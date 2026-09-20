@@ -28,6 +28,23 @@ export class AlreadyRepliedError extends Error {
     }
 }
 
+export class StudentDeletedError extends Error {
+    constructor(studentEmail: string) {
+        super(`Student ${studentEmail} has been deleted and can't be replied to`);
+        this.name = "StudentDeletedError";
+    }
+}
+
+// Soft-deleted students' messages stay recorded in the DB (mail still arrives
+// even after we retire the roster entry) but must be invisible everywhere in
+// the console until restored - so every message-reading query excludes them.
+const EXCLUDE_DELETED_STUDENTS = `
+    NOT EXISTS (
+        SELECT 1 FROM students s
+        WHERE s.email = messages.student_email AND s.deleted_at IS NOT NULL
+    )
+`;
+
 export async function fetchMessageById(
     id: number,
     centralEmail: string
@@ -37,7 +54,7 @@ export async function fetchMessageById(
         SELECT id, message_id, student_email, sender_email, subject, reference_ids, replied,
                received_at, replied_at, body_text, body_html, central_email
         FROM messages
-        WHERE id = $1 AND central_email = $2
+        WHERE id = $1 AND central_email = $2 AND ${EXCLUDE_DELETED_STUDENTS}
         `,
         [id, centralEmail]
     );
@@ -55,7 +72,7 @@ export async function fetchMessages(
             SELECT id, message_id, student_email, sender_email, subject,
                    received_at, replied, replied_at, central_email
             FROM messages
-            WHERE central_email = $1
+            WHERE central_email = $1 AND ${EXCLUDE_DELETED_STUDENTS}
             ORDER BY received_at DESC
             `,
             [centralEmail]
@@ -68,7 +85,7 @@ export async function fetchMessages(
         SELECT id, message_id, student_email, sender_email, subject,
                received_at, replied, replied_at, central_email
         FROM messages
-        WHERE replied = $1 AND central_email = $2
+        WHERE replied = $1 AND central_email = $2 AND ${EXCLUDE_DELETED_STUDENTS}
         ORDER BY received_at ASC
         `,
         [status === "replied", centralEmail]
@@ -79,7 +96,7 @@ export async function fetchMessages(
 
 export async function fetchStudent(email: string) {
     const result = await db.query(
-        "SELECT email, smtp_password FROM students WHERE email = $1",
+        "SELECT email, smtp_password, deleted_at FROM students WHERE email = $1",
         [email]
     );
 
@@ -116,6 +133,10 @@ export async function sendReply(
             throw new Error(
                 `No student record found for ${message.student_email}`
             );
+        }
+
+        if (student.deleted_at) {
+            throw new StudentDeletedError(message.student_email);
         }
 
         const subject =

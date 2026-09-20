@@ -46,6 +46,24 @@ export interface StudentRow {
     created_at: string;
 }
 
+export interface AdminStudentRow {
+    id: number;
+    first_name: string | null;
+    last_name: string | null;
+    name: string | null;
+    email: string;
+    college: string | null;
+    year_enrolled: number | null;
+    central_email: string | null;
+    created_at: string;
+    deleted_at: string | null;
+}
+
+export interface AdminStudentPage {
+    students: AdminStudentRow[];
+    nextCursor: string | null;
+}
+
 export interface RejectedRow {
     line: number;
     email: string;

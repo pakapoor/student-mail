@@ -87,6 +87,8 @@ class UnionFind {
 }
 
 async function fetchAllMessages(centralEmail: string): Promise<MessageRow[]> {
+    // Soft-deleted students' messages stay in the DB but must be invisible
+    // everywhere in the console (including thread grouping) until restored.
     const result = await db.query<MessageRow>(
         `
         SELECT id, message_id, student_email, sender_email, subject, received_at,
@@ -94,6 +96,10 @@ async function fetchAllMessages(centralEmail: string): Promise<MessageRow[]> {
                handled_without_reply
         FROM messages
         WHERE central_email = $1
+          AND NOT EXISTS (
+              SELECT 1 FROM students s
+              WHERE s.email = messages.student_email AND s.deleted_at IS NOT NULL
+          )
         `,
         [centralEmail]
     );

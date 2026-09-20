@@ -36,6 +36,31 @@ export async function fetchStudents(
     return result.rows;
 }
 
+function splitName(name: string | null): { first: string | null; last: string | null } {
+    if (!name) {
+        return { first: null, last: null };
+    }
+
+    const trimmed = name.trim();
+
+    if (!trimmed) {
+        return { first: null, last: null };
+    }
+
+    const spaceIndex = trimmed.indexOf(" ");
+
+    if (spaceIndex === -1) {
+        return { first: trimmed, last: null };
+    }
+
+    // Everything after the first space (including any middle name) becomes
+    // the last name - there's no separate middle-name field.
+    return {
+        first: trimmed.slice(0, spaceIndex),
+        last: trimmed.slice(spaceIndex + 1).trim() || null,
+    };
+}
+
 function parseCsvLine(line: string): string[] {
     const fields: string[] = [];
     let current = "";
@@ -82,8 +107,11 @@ export async function importStudents(
 
     for (const { line, number } of lines) {
         const fields = parseCsvLine(line);
-        const [name, emailRaw, password] = fields;
+        const [name, emailRaw, password, collegeRaw, yearRaw] = fields;
         const email = emailRaw?.toLowerCase();
+        const college = collegeRaw?.trim() || null;
+        const yearEnrolled =
+            yearRaw && /^\d{4}$/.test(yearRaw.trim()) ? Number(yearRaw.trim()) : null;
 
         if (!email || !email.includes("@")) {
             rejected.push({
@@ -120,17 +148,24 @@ export async function importStudents(
             continue;
         }
 
+        const { first, last } = splitName(name || null);
+
         const result = await db.query(
             `
-            INSERT INTO students (name, email, smtp_password, central_email)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO students (name, first_name, last_name, email, smtp_password, central_email, college, year_enrolled)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (email) DO UPDATE SET
                 name = EXCLUDED.name,
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
                 smtp_password = EXCLUDED.smtp_password,
-                central_email = EXCLUDED.central_email
+                central_email = EXCLUDED.central_email,
+                college = EXCLUDED.college,
+                year_enrolled = EXCLUDED.year_enrolled,
+                deleted_at = NULL
             RETURNING (xmax = 0) AS inserted
             `,
-            [name || null, email, password, centralEmail]
+            [name || null, first, last, email, password, centralEmail, college, yearEnrolled]
         );
 
         if (result.rows[0]?.inserted) {

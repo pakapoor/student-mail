@@ -1,4 +1,5 @@
 import type {
+    AdminStudentPage,
     ImportResult,
     StatusFilter,
     StudentRow,
@@ -146,6 +147,84 @@ export async function importStudents(csv: string): Promise<ImportResult> {
     }
 
     return payload;
+}
+
+export async function fetchAdminStudents(
+    search: string,
+    cursor: string | null,
+    deleted: boolean
+): Promise<AdminStudentPage> {
+    const params = new URLSearchParams();
+
+    if (search) {
+        params.set("search", search);
+    }
+
+    if (cursor) {
+        params.set("cursor", cursor);
+    }
+
+    if (deleted) {
+        params.set("deleted", "true");
+    }
+
+    const res = await fetch(`${API_BASE}/api/admin/students?${params}`, {
+        credentials: "include",
+    });
+
+    if (!res.ok) {
+        throw new Error(`Failed to load students (${res.status})`);
+    }
+
+    return res.json();
+}
+
+export async function fetchPendingCounts(
+    ids: number[]
+): Promise<Record<number, number>> {
+    const res = await fetch(`${API_BASE}/api/admin/students/pending-counts`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+    });
+
+    if (!res.ok) {
+        throw new Error(`Failed to load pending counts (${res.status})`);
+    }
+
+    return res.json();
+}
+
+export async function deleteStudents(
+    ids: number[]
+): Promise<{ deleted: number }> {
+    const res = await fetch(`${API_BASE}/api/admin/students/delete`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+    });
+
+    const payload = await res.json();
+
+    if (!res.ok) {
+        throw new Error(payload.error || `Delete failed (${res.status})`);
+    }
+
+    return payload;
+}
+
+export async function restoreStudent(id: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/admin/students/${id}/restore`, {
+        method: "POST",
+        credentials: "include",
+    });
+
+    if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || `Restore failed (${res.status})`);
+    }
 }
 
 export async function markHandled(id: number): Promise<void> {

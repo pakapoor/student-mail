@@ -4,12 +4,32 @@ import DOMPurify from "dompurify";
 // navigating the operator console away, and avoid leaking window.opener.
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
     if (node.tagName === "A") {
+        const href = node.getAttribute("href") || "";
+
+        if (href.toLowerCase().startsWith("mailto:")) {
+            // Mail clients (Gmail included) auto-linkify quoted email
+            // addresses as mailto: anchors - that's not an actionable link,
+            // so it shouldn't look clickable either. Reduce it to plain text.
+            const text = (node.ownerDocument || document).createTextNode(
+                node.textContent || ""
+            );
+            node.replaceWith(text);
+            return;
+        }
+
         node.setAttribute("target", "_blank");
         node.setAttribute("rel", "noopener noreferrer");
     }
 });
 
 const URL_PATTERN_SOURCE = /(https?:\/\/[^\s<>"']+)/;
+
+// Only an <a href="http(s)://..."> counts as a real link needing attention.
+// Mail clients (Gmail included) auto-linkify quoted email addresses as
+// mailto: anchors (e.g. "On ... <student@domain> wrote:") - that's not an
+// actionable link, so it must not trigger the "open link before marking
+// handled" warning.
+const HTTP_ANCHOR_PATTERN = /<a\b[^>]*\bhref\s*=\s*["']https?:\/\/[^"']+["']/i;
 
 function escapeHtml(text: string): string {
     return text
@@ -23,7 +43,7 @@ export function sanitizeHtml(html: string): string {
 }
 
 export function containsLink(html: string | null, text: string | null): boolean {
-    if (html && /<a[\s>]/i.test(html)) {
+    if (html && HTTP_ANCHOR_PATTERN.test(html)) {
         return true;
     }
 

@@ -186,19 +186,21 @@ export default function ThreadView({ items, onReplySent }: Props) {
                             {sending ? "Sending" : "Send reply"}
                         </button>
 
-                        <button
-                            className="secondary-button"
-                            onClick={handleMarkHandled}
-                            disabled={sending || markingHandled || linkNotYetClicked}
-                            title={
-                                linkNotYetClicked
-                                    ? "Open the link in this message before marking it handled"
-                                    : undefined
-                            }
-                        >
-                            {markingHandled && <span className="spinner spinner-dark" />}
-                            {markingHandled ? "Marking..." : "Mark as handled"}
-                        </button>
+                        {replyTargetHasLink && (
+                            <button
+                                className="secondary-button"
+                                onClick={handleMarkHandled}
+                                disabled={sending || markingHandled || linkNotYetClicked}
+                                title={
+                                    linkNotYetClicked
+                                        ? "Open the link in this message before marking it handled"
+                                        : undefined
+                                }
+                            >
+                                {markingHandled && <span className="spinner spinner-dark" />}
+                                {markingHandled ? "Marking..." : "Mark as handled"}
+                            </button>
+                        )}
                     </div>
 
                     {linkNotYetClicked && (

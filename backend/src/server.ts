@@ -6,6 +6,7 @@ import multer from "multer";
 import { db } from "./db.js";
 import {
     AlreadyRepliedError,
+    StudentDeletedError,
     fetchMessageById,
     fetchMessages,
     markHandled,
@@ -26,6 +27,12 @@ import {
     registerCentralMailbox,
 } from "./centralMailboxes.js";
 import { fetchStudents, importStudents } from "./students.js";
+import {
+    pendingCountsForStudents,
+    restoreStudent,
+    searchAdminStudents,
+    softDeleteStudents,
+} from "./studentsAdmin.js";
 
 const upload = multer({ dest: "uploads/" });
 
@@ -120,6 +127,64 @@ app.post("/api/students/import", requireAuth, async (req, res) => {
 
     const result = await importStudents(csv, res.locals.centralEmail);
     res.json(result);
+});
+
+// Cross-operator admin roster - deliberately not scoped to res.locals.centralEmail,
+// since there's no admin role: any logged-in operator can browse/search/delete
+// the full student directory across every central mailbox.
+app.get("/api/admin/students", requireAuth, async (req, res) => {
+    const search = typeof req.query.search === "string" ? req.query.search : "";
+    const cursor = typeof req.query.cursor === "string" ? req.query.cursor : null;
+    const deleted = req.query.deleted === "true";
+
+    const page = await searchAdminStudents({ search, cursor, deleted });
+    res.json(page);
+});
+
+app.post("/api/admin/students/pending-counts", requireAuth, async (req, res) => {
+    const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n))
+        : [];
+
+    const counts = await pendingCountsForStudents(ids);
+    res.json(counts);
+});
+
+app.post("/api/admin/students/delete", requireAuth, async (req, res) => {
+    const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n))
+        : [];
+
+    if (ids.length === 0) {
+        res.status(400).json({ error: "No student ids provided" });
+        return;
+    }
+
+    if (ids.length > 5) {
+        res.status(400).json({ error: "Cannot delete more than 5 students at a time" });
+        return;
+    }
+
+    const deletedCount = await softDeleteStudents(ids);
+    res.json({ deleted: deletedCount });
+});
+
+app.post("/api/admin/students/:id/restore", requireAuth, async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+        res.status(400).json({ error: "Invalid student id" });
+        return;
+    }
+
+    const ok = await restoreStudent(id);
+
+    if (!ok) {
+        res.status(404).json({ error: "Student not found or not deleted" });
+        return;
+    }
+
+    res.json({ restored: true });
 });
 
 app.get("/api/messages", requireAuth, async (req, res) => {
@@ -259,6 +324,11 @@ app.post(
         } catch (error) {
             if (error instanceof AlreadyRepliedError) {
                 res.status(409).json({ error: "Message already replied to" });
+                return;
+            }
+
+            if (error instanceof StudentDeletedError) {
+                res.status(409).json({ error: error.message });
                 return;
             }
 
