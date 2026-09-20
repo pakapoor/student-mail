@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingThreadItem, ThreadItem } from "./types";
 import { markHandled, sendReply } from "./api";
 import { containsLink, linkifyPlainText, sanitizeHtml } from "./linkify";
@@ -222,6 +222,8 @@ export default function ThreadView({ items, onReplySent }: Props) {
     );
 }
 
+const CLAMP_HEIGHT_PX = 420;
+
 function ThreadBubble({
     item,
     onLinkClick,
@@ -240,12 +242,48 @@ function ThreadBubble({
         );
     }, [item]);
 
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const [isOverflowing, setIsOverflowing] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+
+    // College/government letters are often long - only clamp (and only show
+    // the toggle) when the content genuinely exceeds the cap, so short
+    // replies never get an unnecessary "Show more" link.
+    useEffect(() => {
+        setExpanded(false);
+        const el = bodyRef.current;
+        setIsOverflowing(!!el && el.scrollHeight > CLAMP_HEIGHT_PX + 1);
+    }, [renderedBody]);
+
     function handleBodyClick(e: React.MouseEvent<HTMLDivElement>) {
         const target = e.target as HTMLElement;
         if (target.tagName === "A") {
             onLinkClick(item.id);
         }
     }
+
+    const bodyClassName =
+        "bubble-body" + (isOverflowing && !expanded ? " bubble-body-clamped" : "");
+
+    const body = (
+        <>
+            <div
+                ref={bodyRef}
+                className={bodyClassName}
+                onClick={item.type === "incoming" ? handleBodyClick : undefined}
+                dangerouslySetInnerHTML={{ __html: renderedBody }}
+            />
+            {isOverflowing && (
+                <button
+                    type="button"
+                    className="bubble-expand-toggle"
+                    onClick={() => setExpanded((prev) => !prev)}
+                >
+                    {expanded ? "Show less" : "Show full message"}
+                </button>
+            )}
+        </>
+    );
 
     if (item.type === "incoming") {
         return (
@@ -257,11 +295,7 @@ function ThreadBubble({
                             {new Date(item.at).toLocaleString()}
                         </span>
                     </div>
-                    <div
-                        className="bubble-body"
-                        onClick={handleBodyClick}
-                        dangerouslySetInnerHTML={{ __html: renderedBody }}
-                    />
+                    {body}
                 </div>
                 {item.handled_without_reply && (
                     <div className="system-note">Marked as handled &mdash; no reply sent</div>
@@ -280,10 +314,7 @@ function ThreadBubble({
                     {new Date(item.at).toLocaleString()}
                 </span>
             </div>
-            <div
-                className="bubble-body"
-                dangerouslySetInnerHTML={{ __html: renderedBody }}
-            />
+            {body}
             {item.attachment_count > 0 && (
                 <div className="bubble-attachments">
                     {item.attachment_count} attachment

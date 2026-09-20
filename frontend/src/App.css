@@ -296,7 +296,7 @@
 }
 
 .bubble {
-    max-width: 85%;
+    max-width: 95%;
     border-radius: 12px;
     padding: 12px 14px;
     border: 1px solid var(--border);
@@ -336,6 +336,34 @@
 
 .bubble-body a {
     color: var(--accent-dark);
+}
+
+.bubble-body img {
+    max-width: 100%;
+}
+
+.bubble-body-clamped {
+    max-height: 420px;
+    overflow: hidden;
+    position: relative;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent 100%);
+}
+
+.bubble-expand-toggle {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent-dark);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.bubble-expand-toggle:hover {
+    text-decoration: underline;
 }
 
 .bubble-attachments {
