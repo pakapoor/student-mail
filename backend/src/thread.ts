@@ -86,6 +86,37 @@ class UnionFind {
     }
 }
 
+// A thread is "pending" based on timing, not on whether every individual
+// message has its own replied=true row: once you reply to (or mark handled)
+// anything in a thread, every incoming message up to that point is
+// considered addressed, even if several arrived before you got to reply -
+// you don't need a separate reply per message in a burst, only per new
+// message that arrives *after* your last action. Each message's own
+// `replied` column is left untouched for that message's own record; this
+// only changes how thread-level pending status is computed from it.
+function latestResolvedAt(
+    threadMessages: MessageRow[],
+    threadReplies: ReplyRow[]
+): number {
+    let latest = -Infinity;
+
+    for (const r of threadReplies) {
+        latest = Math.max(latest, new Date(r.sent_at).getTime());
+    }
+
+    for (const m of threadMessages) {
+        if (m.handled_without_reply && m.replied_at) {
+            latest = Math.max(latest, new Date(m.replied_at).getTime());
+        }
+    }
+
+    return latest;
+}
+
+function stillPending(message: MessageRow, resolvedAt: number): boolean {
+    return new Date(message.received_at).getTime() > resolvedAt;
+}
+
 async function fetchAllMessages(centralEmail: string): Promise<MessageRow[]> {
     // Soft-deleted students' messages stay in the DB but must be invisible
     // everywhere in the console (including thread grouping) until restored.
@@ -102,6 +133,18 @@ async function fetchAllMessages(centralEmail: string): Promise<MessageRow[]> {
           )
         `,
         [centralEmail]
+    );
+
+    return result.rows;
+}
+
+async function fetchAllReplies(): Promise<ReplyRow[]> {
+    const result = await db.query<ReplyRow>(
+        `
+        SELECT id, incoming_message_id, student_email, recipient_email,
+               sent_message_id, sent_at, attachment_count, body_text
+        FROM replies
+        `
     );
 
     return result.rows;
@@ -136,6 +179,63 @@ function groupIntoThreads(messages: MessageRow[]): MessageRow[][] {
     return [...groups.values()];
 }
 
+async function fetchMessagesForStudentEmails(
+    emails: string[]
+): Promise<MessageRow[]> {
+    if (emails.length === 0) {
+        return [];
+    }
+
+    const result = await db.query<MessageRow>(
+        `
+        SELECT id, message_id, student_email, sender_email, subject, received_at,
+               replied, replied_at, body_text, body_html, in_reply_to, reference_ids,
+               handled_without_reply
+        FROM messages
+        WHERE student_email = ANY($1)
+        `,
+        [emails]
+    );
+
+    return result.rows;
+}
+
+// Cross-operator (not scoped to one central_email) count of effectively-
+// pending messages per student email, using the same timing-based
+// definition as fetchThreadSummaries/fetchThread - a message only counts if
+// nothing newer than it has been replied to/marked handled in its thread.
+// Used by the admin roster's delete-confirmation warning so it matches what
+// the console actually shows as pending, rather than a stricter raw count.
+export async function countEffectivelyPendingByEmail(
+    emails: string[]
+): Promise<Record<string, number>> {
+    const messages = await fetchMessagesForStudentEmails(emails);
+
+    if (messages.length === 0) {
+        return {};
+    }
+
+    const threadGroups = groupIntoThreads(messages);
+    const allReplies = await fetchAllReplies();
+    const counts: Record<string, number> = {};
+
+    for (const groupMessages of threadGroups) {
+        const threadMessageIds = new Set(groupMessages.map((m) => m.message_id));
+        const threadReplies = allReplies.filter((r) =>
+            threadMessageIds.has(r.incoming_message_id)
+        );
+        const resolvedAt = latestResolvedAt(groupMessages, threadReplies);
+
+        for (const m of groupMessages) {
+            if (stillPending(m, resolvedAt)) {
+                counts[m.student_email] = (counts[m.student_email] || 0) + 1;
+            }
+        }
+    }
+
+    return counts;
+}
+
 export async function fetchThread(
     messageId: number,
     centralEmail: string
@@ -155,15 +255,9 @@ export async function fetchThread(
 
     const threadMessageIds = new Set(threadMessages.map((m) => m.message_id));
 
-    const repliesResult = await db.query<ReplyRow>(
-        `
-        SELECT id, incoming_message_id, student_email, recipient_email,
-               sent_message_id, sent_at, attachment_count, body_text
-        FROM replies
-        `
-    );
+    const allReplies = await fetchAllReplies();
 
-    const threadReplies = repliesResult.rows.filter((r) =>
+    const threadReplies = allReplies.filter((r) =>
         threadMessageIds.has(r.incoming_message_id)
     );
 
@@ -228,13 +322,20 @@ export async function fetchThreadSummaries(
 ): Promise<ThreadSummaryPage> {
     const messages = await fetchAllMessages(centralEmail);
     const threadGroups = groupIntoThreads(messages);
+    const allReplies = await fetchAllReplies();
 
     const summaries: ThreadSummary[] = threadGroups.map((groupMessages) => {
         const latest = groupMessages.reduce((a, b) =>
             new Date(b.received_at) > new Date(a.received_at) ? b : a
         );
 
-        const pending = groupMessages.filter((m) => !m.replied);
+        const threadMessageIds = new Set(groupMessages.map((m) => m.message_id));
+        const threadReplies = allReplies.filter((r) =>
+            threadMessageIds.has(r.incoming_message_id)
+        );
+        const resolvedAt = latestResolvedAt(groupMessages, threadReplies);
+
+        const pending = groupMessages.filter((m) => stillPending(m, resolvedAt));
         const pendingCount = pending.length;
 
         const representative =

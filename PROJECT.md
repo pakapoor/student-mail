@@ -212,6 +212,30 @@ needs real DB auth/secrets.
    fade-out + a "Show full message"/"Show less" toggle (`ThreadView.tsx`,
    measured per-message via `scrollHeight` so short replies never show an
    unnecessary toggle).
+6. **"Mark as handled" was too easy to trigger** - "has a link" alone caught
+   ordinary human senders who happened to share a link (e.g. a college
+   letter with a reference URL). Tightened to require BOTH an automated
+   sender address (`donotreply@`/`no-reply@`/`noreply@` patterns, see
+   `isAutomatedSender()` in `linkify.ts`) AND a real link - the button is
+   for messages that genuinely can't get a human reply, not any message that
+   merely contains a URL.
+7. **Thread pending status didn't match how a burst of messages actually
+   gets handled** - originally a thread was "pending" if ANY individual
+   message lacked its own `replied=true` row, meaning if a sender sent 10
+   messages before you got to reply, replying to just one (even one that
+   addressed everything) left the thread showing pending forever unless you
+   wrote 10 separate replies. Redone as timing-based: a message only counts
+   as still-pending if it arrived *after* the most recent reply/mark-handled
+   action in its thread (`latestResolvedAt()`/`stillPending()` in
+   `thread.ts`, mirrored in `ThreadView.tsx`'s reply-target selection). A
+   new message that arrives after your reply correctly flips the thread back
+   to pending - this only changes how thread-level status is *computed*, not
+   the underlying `messages.replied` column, which still records whether
+   that specific message got its own matching reply (kept for any future
+   audit need). `studentsAdmin.ts`'s delete-confirmation pending-count
+   (`pendingCountsForStudents`) was updated to use the same definition via a
+   new `countEffectivelyPendingByEmail()` export, so it never disagrees with
+   what the console shows.
 
 ## Standing working rules for this project
 
@@ -266,3 +290,23 @@ needs real DB auth/secrets.
   shortcuts): plaintext `smtp_password` in Postgres, DB localhost trust auth,
   no operator-level authentication beyond "can this IMAP login succeed",
   attachment size/type validation, rate limiting.
+- **Duplicate-name handling across import batches - needs more design
+  thought, explicitly deferred to after the demo.** Today, two different
+  students sharing a name is already fine as long as their emails differ
+  (email is the unique identifier; the roster disambiguates by showing
+  email/college/owner alongside the name). What's genuinely unresolved: at
+  1600-student scale, imports happen across multiple CSV batches over time
+  (not all at once), and there's currently no collision detection at all
+  when a name reappears in a later batch. Two real risks this doesn't catch:
+  (a) a clerk typos an email that happens to collide with an existing
+  student's email - the import silently upserts (`ON CONFLICT (email) DO
+  UPDATE`) and overwrites that existing student's name/password/college with
+  the new batch's values, with no warning that the name attached to that
+  email just changed; (b) the reverse - two genuinely different people with
+  the same name in different batches are fine today, but there's no
+  "did you mean this existing student?" check to catch a clerk accidentally
+  re-entering the same real person twice under a second email. Needs a
+  decision on whether import should warn (not necessarily block) when a
+  pasted row's name closely matches an existing student under a
+  *different* email, and/or warn when an existing email's name is about to
+  change to something unrelated.

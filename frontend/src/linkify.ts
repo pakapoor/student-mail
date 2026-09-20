@@ -42,6 +42,16 @@ export function sanitizeHtml(html: string): string {
     return DOMPurify.sanitize(html);
 }
 
+// Matches common automated/no-reply sender local-parts (donotreply@,
+// do-not-reply@, noreply@, no-reply@, ...). "Mark as handled" only makes
+// sense for messages that genuinely can't be replied to meaningfully - an
+// automated notification, not a real person/office waiting on a response.
+const AUTOMATED_SENDER_PATTERN = /^(do[-._]?not[-._]?reply|no[-._]?reply)@/i;
+
+export function isAutomatedSender(email: string | null | undefined): boolean {
+    return !!email && AUTOMATED_SENDER_PATTERN.test(email.trim());
+}
+
 export function containsLink(html: string | null, text: string | null): boolean {
     if (html && HTTP_ANCHOR_PATTERN.test(html)) {
         return true;

@@ -1,4 +1,5 @@
 import { db } from "./db.js";
+import { countEffectivelyPendingByEmail } from "./thread.js";
 
 // Cross-operator student directory: unlike students.ts's fetchStudents (scoped
 // to the logged-in operator's own central mailbox), this deliberately shows
@@ -119,21 +120,23 @@ export async function pendingCountsForStudents(
         return {};
     }
 
-    const result = await db.query<{ id: number; pending_count: string }>(
-        `
-        SELECT s.id, COUNT(m.id) FILTER (WHERE m.replied = FALSE) AS pending_count
-        FROM students s
-        LEFT JOIN messages m ON m.student_email = s.email
-        WHERE s.id = ANY($1)
-        GROUP BY s.id
-        `,
+    // Uses the same timing-based "effectively pending" definition as the
+    // console's own Pending/Replied tabs (thread.ts's
+    // countEffectivelyPendingByEmail) rather than a raw replied=false count,
+    // so this delete-confirmation warning never disagrees with what the
+    // console itself shows for that student.
+    const result = await db.query<{ id: number; email: string }>(
+        "SELECT id, email FROM students WHERE id = ANY($1)",
         [ids]
     );
+
+    const emails = result.rows.map((row) => row.email);
+    const countsByEmail = await countEffectivelyPendingByEmail(emails);
 
     const counts: Record<number, number> = {};
 
     for (const row of result.rows) {
-        counts[row.id] = Number(row.pending_count);
+        counts[row.id] = countsByEmail[row.email] || 0;
     }
 
     return counts;

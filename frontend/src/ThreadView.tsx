@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingThreadItem, ThreadItem } from "./types";
 import { markHandled, sendReply } from "./api";
-import { containsLink, linkifyPlainText, sanitizeHtml } from "./linkify";
+import {
+    containsLink,
+    isAutomatedSender,
+    linkifyPlainText,
+    sanitizeHtml,
+} from "./linkify";
 
 interface Props {
     items: ThreadItem[];
@@ -23,9 +28,26 @@ export default function ThreadView({ items, onReplySent }: Props) {
         "(no subject)";
 
     const replyTarget = useMemo(() => {
+        // A thread's pending status is timing-based, not "does every
+        // individual message have its own reply": once you reply to (or
+        // mark handled) anything in the thread, every incoming message up
+        // to that point is considered addressed - only a message that
+        // arrives *after* the most recent reply/mark-handled action still
+        // needs attention. Mirrors thread.ts's latestResolvedAt on the
+        // backend, computed here from the same thread items.
+        let resolvedAt = -Infinity;
+
+        for (const item of items) {
+            if (item.type === "outgoing") {
+                resolvedAt = Math.max(resolvedAt, new Date(item.at).getTime());
+            } else if (item.handled_without_reply && item.replied_at) {
+                resolvedAt = Math.max(resolvedAt, new Date(item.replied_at).getTime());
+            }
+        }
+
         const pending = items.filter(
             (item): item is IncomingThreadItem =>
-                item.type === "incoming" && !item.replied
+                item.type === "incoming" && new Date(item.at).getTime() > resolvedAt
         );
 
         if (pending.length === 0) {
@@ -41,9 +63,18 @@ export default function ThreadView({ items, onReplySent }: Props) {
         ? containsLink(replyTarget.body_html, replyTarget.body_text)
         : false;
 
-    const linkNotYetClicked =
+    // "Mark as handled" is for messages that genuinely can't get a real
+    // reply - an automated notification (donotreply@/noreply@) containing a
+    // link to act on (e.g. a verification link), not a real person or
+    // office waiting on a written response.
+    const canMarkHandled =
         replyTarget !== null &&
         replyTargetHasLink &&
+        isAutomatedSender(replyTarget.sender_email);
+
+    const linkNotYetClicked =
+        replyTarget !== null &&
+        canMarkHandled &&
         !clickedLinkIds.has(replyTarget.id);
 
     function handleLinkClick(itemId: number) {
@@ -186,7 +217,7 @@ export default function ThreadView({ items, onReplySent }: Props) {
                             {sending ? "Sending" : "Send reply"}
                         </button>
 
-                        {replyTargetHasLink && (
+                        {canMarkHandled && (
                             <button
                                 className="secondary-button"
                                 onClick={handleMarkHandled}
