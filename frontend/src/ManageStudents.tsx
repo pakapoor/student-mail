@@ -260,7 +260,7 @@ export default function ManageStudents({ onClose, onImported }: Props) {
                             rows={4}
                             placeholder={
                                 "Jane Doe,jane.doe@pilot.system-design.in,S3cret!,IIT Delhi,2026\n" +
-                                "John Roe,john.roe@pilot.system-design.in,S3cret!"
+                                "John Roe,john.roe@pilot.system-design.in,S3cret!,NSUT,2026"
                             }
                             value={csv}
                             onChange={(e) => setCsv(e.target.value)}

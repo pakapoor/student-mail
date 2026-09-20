@@ -267,17 +267,14 @@ export async function fetchThreadSummaries(
         return true;
     });
 
-    filtered.sort((a, b) => {
-        if (status === "all") {
-            return (
-                new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
-            );
-        }
-
-        return (
-            new Date(a.received_at).getTime() - new Date(b.received_at).getTime()
-        );
-    });
+    // Thread list is always newest-first, regardless of status filter. This
+    // only orders which threads appear where in the list - it doesn't change
+    // which individual message within a thread is offered up for reply
+    // (that's still always the oldest unreplied message in that thread).
+    filtered.sort(
+        (a, b) =>
+            new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
+    );
 
     const page = filtered.slice(offset, offset + limit);
 
