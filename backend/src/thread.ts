@@ -1,0 +1,283 @@
+import { db } from "./db.js";
+
+interface MessageRow {
+    id: number;
+    message_id: string;
+    student_email: string;
+    sender_email: string;
+    subject: string | null;
+    received_at: string;
+    replied: boolean;
+    replied_at: string | null;
+    body_text: string | null;
+    body_html: string | null;
+    in_reply_to: string | null;
+    reference_ids: string[];
+    handled_without_reply: boolean;
+}
+
+interface ReplyRow {
+    id: number;
+    incoming_message_id: string;
+    student_email: string;
+    recipient_email: string;
+    sent_message_id: string | null;
+    sent_at: string;
+    attachment_count: number;
+    body_text: string | null;
+}
+
+export interface IncomingThreadItem {
+    type: "incoming";
+    id: number;
+    message_id: string;
+    student_email: string;
+    sender_email: string;
+    subject: string | null;
+    at: string;
+    replied: boolean;
+    replied_at: string | null;
+    body_text: string | null;
+    body_html: string | null;
+    handled_without_reply: boolean;
+}
+
+export interface OutgoingThreadItem {
+    type: "outgoing";
+    id: number;
+    incoming_message_id: string;
+    student_email: string;
+    recipient_email: string;
+    sent_message_id: string | null;
+    at: string;
+    attachment_count: number;
+    body_text: string | null;
+}
+
+export type ThreadItem = IncomingThreadItem | OutgoingThreadItem;
+
+class UnionFind {
+    private parent = new Map<string, string>();
+
+    find(x: string): string {
+        const existing = this.parent.get(x);
+
+        if (!existing) {
+            this.parent.set(x, x);
+            return x;
+        }
+
+        if (existing === x) {
+            return x;
+        }
+
+        const root = this.find(existing);
+        this.parent.set(x, root);
+        return root;
+    }
+
+    union(a: string, b: string) {
+        const rootA = this.find(a);
+        const rootB = this.find(b);
+
+        if (rootA !== rootB) {
+            this.parent.set(rootA, rootB);
+        }
+    }
+}
+
+async function fetchAllMessages(centralEmail: string): Promise<MessageRow[]> {
+    const result = await db.query<MessageRow>(
+        `
+        SELECT id, message_id, student_email, sender_email, subject, received_at,
+               replied, replied_at, body_text, body_html, in_reply_to, reference_ids,
+               handled_without_reply
+        FROM messages
+        WHERE central_email = $1
+        `,
+        [centralEmail]
+    );
+
+    return result.rows;
+}
+
+function groupIntoThreads(messages: MessageRow[]): MessageRow[][] {
+    const uf = new UnionFind();
+
+    for (const m of messages) {
+        const ids = [m.message_id, m.in_reply_to, ...(m.reference_ids || [])].filter(
+            (v): v is string => Boolean(v)
+        );
+
+        for (const id of ids) {
+            uf.union(m.message_id, id);
+        }
+    }
+
+    const groups = new Map<string, MessageRow[]>();
+
+    for (const m of messages) {
+        const root = uf.find(m.message_id);
+        const list = groups.get(root);
+
+        if (list) {
+            list.push(m);
+        } else {
+            groups.set(root, [m]);
+        }
+    }
+
+    return [...groups.values()];
+}
+
+export async function fetchThread(
+    messageId: number,
+    centralEmail: string
+): Promise<ThreadItem[] | null> {
+    const messages = await fetchAllMessages(centralEmail);
+    const target = messages.find((m) => Number(m.id) === messageId);
+
+    if (!target) {
+        return null;
+    }
+
+    const threadGroups = groupIntoThreads(messages);
+    const threadMessages =
+        threadGroups.find((group) =>
+            group.some((m) => m.message_id === target.message_id)
+        ) || [];
+
+    const threadMessageIds = new Set(threadMessages.map((m) => m.message_id));
+
+    const repliesResult = await db.query<ReplyRow>(
+        `
+        SELECT id, incoming_message_id, student_email, recipient_email,
+               sent_message_id, sent_at, attachment_count, body_text
+        FROM replies
+        `
+    );
+
+    const threadReplies = repliesResult.rows.filter((r) =>
+        threadMessageIds.has(r.incoming_message_id)
+    );
+
+    const items: ThreadItem[] = [
+        ...threadMessages.map(
+            (m): IncomingThreadItem => ({
+                type: "incoming",
+                id: m.id,
+                message_id: m.message_id,
+                student_email: m.student_email,
+                sender_email: m.sender_email,
+                subject: m.subject,
+                at: m.received_at,
+                replied: m.replied,
+                replied_at: m.replied_at,
+                body_text: m.body_text,
+                body_html: m.body_html,
+                handled_without_reply: m.handled_without_reply,
+            })
+        ),
+        ...threadReplies.map(
+            (r): OutgoingThreadItem => ({
+                type: "outgoing",
+                id: r.id,
+                incoming_message_id: r.incoming_message_id,
+                student_email: r.student_email,
+                recipient_email: r.recipient_email,
+                sent_message_id: r.sent_message_id,
+                at: r.sent_at,
+                attachment_count: r.attachment_count,
+                body_text: r.body_text,
+            })
+        ),
+    ];
+
+    items.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+
+    return items;
+}
+
+export interface ThreadSummary {
+    threadId: number;
+    subject: string | null;
+    student_email: string;
+    sender_email: string;
+    received_at: string;
+    message_count: number;
+    pending_count: number;
+}
+
+export interface ThreadSummaryPage {
+    threads: ThreadSummary[];
+    total: number;
+    hasMore: boolean;
+}
+
+export async function fetchThreadSummaries(
+    status: "pending" | "replied" | "all",
+    centralEmail: string,
+    limit = 25,
+    offset = 0
+): Promise<ThreadSummaryPage> {
+    const messages = await fetchAllMessages(centralEmail);
+    const threadGroups = groupIntoThreads(messages);
+
+    const summaries: ThreadSummary[] = threadGroups.map((groupMessages) => {
+        const latest = groupMessages.reduce((a, b) =>
+            new Date(b.received_at) > new Date(a.received_at) ? b : a
+        );
+
+        const pending = groupMessages.filter((m) => !m.replied);
+        const pendingCount = pending.length;
+
+        const representative =
+            pendingCount > 0
+                ? pending.reduce((a, b) =>
+                      new Date(b.received_at) < new Date(a.received_at) ? b : a
+                  )
+                : latest;
+
+        return {
+            threadId: representative.id,
+            subject: latest.subject,
+            student_email: latest.student_email,
+            sender_email: latest.sender_email,
+            received_at: latest.received_at,
+            message_count: groupMessages.length,
+            pending_count: pendingCount,
+        };
+    });
+
+    const filtered = summaries.filter((s) => {
+        if (status === "pending") {
+            return s.pending_count > 0;
+        }
+
+        if (status === "replied") {
+            return s.pending_count === 0;
+        }
+
+        return true;
+    });
+
+    filtered.sort((a, b) => {
+        if (status === "all") {
+            return (
+                new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
+            );
+        }
+
+        return (
+            new Date(a.received_at).getTime() - new Date(b.received_at).getTime()
+        );
+    });
+
+    const page = filtered.slice(offset, offset + limit);
+
+    return {
+        threads: page,
+        total: filtered.length,
+        hasMore: offset + limit < filtered.length,
+    };
+}
