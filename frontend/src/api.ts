@@ -12,7 +12,9 @@ import type {
 // Must match the page's hostname (not just resolve to the same machine) -
 // SameSite=Lax cookies are dropped on cross-site fetches, and browsers treat
 // "localhost" and "127.0.0.1" as different sites even though both are local.
-const API_BASE = "http://localhost:3001";
+// In production, Nginx reverse-proxies /api on the same origin as the page,
+// so VITE_API_BASE is set to "" at build time (see frontend/.env.production).
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001";
 
 export interface ThreadSummaryPage {
     threads: ThreadSummary[];
