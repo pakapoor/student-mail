@@ -20,8 +20,11 @@ export async function registerCentralMailbox(
 }
 
 export async function listCentralMailboxes(): Promise<CentralMailbox[]> {
+    const activeEmail = process.env.ACTIVE_CENTRAL_EMAIL?.trim().toLowerCase();
     const result = await db.query<CentralMailbox>(
-        "SELECT email, password FROM central_mailboxes"
+        `SELECT email, password FROM central_mailboxes
+         WHERE ($1::text IS NULL OR LOWER(email) = $1)`,
+        [activeEmail || null]
     );
 
     return result.rows;

@@ -9,28 +9,44 @@ aren't visible from the code alone.
 
 This section records the user's reviewed target plan, not implemented behavior.
 It supersedes older roadmap assumptions where they conflict. The existing
-implementation and historical notes below remain useful context. Only Step 0
-(this documentation update) is authorized for execution now. Do not run mailbox
-tests, change application code/configuration/data, or deploy until the user
-explicitly authorizes the next work. Discuss exact edits before making them.
+implementation and historical notes below remain useful context. Steps 0–2
+have been authorized and completed. Stop for confirmation before Step 3 or any
+later step. Do not treat approval of this plan as blanket implementation or
+deployment authorization. Discuss exact edits before making them.
 
 - [x] **Step 0 — Record the plan here.** Include native spellchecking and
   defer AWS discussion until Steps 0–13 are complete. Native spellchecking is
   grouped with Step 13 so AWS is Step 14 as requested.
-- [ ] **Step 1 — Script verification of existing mailboxes and forwarding.**
+- [x] **Step 1 — Script verification of existing mailboxes and forwarding.**
   Verify central and all 15 student IMAP logins, verify central SMTP login,
   send one labeled test email to each student, and check all 15 forwarded
   copies in the central inbox. Report failures and observed delivery times.
-  User says forwarding is configured but untested. An earlier execution
-  request was interrupted; no test results were obtained. Do not assume
-  verification succeeded. Credentials were supplied privately; never place
-  their values in this document, tracked test data, or logs.
-- [ ] **Step 2 — Colleges, domain, and central mailbox.** Create manually
+  Completed 2026-09-21: all 16 IMAP logins and central SMTP authentication
+  passed; all 15 sends were accepted and all forwarded copies were matched
+  by Message-ID in the central INBOX. Observed 9–44 seconds after each send
+  began; checks ran after all sends, so these are upper bounds, not exact
+  delivery latency. This did not test app/UI latency. Test subject prefix:
+  `ISM forwarding verification 2026-09-21T12:40:17.148Z`.
+  Credentials were supplied privately; never place their values in this
+  document, tracked test data, or logs.
+- [x] **Step 2 — Colleges, domain, and central mailbox.** Create manually
   entered college records named exactly `KSMA CENTRAL`, `IHSM CENTRAL`, and
   `IHSM ELITE`. Use `myemailinfo.com` for the new setup. All three colleges'
   student mailboxes forward to `central.ksma@myemailinfo.com`. Do not use
   `system-design.in` as the new test domain. The older domain/mailboxes
   documented below describe the existing setup, not this target setup.
+  Completed: `backend/migrations/001_colleges.sql` creates/seeds colleges;
+  `backend/schema.sql` includes the same table/seed for fresh installations.
+  Migration applied and rerun successfully with no duplicate colleges and
+  unchanged existing student/message/reply counts. Local `.env` and tracked
+  `.env.example` use Migadu IMAP with `ACTIVE_CENTRAL_EMAIL` set to the new
+  central mailbox. Login and startup/fallback sync honor that optional
+  setting; the old central registry row and its data are retained but it
+  cannot log in or sync under the current configuration. New credentials
+  were registered through normal login, not committed to source. Backend
+  restarted; new login/session/pending-thread requests returned HTTP 200,
+  old login returned 401, and only the new mailbox is selected for sync.
+  Both TypeScript checks passed. No new test students have been inserted yet.
 - [ ] **Step 3 — Test student records.** Register the 15 already-created
   mailboxes listed below in the ordinary students table with `is_test = true`.
   Add `is_test` as a boolean defaulting to false for real students; do not
@@ -184,6 +200,13 @@ never the real app). No Kafka/Redis/microservices/queueing - this is
 intentionally a simple app for the scale involved (1600 students, ~3 months).
 
 ## Email provider setup
+
+Current operation after Step 2 uses `myemailinfo.com` and
+`central.ksma@myemailinfo.com`, with IMAP `imap.migadu.com:993` and SMTP
+`smtp.migadu.com:465`. `ACTIVE_CENTRAL_EMAIL` restricts login/background sync
+to that mailbox. Its credentials are supplied through login. Existing
+pilot-domain records are retained. The following older setup notes are
+historical and are not the current runtime configuration.
 
 - Student domain: `pilot.system-design.in` (Migadu). Main domain
   `system-design.in` is managed at GoDaddy; Migadu DNS (MX/SPF/DKIM/DMARC) is
@@ -402,6 +425,11 @@ needs real DB auth/secrets.
 
 ## Standing working rules for this project
 
+- **Close out every completed step.** Update this file with the completed
+  checkbox, changes, and verification results; commit that step's changes
+  locally and report the commit ID. Ask for confirmation before beginning
+  the next step. Documentation updates and local check-in are part of the
+  authorized step closeout. Do not mark unfinished steps complete.
 - **Confirm before every edit.** State the plan in plain terms and get
   explicit approval before touching any file - every time, even mid-task,
   even after an earlier general "go ahead". This was set as an explicit

@@ -63,7 +63,7 @@ function requireAuth(
 
 app.post("/api/auth/login", async (req, res) => {
     const email =
-        typeof req.body?.email === "string" ? req.body.email.trim() : "";
+        typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
     const password =
         typeof req.body?.password === "string" ? req.body.password : "";
 

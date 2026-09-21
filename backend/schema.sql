@@ -10,6 +10,15 @@
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+CREATE TABLE colleges (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO colleges (name) VALUES
+    ('KSMA CENTRAL'), ('IHSM CENTRAL'), ('IHSM ELITE');
+
 -- One row per student mailbox (e.g. test.student11@pilot.system-design.in).
 -- Global directory across every central mailbox/operator - central_email is
 -- just "who currently manages this student's mail", not a tenant boundary.
