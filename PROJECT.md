@@ -161,6 +161,18 @@ deployment authorization. Discuss exact edits before making them.
   need a real login). Visual browser review with two colleges side by side
   remains with the user, including confirming Manage Students only shows
   the current mailbox+college's roster and no Owner column.
+  Follow-up cleanup 2026-09-21 (user-requested, done directly against the
+  database, no code change): the 8 legacy `college_id IS NULL`
+  `pilot.system-design.in` students (owned by `pankaj@system-design.in`)
+  were soft-deleted (`deleted_at = NOW()`, reversible via the existing
+  Deleted-tab restore flow, their 15 messages/10 replies untouched in
+  Postgres); the stale `central_mailboxes` row for
+  `pankaj@system-design.in` was permanently deleted (not reversible, but
+  it only holds login credentials for a mailbox that was already unable to
+  log in under the current `ACTIVE_CENTRAL_EMAIL`). The dev database now
+  has exactly the 15 active test students (5 per college) and one
+  registered central mailbox, `central.ksma@myemailinfo.com` - confirmed
+  by direct query after the change.
 - [ ] **Step 7 — Header-based bulk student CSV import.** Require exact full
   college names, with no `KSMA` or `IHSM` aliases. Accept only rows belonging
   to the selected college and explain rejected rows. Existing email with
