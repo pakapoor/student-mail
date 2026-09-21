@@ -59,13 +59,27 @@ function requireAuth(
         return;
     }
 
-    if (!session.college) {
+    res.locals.centralEmail = session.email;
+    res.locals.college = session.college;
+    next();
+}
+
+// Chain after requireAuth on any route that reads/writes college-scoped
+// data. Kept separate from requireAuth itself because /api/auth/college -
+// the endpoint used to select a college for the first time - only needs a
+// logged-in session, not a college already on it (that route requiring its
+// own prerequisite would be a deadlock).
+function requireCollege(
+    _req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+) {
+    if (!res.locals.college) {
         res.status(400).json({ error: "Select a college" });
         return;
     }
 
-    res.locals.centralEmail = session.email;
-    res.locals.collegeId = session.college.id;
+    res.locals.collegeId = res.locals.college.id;
     next();
 }
 
@@ -146,12 +160,12 @@ app.get("/api/auth/me", (req, res) => {
     res.json({ email: session.email, college: session.college ?? null });
 });
 
-app.get("/api/students", requireAuth, async (req, res) => {
+app.get("/api/students", requireAuth, requireCollege, async (req, res) => {
     const students = await fetchStudents(res.locals.centralEmail, res.locals.collegeId);
     res.json(students);
 });
 
-app.post("/api/students/import", requireAuth, async (req, res) => {
+app.post("/api/students/import", requireAuth, requireCollege, async (req, res) => {
     const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
 
     if (!csv.trim()) {
@@ -165,7 +179,7 @@ app.post("/api/students/import", requireAuth, async (req, res) => {
 
 // Admin roster - scoped to the logged-in operator's own central mailbox and
 // selected college (same scope as /api/students), not cross-operator.
-app.get("/api/admin/students", requireAuth, async (req, res) => {
+app.get("/api/admin/students", requireAuth, requireCollege, async (req, res) => {
     const search = typeof req.query.search === "string" ? req.query.search : "";
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : null;
     const deleted = req.query.deleted === "true";
@@ -180,7 +194,7 @@ app.get("/api/admin/students", requireAuth, async (req, res) => {
     res.json(page);
 });
 
-app.post("/api/admin/students/pending-counts", requireAuth, async (req, res) => {
+app.post("/api/admin/students/pending-counts", requireAuth, requireCollege, async (req, res) => {
     const ids = Array.isArray(req.body?.ids)
         ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n))
         : [];
@@ -189,7 +203,7 @@ app.post("/api/admin/students/pending-counts", requireAuth, async (req, res) => 
     res.json(counts);
 });
 
-app.post("/api/admin/students/delete", requireAuth, async (req, res) => {
+app.post("/api/admin/students/delete", requireAuth, requireCollege, async (req, res) => {
     const ids = Array.isArray(req.body?.ids)
         ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n))
         : [];
@@ -208,7 +222,7 @@ app.post("/api/admin/students/delete", requireAuth, async (req, res) => {
     res.json({ deleted: deletedCount });
 });
 
-app.post("/api/admin/students/:id/restore", requireAuth, async (req, res) => {
+app.post("/api/admin/students/:id/restore", requireAuth, requireCollege, async (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id)) {
@@ -226,7 +240,7 @@ app.post("/api/admin/students/:id/restore", requireAuth, async (req, res) => {
     res.json({ restored: true });
 });
 
-app.get("/api/messages", requireAuth, async (req, res) => {
+app.get("/api/messages", requireAuth, requireCollege, async (req, res) => {
     const status = req.query.status;
 
     const normalized =
@@ -236,7 +250,7 @@ app.get("/api/messages", requireAuth, async (req, res) => {
     res.json(messages);
 });
 
-app.get("/api/threads", requireAuth, async (req, res) => {
+app.get("/api/threads", requireAuth, requireCollege, async (req, res) => {
     const status = req.query.status;
 
     const normalized = status === "replied" ? status : "pending";
@@ -261,7 +275,7 @@ app.get("/api/threads", requireAuth, async (req, res) => {
     res.json(page);
 });
 
-app.get("/api/messages/:id", requireAuth, async (req, res) => {
+app.get("/api/messages/:id", requireAuth, requireCollege, async (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id)) {
@@ -279,7 +293,7 @@ app.get("/api/messages/:id", requireAuth, async (req, res) => {
     res.json(message);
 });
 
-app.get("/api/events", requireAuth, (req, res) => {
+app.get("/api/events", requireAuth, requireCollege, (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -298,7 +312,7 @@ app.get("/api/events", requireAuth, (req, res) => {
     });
 });
 
-app.get("/api/messages/:id/thread", requireAuth, async (req, res) => {
+app.get("/api/messages/:id/thread", requireAuth, requireCollege, async (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id)) {
@@ -319,6 +333,7 @@ app.get("/api/messages/:id/thread", requireAuth, async (req, res) => {
 app.post(
     "/api/messages/:id/reply",
     requireAuth,
+    requireCollege,
     upload.array("attachments"),
     async (req, res) => {
         const id = Number(req.params.id);
@@ -377,7 +392,7 @@ app.post(
     }
 );
 
-app.post("/api/messages/:id/mark-handled", requireAuth, async (req, res) => {
+app.post("/api/messages/:id/mark-handled", requireAuth, requireCollege, async (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id)) {

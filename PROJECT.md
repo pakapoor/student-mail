@@ -173,6 +173,20 @@ deployment authorization. Discuss exact edits before making them.
   has exactly the 15 active test students (5 per college) and one
   registered central mailbox, `central.ksma@myemailinfo.com` - confirmed
   by direct query after the change.
+  **Bug found and fixed 2026-09-21 in browser testing:** clicking a college
+  on the picker had no effect and showed "Select a college". Root cause:
+  this step's own `requireAuth` change (demanding a college already be on
+  the session) was also guarding `POST /api/auth/college` - the endpoint
+  that attaches a college to a college-less session for the first time -
+  creating a deadlock (couldn't select a college because selecting one
+  required already having one). Fixed by splitting the middleware into
+  `requireAuth` (session only) and a new `requireCollege` (session with a
+  college, sets `res.locals.collegeId`), chaining both on every
+  college-scoped data route but only `requireAuth` on `/api/auth/college`.
+  TypeScript check passed, backend restarted, confirmed
+  `/api/auth/college` still 401s with no session at all. User confirmed
+  fixed live in the browser (college selection and Manage Students/Add
+  students both working).
 - [ ] **Step 7 — Header-based bulk student CSV import.** Require exact full
   college names, with no `KSMA` or `IHSM` aliases. Accept only rows belonging
   to the selected college and explain rejected rows. Existing email with
