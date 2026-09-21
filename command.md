@@ -114,23 +114,22 @@ continue without re-deriving them.
 6. ✅ Node.js, PostgreSQL, and Nginx installed via NodeSource LTS setup
    script + `apt install postgresql nginx`. Confirmed versions: Node
    v24.21.0, PostgreSQL 18.6, Nginx 1.28.3.
+7. ✅ Code cloned onto the instance via `git clone` from GitHub
+   (`https://github.com/pakapoor/student-mail.git`, private repo). Auth
+   via a no-expiration classic PAT (`repo` scope only), stored with
+   `git config --global credential.helper store` so future `git pull`s
+   on this instance won't re-prompt. User plans to eventually wire up
+   auto-deploy-on-push to main (not yet built, not blocking now).
+8. ✅ `npm install` done in `backend/` (had to run
+   `npm install-scripts approve esbuild` first, a newer npm safety gate
+   on postinstall scripts — harmless, esbuild is a legit build tool).
+   `npm install && npm run build` done in `frontend/` — built cleanly to
+   `frontend/dist/` (273KB JS / 15KB CSS, gzip ~86KB/3.6KB).
 
 ## Next steps, in order (give ONE at a time, per user's explicit request —
 ## do not dump the whole list on them at once)
 
-1. **Get the code onto the instance.** Not yet decided how — options are
-   `git clone` from GitHub (need the repo URL and confirmation the user
-   has actually pushed the latest local commits — recall that `git push`
-   has failed in *this* sandboxed dev session all along due to missing
-   GitHub credentials here, so the user has been pushing manually from
-   their own terminal after each step; need to confirm the GitHub remote
-   is actually up to date before cloning) or `scp`/`rsync` the local
-   working directory directly to the instance. Ask the user which they'd
-   prefer, or check for a known GitHub remote URL first.
-3. **Install dependencies and build**: `npm install` in both `backend/`
-   and `frontend/`, then `npm run build` in `frontend/` for the
-   production static build.
-4. **Migrate the database**: one-time `pg_dump` of the current local dev
+1. **Migrate the database**: one-time `pg_dump` of the current local dev
    database (schema + data), transfer the dump to the instance, restore
    into a fresh Postgres instance there (this restores schema + all real
    data already imported today — the ~1265/573/422 real KSMA/IHSM
