@@ -126,19 +126,23 @@ continue without re-deriving them.
    `npm install && npm run build` done in `frontend/` — built cleanly to
    `frontend/dist/` (273KB JS / 15KB CSS, gzip ~86KB/3.6KB).
 
+9. ✅ Database migrated: `pg_dump -F c` taken locally, committed to git
+   (user's explicit choice — data is emails/students the org itself
+   manages, accepted the tradeoff of a binary dump in repo history),
+   pulled onto EC2 via `git pull`, restored with `pg_restore --no-owner`
+   into a fresh `student_mail` DB owned by a new `student_mail_app` user
+   (no password, mirroring local dev). Had to edit
+   `/etc/postgresql/18/main/pg_hba.conf` — changed the two IPv4/IPv6
+   *local* connection lines (not the replication ones) from
+   `scram-sha-256` to `trust`, then `systemctl restart postgresql`, to
+   allow passwordless TCP connection like local dev. Restore was clean,
+   no errors. Verified: 2283 students / 38 messages / 17 replies / 3
+   colleges — matches expected scale.
+
 ## Next steps, in order (give ONE at a time, per user's explicit request —
 ## do not dump the whole list on them at once)
 
-1. **Migrate the database**: one-time `pg_dump` of the current local dev
-   database (schema + data), transfer the dump to the instance, restore
-   into a fresh Postgres instance there (this restores schema + all real
-   data already imported today — the ~1265/573/422 real KSMA/IHSM
-   CENTRAL/IHSM ELITE students, test students, etc.). This is explicitly
-   a **one-time transfer, not an ongoing sync** — user confirmed AWS
-   becomes the sole source of truth after this; the local dev DB is not
-   kept in sync with it afterward. No incremental migration tooling
-   needed given the data size.
-5. **Configure `.env`** on the instance with real IMAP/SMTP/DB
+1. **Configure `.env`** on the instance with real IMAP/SMTP/DB
    credentials, set `FRONTEND_ORIGIN` to `https://app.myemailinfo.com`,
    and update the session cookie's `secure: false` (currently hardcoded
    for local plain-HTTP dev in `auth.ts`/`server.ts` — search for
