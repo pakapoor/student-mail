@@ -5,6 +5,142 @@ up cold, mid-stream. If you're an AI continuing this work, read this whole
 file before touching anything - it captures decisions and constraints that
 aren't visible from the code alone.
 
+## Agreed TODO plan (2026-09-21)
+
+This section records the user's reviewed target plan, not implemented behavior.
+It supersedes older roadmap assumptions where they conflict. The existing
+implementation and historical notes below remain useful context. Only Step 0
+(this documentation update) is authorized for execution now. Do not run mailbox
+tests, change application code/configuration/data, or deploy until the user
+explicitly authorizes the next work. Discuss exact edits before making them.
+
+- [x] **Step 0 — Record the plan here.** Include native spellchecking and
+  defer AWS discussion until Steps 0–13 are complete. Native spellchecking is
+  grouped with Step 13 so AWS is Step 14 as requested.
+- [ ] **Step 1 — Script verification of existing mailboxes and forwarding.**
+  Verify central and all 15 student IMAP logins, verify central SMTP login,
+  send one labeled test email to each student, and check all 15 forwarded
+  copies in the central inbox. Report failures and observed delivery times.
+  User says forwarding is configured but untested. An earlier execution
+  request was interrupted; no test results were obtained. Do not assume
+  verification succeeded. Credentials were supplied privately; never place
+  their values in this document, tracked test data, or logs.
+- [ ] **Step 2 — Colleges, domain, and central mailbox.** Create manually
+  entered college records named exactly `KSMA CENTRAL`, `IHSM CENTRAL`, and
+  `IHSM ELITE`. Use `myemailinfo.com` for the new setup. All three colleges'
+  student mailboxes forward to `central.ksma@myemailinfo.com`. Do not use
+  `system-design.in` as the new test domain. The older domain/mailboxes
+  documented below describe the existing setup, not this target setup.
+- [ ] **Step 3 — Test student records.** Register the 15 already-created
+  mailboxes listed below in the ordinary students table with `is_test = true`.
+  Add `is_test` as a boolean defaulting to false for real students; do not
+  create a separate test-emails table. Test records must exercise the normal
+  inbox, reply, import, search, and college-scoping workflow.
+- [ ] **Step 4 — Student identity fields and constraints.** Store student
+  name, globally unique email, `college_id`, Application No as text in
+  `admission_id`, and `is_test`. Application No is unique within a college
+  (college_id + admission_id), not globally. Duplicate names are allowed.
+- [ ] **Step 5 — College picker before login.** Show three college buttons
+  on the landing page. Carry the selection through login. Operators using
+  the shared central credentials may select any college; no separate
+  operator-to-college permission assignments were requested.
+- [ ] **Step 6 — Enforce selected-college scoping.** Pending and Replied
+  show only that college's threads. Scope student lists, searches, imports,
+  deleted records, restoration, thread access, and reply actions on the
+  backend as well as in the UI. Student college_id determines placement,
+  even though the central mailbox is shared.
+- [ ] **Step 7 — Header-based bulk student CSV import.** Require exact full
+  college names, with no `KSMA` or `IHSM` aliases. Accept only rows belonging
+  to the selected college and explain rejected rows. Existing email with
+  identical supplied details: skip as already imported. Existing email with
+  conflicting details: flag for review, never silently overwrite. New email
+  with an Application No already used in that college: flag for review.
+  Otherwise import, even if a name matches. Check conflicts both within a
+  batch and against previous batches. Report imported/skipped/rejected rows
+  and reasons. Set is_test separately from CSV; the supplied 15 are tests.
+- [ ] **Step 8 — Password column for sending credentials.** Final CSV format
+  is `Student Name,College,Application No,Email,Password`. Each row supplies
+  its student mailbox password for SMTP replies. The user supplied one
+  common value for the 15 test accounts; use it only when execution is
+  authorized and do not reproduce it in tracked documentation or fixtures.
+- [ ] **Step 9 — Search by Application No.** Provide type-to-search partial
+  matching across student name, email, and Application No, scoped to the
+  selected college. Display Application No in the roster. "Elastic type"
+  describes the search experience; use existing PostgreSQL capabilities,
+  not a new Elasticsearch service.
+- [ ] **Step 10 — Diagnose and fix central-inbox-to-UI latency.** The user
+  observed 3–4 minutes after central inbox arrival; whether insertion or UI
+  notification is delayed remains unmeasured. Time detection, fetch,
+  database insertion, broadcast, and browser receipt. Verify actual IDLE
+  operation and polling configuration; an earlier IDLE lock fix is already
+  documented below and must not be mistaken for a new unimplemented fix.
+  Replace repeated latest-50 full-message fetches with incremental IMAP UID
+  tracking per mailbox, including UIDVALIDITY recovery. Use a persistent
+  connection and IDLE notifications, queue a follow-up pass for arrivals
+  during sync, notify the UI promptly after saving messages, and retain
+  fallback polling/reconnect catch-up. Handle all messages in college bulk
+  sends, including bursts exceeding 50 and downtime backlogs. Inspect
+  multi-student recipient handling and global Message-ID deduplication so
+  one bulk message does not hide other students' copies or mix their
+  conversations across colleges. Verify the fix with measured test results.
+- [ ] **Step 11 — Branding.** User will provide high-resolution ISM Edutech
+  and college logos. Landing: ISM Edutech branding plus college buttons.
+  Selected-college login and inner/mail pages: ISM Edutech and selected
+  college logos, with the selected college's full name.
+- [ ] **Step 12 — Professional inbox UI.** Preserve consistent full width.
+  Use a compact branded header with college and logged-in mailbox, a fixed
+  desktop thread-list width and flexible reading pane, clear student
+  name/email, subject, preview, timestamp, and selection state. Improve
+  message readability and attachment/composer layout; show the student's
+  sending address. Retain Pending / Replied labels per the latest approved
+  wording, rather than the earlier proposed Handled rename.
+- [ ] **Step 13 — Rich-text composition and native spellchecking.** Add
+  Bold and Italic toolbar controls and Ctrl/Cmd+B and Ctrl/Cmd+I shortcuts.
+  Preserve formatting in sent mail and conversation history; store/send
+  sanitized HTML with a plain-text fallback while retaining attachments
+  and threading. Enable browser-native spellcheck in the composer, with
+  browser-provided suggestions and manual corrections. Availability varies
+  by browser/language. No automatic rewriting or integrated grammar service
+  in this scope; grammar-service integration is deferred.
+- [ ] **Step 14 — Discuss AWS migration after Steps 0–13.** Moving the app
+  to AWS is a future discussion, not current deployment authorization.
+  Agree on architecture, costs, security/credentials, data migration,
+  backups, and rollout before provisioning or deploying anything.
+
+### Approved test roster (passwords intentionally omitted)
+
+Final import needs the Password column from Step 8, supplied privately.
+These Application Numbers replace the earlier shared `TEST` values.
+
+| Student Name | College | Application No | Email |
+|---|---|---|---|
+| Test Student 1 KSMA | KSMA CENTRAL | 97299038 | test.ksma1@myemailinfo.com |
+| Test Student 2 KSMA | KSMA CENTRAL | 88067600 | test.ksma2@myemailinfo.com |
+| Test Student 3 KSMA | KSMA CENTRAL | 58323203 | test.ksma3@myemailinfo.com |
+| Test Student 4 KSMA | KSMA CENTRAL | 10610719 | test.ksma4@myemailinfo.com |
+| Test Student 5 KSMA | KSMA CENTRAL | 60253661 | test.ksma5@myemailinfo.com |
+| Test Student 1 IHSM | IHSM CENTRAL | 92134630 | test.ihsm1@myemailinfo.com |
+| Test Student 2 IHSM | IHSM CENTRAL | 22264851 | test.ihsm2@myemailinfo.com |
+| Test Student 3 IHSM | IHSM CENTRAL | 81945572 | test.ihsm3@myemailinfo.com |
+| Test Student 4 IHSM | IHSM CENTRAL | 88758662 | test.ihsm4@myemailinfo.com |
+| Test Student 5 IHSM | IHSM CENTRAL | 45543760 | test.ihsm5@myemailinfo.com |
+| Test Student 1 IHSM ELITE | IHSM ELITE | 33348853 | test.ihsmelite1@myemailinfo.com |
+| Test Student 2 IHSM ELITE | IHSM ELITE | 39342146 | test.ihsmelite2@myemailinfo.com |
+| Test Student 3 IHSM ELITE | IHSM ELITE | 90846470 | test.ihsmelite3@myemailinfo.com |
+| Test Student 4 IHSM ELITE | IHSM ELITE | 91195136 | test.ihsmelite4@myemailinfo.com |
+| Test Student 5 IHSM ELITE | IHSM ELITE | 13079785 | test.ihsmelite5@myemailinfo.com |
+
+### Implementation decisions still requiring discussion
+
+- Treatment of existing pilot-domain students/messages: no implicit deletion
+  or college reassignment is authorized.
+- Conflict-resolution edits, restoration behavior during the new import,
+  and legacy import compatibility need an exact implementation plan.
+- Validate schema migration, college isolation, imports, search, reply
+  formatting, attachments, burst delivery, and UI updates when implemented.
+  Run the required TypeScript checks and appropriate build/tests; restart
+  the backend after approved backend changes.
+
 ## What this is
 
 A client manages ~1600 students traveling to Kyrgyzstan. The Kyrgyzstan
