@@ -249,26 +249,26 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                     <div className="import-section">
                         <p className="hint-text">
                             First line must be the exact header{" "}
-                            <code>Student Name,College,Application No,Email,Password</code>,
-                            one student per line after that. College must be
-                            the exact full college name (no KSMA/IHSM
-                            shorthand) and must match your currently selected
-                            college, <strong>{collegeName}</strong> - rows for
-                            another college are rejected, not imported.
-                            Password is that student's mailbox password, used
-                            for sending replies. Re-pasting an unchanged row
-                            for a student that was previously deleted restores
-                            them; re-pasting a row with different details for
-                            an existing email is flagged for review, never
+                            <code>Student Name,Application No,Email,Password</code>,
+                            one student per line after that. All rows import
+                            into your currently selected college,{" "}
+                            <strong>{collegeName}</strong>. Password is
+                            optional - leave it blank to default to{" "}
+                            <code>password</code>; otherwise it's that
+                            student's mailbox password, used for sending
+                            replies. Re-pasting an unchanged row for a student
+                            that was previously deleted restores them;
+                            re-pasting a row with different details for an
+                            existing email is flagged for review, never
                             silently overwritten.
                         </p>
 
                         <textarea
                             rows={5}
                             placeholder={
-                                "Student Name,College,Application No,Email,Password\n" +
-                                `Jane Doe,${collegeName},10012345,jane.doe@myemailinfo.com,S3cret!\n` +
-                                `John Roe,${collegeName},10012346,john.roe@myemailinfo.com,S3cret!`
+                                "Student Name,Application No,Email,Password\n" +
+                                "Jane Doe,10012345,jane.doe@myemailinfo.com,S3cret!\n" +
+                                "John Roe,10012346,john.roe@myemailinfo.com,"
                             }
                             value={csv}
                             onChange={(e) => setCsv(e.target.value)}

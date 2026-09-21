@@ -242,6 +242,22 @@ deployment authorization. Discuss exact edits before making them.
   the browser UI (no real login here); visual browser review of the new
   Add-students flow, including a real header-based paste, remains with
   the user.
+  Follow-up simplification 2026-09-21 (user-requested): dropped the College
+  column entirely - the server already knows the operator's selected
+  college from the session, so the header/format is now
+  `Student Name,Application No,Email,Password` and every imported row
+  belongs to the currently selected college directly (no per-row
+  cross-check against a mismatched college; that was judged not worth the
+  extra column for this workflow). Also made Password optional per row: a
+  blank password defaults to the literal string `password` (deliberately
+  weak, at the user's explicit request - real rosters should still supply
+  a real one). Re-verified with 4 scenarios directly against the dev
+  database (old College-containing header now correctly rejected; a blank
+  password defaults and is stored as literally `password`; re-pasting with
+  that default explicit is a no-op skip; the `college`/`college_id`
+  columns are still populated correctly from the session, not the CSV) -
+  all passed, test rows cleaned up, both TypeScript checks passed, backend
+  restarted.
 - [ ] **Step 9 — Search by Application No.** Provide type-to-search partial
   matching across student name, email, and Application No, scoped to the
   selected college. Display Application No in the roster. "Elastic type"

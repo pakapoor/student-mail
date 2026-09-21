@@ -1,5 +1,4 @@
 import { db } from "./db.js";
-import { listColleges } from "./colleges.js";
 
 export interface StudentRow {
     id: number;
@@ -22,7 +21,8 @@ export interface ImportResult {
 
 export class InvalidHeaderError extends Error {}
 
-const EXPECTED_HEADER = "student name,college,application no,email,password";
+const EXPECTED_HEADER = "student name,application no,email,password";
+const DEFAULT_PASSWORD = "password";
 
 export async function fetchStudents(
     centralEmail: string,
@@ -108,10 +108,13 @@ interface ExistingStudent {
 
 // Header-based bulk CSV import (Step 7/8). Replaces the old ad hoc
 // `name,email,password,college,year_enrolled` paste format. Format:
-//   Student Name,College,Application No,Email,Password
-// - College must be one of the colleges table's exact full names, and must
-//   match the operator's currently selected college - a row for a different
-//   college is rejected, never silently redirected or imported anyway.
+//   Student Name,Application No,Email,Password
+// The importing operator's currently selected college (from the session)
+// is used directly - there's no College column, since the server already
+// knows which college the import belongs to.
+// - Password is optional per row; a blank password defaults to the literal
+//   string "password" (deliberately weak - the user asked for this default
+//   explicitly; real rosters should still supply a real password).
 // - Never silently overwrites an existing student: identical resubmission is
 //   a no-op (skip), any differing field is flagged for manual review.
 // - is_test is deliberately never set here - it stays a manual/DB-level flag
@@ -134,14 +137,11 @@ export async function importStudents(
 
     if (normalizedHeader !== EXPECTED_HEADER) {
         throw new InvalidHeaderError(
-            `First line must be the header: Student Name,College,Application No,Email,Password`
+            `First line must be the header: Student Name,Application No,Email,Password`
         );
     }
 
     const dataRows = nonEmpty.slice(1);
-
-    const validColleges = await listColleges();
-    const validCollegeNames = new Set(validColleges.map((c) => c.name.toLowerCase()));
 
     let imported = 0;
     let skipped = 0;
@@ -152,13 +152,12 @@ export async function importStudents(
 
     for (const { line, number } of dataRows) {
         const fields = parseCsvLine(line);
-        const [nameRaw, collegeRaw, admissionIdRaw, emailRaw, passwordRaw] = fields;
+        const [nameRaw, admissionIdRaw, emailRaw, passwordRaw] = fields;
 
         const name = nameRaw?.trim();
-        const collegeText = collegeRaw?.trim();
         const admissionId = admissionIdRaw?.trim();
         const email = emailRaw?.trim().toLowerCase();
-        const password = passwordRaw?.trim();
+        const password = passwordRaw?.trim() || DEFAULT_PASSWORD;
 
         if (!name) {
             rejected.push({ line: number, email: email || "(missing)", reason: "Missing student name" });
@@ -172,29 +171,6 @@ export async function importStudents(
 
         if (!admissionId) {
             rejected.push({ line: number, email, reason: "Missing Application No" });
-            continue;
-        }
-
-        if (!password) {
-            rejected.push({ line: number, email, reason: "Missing password" });
-            continue;
-        }
-
-        if (!collegeText || !validCollegeNames.has(collegeText.toLowerCase())) {
-            rejected.push({
-                line: number,
-                email,
-                reason: "College must be an exact full college name (no abbreviations)",
-            });
-            continue;
-        }
-
-        if (collegeText.toLowerCase() !== collegeName.toLowerCase()) {
-            rejected.push({
-                line: number,
-                email,
-                reason: `Row belongs to ${collegeText}, but you are importing into ${collegeName}`,
-            });
             continue;
         }
 
