@@ -539,6 +539,31 @@ deployment authorization. Discuss exact edits before making them.
      `college_id` was affected. `GET /api/colleges` confirmed returning
      `KRMA CENTRAL`. Both TypeScript checks and the production frontend
      build passed; backend restarted.
+  3. Added bulleted and numbered lists to the composer toolbar
+     (`insertUnorderedList`/`insertOrderedList` via `execCommand`,
+     matching the existing Bold/Italic/Underline pattern). `ul`/`ol`/`li`
+     added to `sanitizeReplyHtml.ts`'s allowlist. `htmlToPlainText` was
+     rewritten from a flat sequence of regex replacements into a small
+     stateful walk with a list stack, since correct `<ol>` numbering
+     needs a counter that resets per list and can't be expressed as a
+     single blanket regex replace; it renders bulleted items as `- ` and
+     numbered items as `1. `, `2. `, etc. Two real bugs in the first
+     version of this logic were caught by the test suite itself (not
+     assumed correct): a list ending right before a new `<div>` produced
+     a spurious blank line, and a list starting right after other block
+     content produced no line break at all - fixed by having list-open
+     tags emit their own newline and collapsing any resulting
+     doubled-up blank lines at the end, rather than special-casing every
+     tag-transition pair individually.
+     Verified: 19 sanitizer/plain-text scenarios (the full existing suite
+     plus new list cases, including two independent `<ol>` lists in the
+     same message not sharing a counter) all passed, plus one real
+     end-to-end reply sent through the actual `sendReply` pipeline
+     containing both a bulleted and a numbered list - confirmed correct
+     HTML storage, a malicious `onclick` attribute stripped, and a
+     naturally-readable plain-text fallback - with the test message's
+     state cleanly reset afterward. Both TypeScript checks and the
+     production frontend build passed; backend restarted.
 - [ ] **Step 14 — Discuss AWS migration after Steps 0–13.** Moving the app
   to AWS is a future discussion, not current deployment authorization.
   Agree on architecture, costs, security/credentials, data migration,

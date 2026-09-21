@@ -509,6 +509,14 @@
     outline-offset: 1px;
 }
 
+.rich-editor ul,
+.rich-editor ol,
+.bubble-body ul,
+.bubble-body ol {
+    margin: 6px 0;
+    padding-left: 24px;
+}
+
 .rich-editor-placeholder {
     position: absolute;
     top: 10px;

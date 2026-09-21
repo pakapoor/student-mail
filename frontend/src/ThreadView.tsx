@@ -94,7 +94,9 @@ export default function ThreadView({ items, onReplySent }: Props) {
         setHasContent((editorRef.current?.textContent?.trim().length ?? 0) > 0);
     }
 
-    function applyFormat(command: "bold" | "italic" | "underline") {
+    function applyFormat(
+        command: "bold" | "italic" | "underline" | "insertUnorderedList" | "insertOrderedList"
+    ) {
         editorRef.current?.focus();
         document.execCommand(command);
         updateHasContent();
@@ -231,6 +233,31 @@ export default function ThreadView({ items, onReplySent }: Props) {
                             title="Underline (Ctrl/Cmd+U)"
                         >
                             <u>U</u>
+                        </button>
+
+                        <span className="toolbar-divider" />
+
+                        <button
+                            type="button"
+                            className="toolbar-button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyFormat("insertUnorderedList")}
+                            disabled={sending}
+                            aria-label="Bulleted list"
+                            title="Bulleted list"
+                        >
+                            &bull; List
+                        </button>
+                        <button
+                            type="button"
+                            className="toolbar-button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyFormat("insertOrderedList")}
+                            disabled={sending}
+                            aria-label="Numbered list"
+                            title="Numbered list"
+                        >
+                            1. List
                         </button>
 
                         <span className="toolbar-divider" />
