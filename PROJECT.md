@@ -258,6 +258,17 @@ deployment authorization. Discuss exact edits before making them.
   columns are still populated correctly from the session, not the CSV) -
   all passed, test rows cleaned up, both TypeScript checks passed, backend
   restarted.
+  Follow-up 2026-09-21 (user-requested): made the header line optional
+  instead of required, since parsing is purely positional and never used
+  the header to map columns - it only ever served as an up-front sanity
+  check. If the first non-empty line matches
+  `Student Name,Application No,Email,Password` exactly (case-insensitive)
+  it's skipped; otherwise every line is treated as data. Removed the now-
+  unused `InvalidHeaderError` class and its handling in `server.ts`.
+  Re-verified with 3 scenarios against the dev database (with header,
+  without header, header matched case-insensitively) - all imported
+  correctly, test rows cleaned up, both TypeScript checks passed, backend
+  restarted.
 - [ ] **Step 9 — Search by Application No.** Provide type-to-search partial
   matching across student name, email, and Application No, scoped to the
   selected college. Display Application No in the roster. "Elastic type"

@@ -248,9 +248,10 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                 {rosterTab === "add" && (
                     <div className="import-section">
                         <p className="hint-text">
-                            First line must be the exact header{" "}
-                            <code>Student Name,Application No,Email,Password</code>,
-                            one student per line after that. All rows import
+                            One student per line, in the order{" "}
+                            <code>Student Name,Application No,Email,Password</code>.
+                            An optional header line in that exact form is
+                            skipped if you include it. All rows import
                             into your currently selected college,{" "}
                             <strong>{collegeName}</strong>. Password is
                             optional - leave it blank to default to{" "}

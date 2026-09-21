@@ -28,7 +28,7 @@ import {
     listCentralMailboxes,
     registerCentralMailbox,
 } from "./centralMailboxes.js";
-import { fetchStudents, importStudents, InvalidHeaderError } from "./students.js";
+import { fetchStudents, importStudents } from "./students.js";
 import {
     pendingCountsForStudents,
     restoreStudent,
@@ -173,22 +173,13 @@ app.post("/api/students/import", requireAuth, requireCollege, async (req, res) =
         return;
     }
 
-    try {
-        const result = await importStudents(
-            csv,
-            res.locals.centralEmail,
-            res.locals.collegeId,
-            res.locals.college.name
-        );
-        res.json(result);
-    } catch (error) {
-        if (error instanceof InvalidHeaderError) {
-            res.status(400).json({ error: error.message });
-            return;
-        }
-
-        throw error;
-    }
+    const result = await importStudents(
+        csv,
+        res.locals.centralEmail,
+        res.locals.collegeId,
+        res.locals.college.name
+    );
+    res.json(result);
 });
 
 // Admin roster - scoped to the logged-in operator's own central mailbox and

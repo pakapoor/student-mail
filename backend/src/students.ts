@@ -19,8 +19,6 @@ export interface ImportResult {
     rejected: RejectedRow[];
 }
 
-export class InvalidHeaderError extends Error {}
-
 const EXPECTED_HEADER = "student name,application no,email,password";
 const DEFAULT_PASSWORD = "password";
 
@@ -106,9 +104,12 @@ interface ExistingStudent {
     deleted_at: string | null;
 }
 
-// Header-based bulk CSV import (Step 7/8). Replaces the old ad hoc
+// Bulk CSV import (Step 7/8). Replaces the old ad hoc
 // `name,email,password,college,year_enrolled` paste format. Format:
 //   Student Name,Application No,Email,Password
+// An optional header line matching that exactly (case-insensitive) is
+// skipped if present; otherwise every line is treated as data - positional
+// parsing doesn't need a header to map columns.
 // The importing operator's currently selected college (from the session)
 // is used directly - there's no College column, since the server already
 // knows which college the import belongs to.
@@ -130,18 +131,16 @@ export async function importStudents(
         .map((line, index) => ({ line, number: index + 1 }))
         .filter(({ line }) => line.trim().length > 0);
 
+    // Header row is optional: if the first line is exactly the expected
+    // header, skip it; otherwise treat every line as data (positional
+    // parsing doesn't need the header to map columns).
     const headerEntry = nonEmpty[0];
     const normalizedHeader = headerEntry
         ? parseCsvLine(headerEntry.line).join(",").toLowerCase()
         : "";
+    const hasHeader = normalizedHeader === EXPECTED_HEADER;
 
-    if (normalizedHeader !== EXPECTED_HEADER) {
-        throw new InvalidHeaderError(
-            `First line must be the header: Student Name,Application No,Email,Password`
-        );
-    }
-
-    const dataRows = nonEmpty.slice(1);
+    const dataRows = hasHeader ? nonEmpty.slice(1) : nonEmpty;
 
     let imported = 0;
     let skipped = 0;
