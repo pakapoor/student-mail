@@ -139,31 +139,48 @@ continue without re-deriving them.
    no errors. Verified: 2283 students / 38 messages / 17 replies / 3
    colleges — matches expected scale.
 
+10. ✅ `backend/src/server.ts`'s session cookie `secure` flag changed from
+   hardcoded `false` to `process.env.NODE_ENV === "production"` (commit
+   `bd97821`) — keeps local dev over plain HTTP working while making
+   the real deployment's cookie HTTPS-only. `.env` created on the
+   instance (`backend/.env`) with real IMAP/SMTP/DB credentials (same as
+   local), `DB_PASSWORD` blank (matches trust-auth setup), plus two new
+   lines: `FRONTEND_ORIGIN=https://app.myemailinfo.com` and
+   `NODE_ENV=production`.
+
 ## Next steps, in order (give ONE at a time, per user's explicit request —
 ## do not dump the whole list on them at once)
 
-1. **Configure `.env`** on the instance with real IMAP/SMTP/DB
-   credentials, set `FRONTEND_ORIGIN` to `https://app.myemailinfo.com`,
-   and update the session cookie's `secure: false` (currently hardcoded
-   for local plain-HTTP dev in `auth.ts`/`server.ts` — search for
-   `res.cookie(SESSION_COOKIE` in `server.ts`) to `true` now that real
-   HTTPS will be live.
-6. **Set up Nginx**: reverse-proxy `/api` (or however the routes are
-   structured) to the Node backend, serve the built frontend's static
-   files for everything else, then run **Certbot** for
-   `app.myemailinfo.com` once DNS has propagated (check with
-   `dig app.myemailinfo.com` or similar before attempting — Certbot's
-   HTTP-01 challenge needs the A record to actually resolve first).
-7. **Run the backend as a systemd service** (not a bare `npx tsx` in a
-   terminal — needs to survive reboots and terminal closes).
-8. **Stop the local dev instance's IMAP sync** — this is a real
-   correctness requirement, not just cleanup: two processes (local dev +
-   AWS) both running IMAP IDLE watchers/polling against the same
-   mailboxes would race on the per-mailbox UID watermark added in
-   Step 10 of the main project work, potentially corrupting sync state
-   or double-processing mail. This must be a clean cutover, not a
-   "run both for a while" period.
-9. **Test end-to-end on the real domain**: login → college picker →
+11. ✅ Nginx configured (`/etc/nginx/sites-available/student-mail`):
+   `/api/` reverse-proxied to backend on `127.0.0.1:3001` (with
+   `proxy_buffering off` for the `/api/events` SSE endpoint), `/` serves
+   `frontend/dist` static build with `try_files $uri /index.html` SPA
+   fallback. DNS confirmed resolving (`dig` → `52.86.63.127`) before
+   running Certbot.
+12. ✅ HTTPS live: `sudo certbot --nginx -d app.myemailinfo.com` succeeded
+   (email `pakapoor@gmail.com`), cert auto-deployed into the Nginx
+   config, auto-renewal scheduled by Certbot. **`https://app.myemailinfo.com`
+   is now serving over TLS** (backend not yet running as a service, so
+   `/api/` will 502 until the next step).
+
+13. ✅ Backend running as a systemd service (`/etc/systemd/system/
+   student-mail.service`, `ExecStart` uses `node_modules/.bin/tsx
+   src/server.ts` directly since there's no npm start script), enabled
+   + started via `systemctl enable --now`. Confirmed via
+   `journalctl -u student-mail`: `.env` loaded, listening on
+   `127.0.0.1:3001`, IMAP idle watcher connected for
+   `central.ksma@myemailinfo.com`, sync loop running cleanly (no
+   errors). **The backend is now live on AWS.**
+
+14. ✅ Local dev backend stopped (killed `tsx src/server.ts` and its
+   child processes on the local WSL machine) — clean cutover done, AWS
+   is now the sole process syncing the IMAP mailboxes. Confirmed no
+   `tsx` processes remain locally.
+
+## Next steps, in order (give ONE at a time, per user's explicit request —
+## do not dump the whole list on them at once)
+
+1. **Test end-to-end on the real domain**: login → college picker →
    Manage Students / CSV import → reply with rich text (Bold/Italic/
    Underline/lists) → Close button → follow-up message on a closed
    thread → confirm pending count badge works — i.e., re-verify
