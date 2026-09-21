@@ -372,7 +372,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         {rosterTab === "students" && <span className="admin-checkbox-spacer" />}
                         <span className="admin-cell admin-name">Name</span>
                         <span className="admin-cell admin-email">Email</span>
-                        <span className="admin-cell admin-college">College</span>
+                        <span className="admin-cell admin-admission">Application No</span>
                         <span className="admin-cell admin-year">Year enrolled</span>
                         {rosterTab === "deleted" && <span className="admin-action-spacer" />}
                     </div>
@@ -405,8 +405,8 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                                             {displayName(s)}
                                         </span>
                                         <span className="admin-cell admin-email">{s.email}</span>
-                                        <span className="admin-cell admin-college">
-                                            {s.college || "—"}
+                                        <span className="admin-cell admin-admission">
+                                            {s.admission_id || "—"}
                                         </span>
                                         <span className="admin-cell admin-year">
                                             {s.year_enrolled ?? "—"}

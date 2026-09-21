@@ -187,6 +187,20 @@ deployment authorization. Discuss exact edits before making them.
   `/api/auth/college` still 401s with no session at all. User confirmed
   fixed live in the browser (college selection and Manage Students/Add
   students both working).
+  Follow-up 2026-09-21 (user-requested, found via browser screenshot):
+  Manage Students' Students/Deleted tables were missing Application No
+  entirely (a real gap - it's the field operators actually need to look
+  students up by) while showing a College column that's always the same
+  value now that the roster is college-scoped. Swapped them:
+  `searchAdminStudents` now selects `admission_id` instead of `college`,
+  `AdminStudentRow` (both backend and frontend) updated to match, and the
+  table column (backend/CSS class renamed `admin-college` ->
+  `admin-admission`) now shows Application No instead of College.
+  Verified by re-running the exact `searchAdminStudents` SQL directly
+  against the dev database - `admission_id` values return correctly
+  (confirmed against the real KSMA CENTRAL roster, including the two
+  `Sample Student A/B` rows the user had already imported live). Both
+  TypeScript checks passed, backend restarted.
 - [x] **Step 7/8 — Header-based bulk student CSV import with password
   column.** Merged at implementation time: `students.smtp_password` is
   `NOT NULL`, so Step 7's format alone (no password) couldn't actually

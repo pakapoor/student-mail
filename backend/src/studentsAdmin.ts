@@ -11,7 +11,7 @@ export interface AdminStudentRow {
     last_name: string | null;
     name: string | null;
     email: string;
-    college: string | null;
+    admission_id: string | null;
     year_enrolled: number | null;
     created_at: string;
     deleted_at: string | null;
@@ -96,7 +96,7 @@ export async function searchAdminStudents(opts: {
 
     const result = await db.query<AdminStudentRow>(
         `
-        SELECT id, first_name, last_name, name, email, college, year_enrolled, created_at, deleted_at
+        SELECT id, first_name, last_name, name, email, admission_id, year_enrolled, created_at, deleted_at
         FROM students
         WHERE ${conditions.join(" AND ")}
         ORDER BY coalesce(first_name,''), coalesce(last_name,''), id
