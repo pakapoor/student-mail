@@ -107,11 +107,60 @@ deployment authorization. Discuss exact edits before making them.
   the setup notes below); visual browser review of the new login-first ->
   college-picker -> console sequence remains with the user. This step does
   not filter mail/students by college: backend enforcement is Step 6.
-- [ ] **Step 6 — Enforce selected-college scoping.** Pending and Replied
+- [x] **Step 6 — Enforce selected-college scoping.** Pending and Replied
   show only that college's threads. Scope student lists, searches, imports,
   deleted records, restoration, thread access, and reply actions on the
   backend as well as in the UI. Student college_id determines placement,
   even though the central mailbox is shared.
+  Completed 2026-09-21: `requireAuth` in `server.ts` now requires a selected
+  college on the session (400 "Select a college" otherwise) and passes
+  `res.locals.collegeId` to every handler. `students.ts` (`fetchStudents`,
+  `importStudents`), `studentsAdmin.ts` (`searchAdminStudents`,
+  `softDeleteStudents`, `restoreStudent`, `pendingCountsForStudents`),
+  `thread.ts` (`fetchAllMessages`/`fetchThread`/`fetchThreadSummaries`), and
+  `reply.ts` (`fetchMessageById`/`fetchMessages`/`markHandled`) all now
+  filter by `students.college_id` (messages via an `EXISTS` join through
+  `student_email`), so Pending/Replied, the roster, search, delete/restore,
+  and reply/mark-handled are all isolated per college. `importStudents` also
+  rejects a pasted row whose email is already assigned to a different
+  college, mirroring the existing central-mailbox conflict check.
+  Rolled the user's follow-up request into this same step: the admin roster
+  (Manage Students) is no longer cross-operator - `searchAdminStudents`,
+  `softDeleteStudents`, and `restoreStudent` now also filter by
+  `central_email`, matching how the "Add students" tab already scoped
+  itself. This intentionally overrides the earlier documented decision that
+  the roster deliberately showed every central mailbox's students (see the
+  updated note in "Key schema decisions worth knowing" below). Since the
+  Owner column would now always show the same value for every visible row,
+  it was removed from `ManageStudents.tsx`/`AdminStudentRow`/the search
+  placeholder text, along with the now-unused `.admin-owner` CSS rule.
+  SSE broadcast (`realtime.ts`) was deliberately left unscoped by college -
+  it still only keys off central mailbox, so an operator may get an extra
+  "new mail" refresh ping for another college's message, but the refetch
+  that follows goes through the newly college-scoped endpoints, so no data
+  crosses colleges; this avoids threading college context through
+  `mailboxSync.ts`/`sync.ts` for a purely-cosmetic extra refresh.
+  Legacy pre-Step-4 students (8 rows, `college_id IS NULL`, owned by the old
+  `pankaj@system-design.in` mailbox) are now invisible under every college
+  until manually assigned - no bulk reassignment tool exists yet. In
+  practice this changes nothing reachable today: `ACTIVE_CENTRAL_EMAIL`
+  already prevents that old mailbox from logging in (see Step 2), so those
+  records were already unreachable through the console before this step.
+  Verified: both TypeScript checks passed (one legacy CLI script,
+  `test-reply.ts`, needed a `CENTRAL_COLLEGE_ID` env var added to keep
+  compiling against the new signatures - it is not part of the live app).
+  Backend restarted. Could not drive a real IMAP login here (no working
+  central mailbox password in `.env`), so verified scoping directly against
+  the real dev database with the same filters the code now uses: the 15 test
+  students split cleanly 5/5/5 across the three colleges with zero overlap
+  under `central.ksma@myemailinfo.com`, and the 15 forwarding-verification
+  messages joined to students split the same 5/5/5 with zero overlap.
+  Confirmed unauthenticated requests to `/api/students` and `/api/threads`
+  still return 401. The "no college selected" 400 gate is a direct read of
+  a one-line check and was not independently curl-tested end-to-end (would
+  need a real login). Visual browser review with two colleges side by side
+  remains with the user, including confirming Manage Students only shows
+  the current mailbox+college's roster and no Owner column.
 - [ ] **Step 7 — Header-based bulk student CSV import.** Require exact full
   college names, with no `KSMA` or `IHSM` aliases. Accept only rows belonging
   to the selected college and explain rejected rows. Existing email with
@@ -316,12 +365,15 @@ needs real DB auth/secrets.
 
 ### Key schema decisions worth knowing
 
-- `students.central_email` is **not a tenant boundary** - it just records
-  which operator/mailbox currently handles that student's mail. The admin
-  roster page deliberately shows students across every central_email (no
-  admin role exists; a handful of trusted coworkers share full visibility).
-  Messages/threads, by contrast, ARE scoped per-operator central_email -
-  worker A doesn't see worker B's live inbox.
+- `students.central_email` records which operator/mailbox currently handles
+  that student's mail. It was originally **not** treated as a tenant
+  boundary for the admin roster (the roster deliberately showed students
+  across every central_email, since no admin role exists). As of Step 6
+  this was deliberately overridden at the user's request: the admin roster
+  (Manage Students) is now scoped by `central_email` **and** `college_id`,
+  same as everything else - one operator's console never shows another
+  operator's or another college's students. Messages/threads were always
+  scoped per-operator central_email and are now also scoped by college_id.
 - `students.deleted_at` is a **soft delete**. Deleted students (and all their
   messages/threads) are hidden everywhere in the console until restored, but
   nothing is ever purged from Postgres. Rules: max 5 deleted at once (with a

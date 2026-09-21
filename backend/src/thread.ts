@@ -117,9 +117,14 @@ function stillPending(message: MessageRow, resolvedAt: number): boolean {
     return new Date(message.received_at).getTime() > resolvedAt;
 }
 
-async function fetchAllMessages(centralEmail: string): Promise<MessageRow[]> {
+async function fetchAllMessages(
+    centralEmail: string,
+    collegeId: string
+): Promise<MessageRow[]> {
     // Soft-deleted students' messages stay in the DB but must be invisible
     // everywhere in the console (including thread grouping) until restored.
+    // A message only counts as visible if its student is active and belongs
+    // to the selected college.
     const result = await db.query<MessageRow>(
         `
         SELECT id, message_id, student_email, sender_email, subject, received_at,
@@ -127,12 +132,14 @@ async function fetchAllMessages(centralEmail: string): Promise<MessageRow[]> {
                handled_without_reply
         FROM messages
         WHERE central_email = $1
-          AND NOT EXISTS (
+          AND EXISTS (
               SELECT 1 FROM students s
-              WHERE s.email = messages.student_email AND s.deleted_at IS NOT NULL
+              WHERE s.email = messages.student_email
+                AND s.deleted_at IS NULL
+                AND s.college_id = $2
           )
         `,
-        [centralEmail]
+        [centralEmail, collegeId]
     );
 
     return result.rows;
@@ -238,9 +245,10 @@ export async function countEffectivelyPendingByEmail(
 
 export async function fetchThread(
     messageId: number,
-    centralEmail: string
+    centralEmail: string,
+    collegeId: string
 ): Promise<ThreadItem[] | null> {
-    const messages = await fetchAllMessages(centralEmail);
+    const messages = await fetchAllMessages(centralEmail, collegeId);
     const target = messages.find((m) => Number(m.id) === messageId);
 
     if (!target) {
@@ -317,10 +325,11 @@ export interface ThreadSummaryPage {
 export async function fetchThreadSummaries(
     status: "pending" | "replied",
     centralEmail: string,
+    collegeId: string,
     limit = 25,
     offset = 0
 ): Promise<ThreadSummaryPage> {
-    const messages = await fetchAllMessages(centralEmail);
+    const messages = await fetchAllMessages(centralEmail, collegeId);
     const threadGroups = groupIntoThreads(messages);
     const allReplies = await fetchAllReplies();
 

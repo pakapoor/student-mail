@@ -1,11 +1,9 @@
 import { db } from "./db.js";
 import { countEffectivelyPendingByEmail } from "./thread.js";
 
-// Cross-operator student directory: unlike students.ts's fetchStudents (scoped
-// to the logged-in operator's own central mailbox), this deliberately shows
-// students across ALL central mailboxes - there is no admin role, so any
-// logged-in operator can browse/search/delete the full roster. Only used for
-// the admin roster page; messages/threads stay scoped per-operator elsewhere.
+// Admin roster: scoped to the logged-in operator's own central mailbox AND
+// selected college, same as students.ts's fetchStudents. Only used for the
+// admin roster page; messages/threads stay scoped the same way elsewhere.
 
 export interface AdminStudentRow {
     id: number;
@@ -15,7 +13,6 @@ export interface AdminStudentRow {
     email: string;
     college: string | null;
     year_enrolled: number | null;
-    central_email: string | null;
     created_at: string;
     deleted_at: string | null;
 }
@@ -58,6 +55,8 @@ function decodeCursor(cursor: string): Cursor | null {
 }
 
 export async function searchAdminStudents(opts: {
+    centralEmail: string;
+    collegeId: string;
     search?: string;
     cursor?: string | null;
     deleted?: boolean;
@@ -69,8 +68,10 @@ export async function searchAdminStudents(opts: {
 
     const conditions: string[] = [
         deleted ? "deleted_at IS NOT NULL" : "deleted_at IS NULL",
+        "central_email = $1",
+        "college_id = $2",
     ];
-    const params: unknown[] = [];
+    const params: unknown[] = [opts.centralEmail, opts.collegeId];
 
     if (search) {
         params.push(`%${search}%`);
@@ -95,7 +96,7 @@ export async function searchAdminStudents(opts: {
 
     const result = await db.query<AdminStudentRow>(
         `
-        SELECT id, first_name, last_name, name, email, college, year_enrolled, central_email, created_at, deleted_at
+        SELECT id, first_name, last_name, name, email, college, year_enrolled, created_at, deleted_at
         FROM students
         WHERE ${conditions.join(" AND ")}
         ORDER BY coalesce(first_name,''), coalesce(last_name,''), id
@@ -114,7 +115,9 @@ export async function searchAdminStudents(opts: {
 }
 
 export async function pendingCountsForStudents(
-    ids: number[]
+    ids: number[],
+    centralEmail: string,
+    collegeId: string
 ): Promise<Record<number, number>> {
     if (ids.length === 0) {
         return {};
@@ -126,8 +129,8 @@ export async function pendingCountsForStudents(
     // so this delete-confirmation warning never disagrees with what the
     // console itself shows for that student.
     const result = await db.query<{ id: number; email: string }>(
-        "SELECT id, email FROM students WHERE id = ANY($1)",
-        [ids]
+        "SELECT id, email FROM students WHERE id = ANY($1) AND central_email = $2 AND college_id = $3",
+        [ids, centralEmail, collegeId]
     );
 
     const emails = result.rows.map((row) => row.email);
@@ -142,7 +145,11 @@ export async function pendingCountsForStudents(
     return counts;
 }
 
-export async function softDeleteStudents(ids: number[]): Promise<number> {
+export async function softDeleteStudents(
+    ids: number[],
+    centralEmail: string,
+    collegeId: string
+): Promise<number> {
     if (ids.length === 0) {
         return 0;
     }
@@ -156,21 +163,27 @@ export async function softDeleteStudents(ids: number[]): Promise<number> {
         UPDATE students
         SET deleted_at = NOW()
         WHERE id = ANY($1) AND deleted_at IS NULL
+          AND central_email = $2 AND college_id = $3
         `,
-        [ids]
+        [ids, centralEmail, collegeId]
     );
 
     return result.rowCount ?? 0;
 }
 
-export async function restoreStudent(id: number): Promise<boolean> {
+export async function restoreStudent(
+    id: number,
+    centralEmail: string,
+    collegeId: string
+): Promise<boolean> {
     const result = await db.query(
         `
         UPDATE students
         SET deleted_at = NULL
         WHERE id = $1 AND deleted_at IS NOT NULL
+          AND central_email = $2 AND college_id = $3
         `,
-        [id]
+        [id, centralEmail, collegeId]
     );
 
     return (result.rowCount ?? 0) > 0;

@@ -64,7 +64,6 @@ export interface AdminStudentRow {
     email: string;
     college: string | null;
     year_enrolled: number | null;
-    central_email: string | null;
     created_at: string;
     deleted_at: string | null;
 }

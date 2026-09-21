@@ -858,8 +858,3 @@
     flex: 0.6 1 90px;
     color: var(--text-muted);
 }
-
-.admin-owner {
-    flex: 1.2 1 180px;
-    color: var(--text-muted);
-}

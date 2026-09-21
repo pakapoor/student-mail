@@ -32,7 +32,7 @@ export default function ManageStudents({ onClose, onImported }: Props) {
     const [importError, setImportError] = useState<string | null>(null);
     const [result, setResult] = useState<ImportResult | null>(null);
 
-    // Cross-operator admin roster.
+    // Admin roster, scoped to this operator's mailbox and selected college.
     const [rosterTab, setRosterTab] = useState<RosterTab>("students");
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -310,7 +310,7 @@ export default function ManageStudents({ onClose, onImported }: Props) {
                     <input
                         className="admin-search"
                         type="text"
-                        placeholder="Search name, email, college, or owner..."
+                        placeholder="Search name, email, or college..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
@@ -366,7 +366,6 @@ export default function ManageStudents({ onClose, onImported }: Props) {
                         <span className="admin-cell admin-email">Email</span>
                         <span className="admin-cell admin-college">College</span>
                         <span className="admin-cell admin-year">Year enrolled</span>
-                        <span className="admin-cell admin-owner">Owner</span>
                         {rosterTab === "deleted" && <span className="admin-action-spacer" />}
                     </div>
 
@@ -403,9 +402,6 @@ export default function ManageStudents({ onClose, onImported }: Props) {
                                         </span>
                                         <span className="admin-cell admin-year">
                                             {s.year_enrolled ?? "—"}
-                                        </span>
-                                        <span className="admin-cell admin-owner">
-                                            {s.central_email || "—"}
                                         </span>
                                         {rosterTab === "deleted" && (
                                             <button

@@ -38,25 +38,31 @@ export class StudentDeletedError extends Error {
 // Soft-deleted students' messages stay recorded in the DB (mail still arrives
 // even after we retire the roster entry) but must be invisible everywhere in
 // the console until restored - so every message-reading query excludes them.
-const EXCLUDE_DELETED_STUDENTS = `
-    NOT EXISTS (
+// A message is only visible if its student is active and belongs to the
+// selected college - soft-deleted students' messages stay in the DB but must
+// be invisible everywhere in the console until restored.
+const VISIBLE_TO_COLLEGE = (collegeParamIndex: number) => `
+    EXISTS (
         SELECT 1 FROM students s
-        WHERE s.email = messages.student_email AND s.deleted_at IS NOT NULL
+        WHERE s.email = messages.student_email
+          AND s.deleted_at IS NULL
+          AND s.college_id = $${collegeParamIndex}
     )
 `;
 
 export async function fetchMessageById(
     id: number,
-    centralEmail: string
+    centralEmail: string,
+    collegeId: string
 ): Promise<MessageRow | undefined> {
     const result = await db.query(
         `
         SELECT id, message_id, student_email, sender_email, subject, reference_ids, replied,
                received_at, replied_at, body_text, body_html, central_email
         FROM messages
-        WHERE id = $1 AND central_email = $2 AND ${EXCLUDE_DELETED_STUDENTS}
+        WHERE id = $1 AND central_email = $2 AND ${VISIBLE_TO_COLLEGE(3)}
         `,
-        [id, centralEmail]
+        [id, centralEmail, collegeId]
     );
 
     return result.rows[0];
@@ -64,7 +70,8 @@ export async function fetchMessageById(
 
 export async function fetchMessages(
     status: "pending" | "replied" | "all",
-    centralEmail: string
+    centralEmail: string,
+    collegeId: string
 ): Promise<MessageRow[]> {
     if (status === "all") {
         const result = await db.query(
@@ -72,10 +79,10 @@ export async function fetchMessages(
             SELECT id, message_id, student_email, sender_email, subject,
                    received_at, replied, replied_at, central_email
             FROM messages
-            WHERE central_email = $1 AND ${EXCLUDE_DELETED_STUDENTS}
+            WHERE central_email = $1 AND ${VISIBLE_TO_COLLEGE(2)}
             ORDER BY received_at DESC
             `,
-            [centralEmail]
+            [centralEmail, collegeId]
         );
         return result.rows;
     }
@@ -85,10 +92,10 @@ export async function fetchMessages(
         SELECT id, message_id, student_email, sender_email, subject,
                received_at, replied, replied_at, central_email
         FROM messages
-        WHERE replied = $1 AND central_email = $2 AND ${EXCLUDE_DELETED_STUDENTS}
+        WHERE replied = $1 AND central_email = $2 AND ${VISIBLE_TO_COLLEGE(3)}
         ORDER BY received_at ASC
         `,
-        [status === "replied", centralEmail]
+        [status === "replied", centralEmail, collegeId]
     );
 
     return result.rows;
@@ -212,15 +219,16 @@ export async function sendReply(
 
 export async function markHandled(
     messageId: number,
-    centralEmail: string
+    centralEmail: string,
+    collegeId: string
 ): Promise<boolean> {
     const result = await db.query(
         `
         UPDATE messages
         SET replied = TRUE, replied_at = NOW(), handled_without_reply = TRUE
-        WHERE id = $1 AND replied = FALSE AND central_email = $2
+        WHERE id = $1 AND replied = FALSE AND central_email = $2 AND ${VISIBLE_TO_COLLEGE(3)}
         `,
-        [messageId, centralEmail]
+        [messageId, centralEmail, collegeId]
     );
 
     return (result.rowCount ?? 0) > 0;

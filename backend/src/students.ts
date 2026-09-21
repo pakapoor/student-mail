@@ -21,16 +21,17 @@ export interface ImportResult {
 }
 
 export async function fetchStudents(
-    centralEmail: string
+    centralEmail: string,
+    collegeId: string
 ): Promise<StudentRow[]> {
     const result = await db.query<StudentRow>(
         `
         SELECT id, name, email, created_at
         FROM students
-        WHERE central_email = $1
+        WHERE central_email = $1 AND college_id = $2
         ORDER BY created_at DESC
         `,
-        [centralEmail]
+        [centralEmail, collegeId]
     );
 
     return result.rows;
@@ -94,7 +95,8 @@ function parseCsvLine(line: string): string[] {
 
 export async function importStudents(
     csvText: string,
-    centralEmail: string
+    centralEmail: string,
+    collegeId: string
 ): Promise<ImportResult> {
     const lines = csvText
         .split(/\r?\n/)
@@ -131,8 +133,11 @@ export async function importStudents(
             continue;
         }
 
-        const existing = await db.query<{ central_email: string | null }>(
-            "SELECT central_email FROM students WHERE email = $1",
+        const existing = await db.query<{
+            central_email: string | null;
+            college_id: string | null;
+        }>(
+            "SELECT central_email, college_id FROM students WHERE email = $1",
             [email]
         );
 
@@ -148,12 +153,23 @@ export async function importStudents(
             continue;
         }
 
+        const existingCollegeId = existing.rows[0]?.college_id;
+
+        if (existingCollegeId && existingCollegeId !== collegeId) {
+            rejected.push({
+                line: number,
+                email,
+                reason: "Already assigned to another college",
+            });
+            continue;
+        }
+
         const { first, last } = splitName(name || null);
 
         const result = await db.query(
             `
-            INSERT INTO students (name, first_name, last_name, email, smtp_password, central_email, college, year_enrolled)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO students (name, first_name, last_name, email, smtp_password, central_email, college, college_id, year_enrolled)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (email) DO UPDATE SET
                 name = EXCLUDED.name,
                 first_name = EXCLUDED.first_name,
@@ -161,11 +177,12 @@ export async function importStudents(
                 smtp_password = EXCLUDED.smtp_password,
                 central_email = EXCLUDED.central_email,
                 college = EXCLUDED.college,
+                college_id = EXCLUDED.college_id,
                 year_enrolled = EXCLUDED.year_enrolled,
                 deleted_at = NULL
             RETURNING (xmax = 0) AS inserted
             `,
-            [name || null, first, last, email, password, centralEmail, college, yearEnrolled]
+            [name || null, first, last, email, password, centralEmail, college, collegeId, yearEnrolled]
         );
 
         if (result.rows[0]?.inserted) {

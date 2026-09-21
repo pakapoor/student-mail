@@ -59,8 +59,13 @@ function requireAuth(
         return;
     }
 
+    if (!session.college) {
+        res.status(400).json({ error: "Select a college" });
+        return;
+    }
+
     res.locals.centralEmail = session.email;
-    res.locals.collegeId = session.college?.id;
+    res.locals.collegeId = session.college.id;
     next();
 }
 
@@ -142,7 +147,7 @@ app.get("/api/auth/me", (req, res) => {
 });
 
 app.get("/api/students", requireAuth, async (req, res) => {
-    const students = await fetchStudents(res.locals.centralEmail);
+    const students = await fetchStudents(res.locals.centralEmail, res.locals.collegeId);
     res.json(students);
 });
 
@@ -154,19 +159,24 @@ app.post("/api/students/import", requireAuth, async (req, res) => {
         return;
     }
 
-    const result = await importStudents(csv, res.locals.centralEmail);
+    const result = await importStudents(csv, res.locals.centralEmail, res.locals.collegeId);
     res.json(result);
 });
 
-// Cross-operator admin roster - deliberately not scoped to res.locals.centralEmail,
-// since there's no admin role: any logged-in operator can browse/search/delete
-// the full student directory across every central mailbox.
+// Admin roster - scoped to the logged-in operator's own central mailbox and
+// selected college (same scope as /api/students), not cross-operator.
 app.get("/api/admin/students", requireAuth, async (req, res) => {
     const search = typeof req.query.search === "string" ? req.query.search : "";
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : null;
     const deleted = req.query.deleted === "true";
 
-    const page = await searchAdminStudents({ search, cursor, deleted });
+    const page = await searchAdminStudents({
+        centralEmail: res.locals.centralEmail,
+        collegeId: res.locals.collegeId,
+        search,
+        cursor,
+        deleted,
+    });
     res.json(page);
 });
 
@@ -175,7 +185,7 @@ app.post("/api/admin/students/pending-counts", requireAuth, async (req, res) => 
         ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n))
         : [];
 
-    const counts = await pendingCountsForStudents(ids);
+    const counts = await pendingCountsForStudents(ids, res.locals.centralEmail, res.locals.collegeId);
     res.json(counts);
 });
 
@@ -194,7 +204,7 @@ app.post("/api/admin/students/delete", requireAuth, async (req, res) => {
         return;
     }
 
-    const deletedCount = await softDeleteStudents(ids);
+    const deletedCount = await softDeleteStudents(ids, res.locals.centralEmail, res.locals.collegeId);
     res.json({ deleted: deletedCount });
 });
 
@@ -206,7 +216,7 @@ app.post("/api/admin/students/:id/restore", requireAuth, async (req, res) => {
         return;
     }
 
-    const ok = await restoreStudent(id);
+    const ok = await restoreStudent(id, res.locals.centralEmail, res.locals.collegeId);
 
     if (!ok) {
         res.status(404).json({ error: "Student not found or not deleted" });
@@ -222,7 +232,7 @@ app.get("/api/messages", requireAuth, async (req, res) => {
     const normalized =
         status === "all" || status === "replied" ? status : "pending";
 
-    const messages = await fetchMessages(normalized, res.locals.centralEmail);
+    const messages = await fetchMessages(normalized, res.locals.centralEmail, res.locals.collegeId);
     res.json(messages);
 });
 
@@ -244,6 +254,7 @@ app.get("/api/threads", requireAuth, async (req, res) => {
     const page = await fetchThreadSummaries(
         normalized,
         res.locals.centralEmail,
+        res.locals.collegeId,
         limit,
         offset
     );
@@ -258,7 +269,7 @@ app.get("/api/messages/:id", requireAuth, async (req, res) => {
         return;
     }
 
-    const message = await fetchMessageById(id, res.locals.centralEmail);
+    const message = await fetchMessageById(id, res.locals.centralEmail, res.locals.collegeId);
 
     if (!message) {
         res.status(404).json({ error: "Message not found" });
@@ -295,7 +306,7 @@ app.get("/api/messages/:id/thread", requireAuth, async (req, res) => {
         return;
     }
 
-    const items = await fetchThread(id, res.locals.centralEmail);
+    const items = await fetchThread(id, res.locals.centralEmail, res.locals.collegeId);
 
     if (!items) {
         res.status(404).json({ error: "Message not found" });
@@ -318,7 +329,7 @@ app.post(
         }
 
         const centralEmail = res.locals.centralEmail;
-        const message = await fetchMessageById(id, centralEmail);
+        const message = await fetchMessageById(id, centralEmail, res.locals.collegeId);
 
         if (!message) {
             res.status(404).json({ error: "Message not found" });
@@ -375,7 +386,7 @@ app.post("/api/messages/:id/mark-handled", requireAuth, async (req, res) => {
     }
 
     const centralEmail = res.locals.centralEmail;
-    const message = await fetchMessageById(id, centralEmail);
+    const message = await fetchMessageById(id, centralEmail, res.locals.collegeId);
 
     if (!message) {
         res.status(404).json({ error: "Message not found" });
@@ -387,7 +398,7 @@ app.post("/api/messages/:id/mark-handled", requireAuth, async (req, res) => {
         return;
     }
 
-    const ok = await markHandled(id, centralEmail);
+    const ok = await markHandled(id, centralEmail, res.locals.collegeId);
 
     if (!ok) {
         res.status(409).json({ error: "Message already replied to" });

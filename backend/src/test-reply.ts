@@ -15,10 +15,13 @@ async function main() {
         : [];
 
     const centralEmail = process.env.CENTRAL_EMAIL!;
+    // Messages are now college-scoped (Step 6); this old one-off CLI script
+    // needs a college id to look one up. Not part of the live app.
+    const collegeId = process.env.CENTRAL_COLLEGE_ID!;
 
     const message = messageIdArg
-        ? await fetchMessageById(Number(messageIdArg), centralEmail)
-        : (await fetchMessages("pending", centralEmail))[0];
+        ? await fetchMessageById(Number(messageIdArg), centralEmail, collegeId)
+        : (await fetchMessages("pending", centralEmail, collegeId))[0];
 
     if (!message) {
         console.log("No pending message found.");
