@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { fetchColleges } from "./api";
-import type { College } from "./types";
+import { fetchColleges, selectCollege } from "./api";
+import type { College, Session } from "./types";
 
-export default function CollegePicker({ onSelect }: { onSelect: (college: College) => void }) {
+export default function CollegePicker({ onSelect }: { onSelect: (session: Session) => void }) {
     const [colleges, setColleges] = useState<College[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [attempt, setAttempt] = useState(0);
+    const [selecting, setSelecting] = useState(false);
+    const [selectError, setSelectError] = useState<string | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -19,6 +21,19 @@ export default function CollegePicker({ onSelect }: { onSelect: (college: Colleg
         return () => { active = false; };
     }, [attempt]);
 
+    async function handleSelect(college: College) {
+        setSelecting(true);
+        setSelectError(null);
+
+        try {
+            const session = await selectCollege(college.id);
+            onSelect(session);
+        } catch (err) {
+            setSelectError(err instanceof Error ? err.message : "Failed to select college");
+            setSelecting(false);
+        }
+    }
+
     return <main className="login-page">
         <section className="login-card college-picker" aria-labelledby="college-picker-title">
             <p className="brand-name">ISM Edutech</p>
@@ -29,11 +44,17 @@ export default function CollegePicker({ onSelect }: { onSelect: (college: Colleg
                 <button className="secondary-button" onClick={() => setAttempt((value) => value + 1)}>Retry</button>
             </> : colleges.length === 0 ? <p>No colleges are configured yet.</p> :
                 <div className="college-options">{colleges.map((college) =>
-                    <button key={college.id} className="college-option" onClick={() => onSelect(college)}>
+                    <button
+                        key={college.id}
+                        className="college-option"
+                        onClick={() => handleSelect(college)}
+                        disabled={selecting}
+                    >
                         {college.name}<span aria-hidden="true">→</span>
                     </button>
                 )}</div>
             }
+            {selectError && <p className="error" role="alert">{selectError}</p>}
         </section>
     </main>;
 }

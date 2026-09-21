@@ -5,7 +5,7 @@ export interface College {
 
 export interface Session {
     email: string;
-    college: College;
+    college: College | null;
 }
 
 export interface ThreadSummary {

@@ -78,22 +78,34 @@ deployment authorization. Discuss exact edits before making them.
   transaction before the user requested full database isolation. Scratch
   instance stopped afterward. The approved migration and roster insertion
   intentionally changed the app database. Both TypeScript checks passed.
-- [x] **Step 5 — College picker before login.** Show three college buttons
-  on the landing page. Carry the selection through login. Operators using
-  the shared central credentials may select any college; no separate
-  operator-to-college permission assignments were requested.
+- [x] **Step 5 — Login first, then college picker.** Show the central
+  mailbox login form first; after a successful login, show the three college
+  buttons before entering the console. Operators using the shared central
+  credentials may select any college; no separate operator-to-college
+  permission assignments were requested.
   Completed 2026-09-21: public `GET /api/colleges` returns database college
-  IDs/names; `CollegePicker.tsx` shows the three buttons with loading/error
-  and retry states. Login displays the selected college and offers Change
-  college. Login requires a valid collegeId string, stores the database
-  college in the server session, and returns it from login and auth/me.
-  Refresh restores the session's selection; the console header displays it;
-  logout returns to the college picker. Text ISM Edutech branding is used
-  pending logo assets. Backend restarted. Both TypeScript checks and the
-  production frontend build passed. Live API checks passed for all three
-  colleges, malformed/missing/unknown/out-of-range IDs, independent sessions,
-  refresh/session retrieval, and logout. No automated browser runner was
-  available; visual browser review remains with the user. This step does
+  IDs/names. `POST /api/auth/login` now only verifies central mailbox IMAP
+  credentials and creates a session with no college attached
+  (`college: null`); it no longer requires or accepts a collegeId. A new
+  authenticated `POST /api/auth/college` validates a collegeId and attaches
+  that database college to the existing session (`setSessionCollege` in
+  `auth.ts`); `Session.college` is now nullable both server- and
+  client-side. `App.tsx` renders `Login` first, then `CollegePicker` when
+  `session.college` is null, then `Console` once a college is selected.
+  `CollegePicker.tsx` calls the new endpoint and hands the resulting session
+  up, with its own loading/error state for the selection call.
+  `GET /api/auth/me` and the login response both return `college` as
+  possibly null. Reordered 2026-09-21 from the original college-first
+  sequence at the user's request; originally completed the same day as
+  college-picker-before-login (see history in git log for that version).
+  Backend restarted. Both TypeScript checks passed. Live API checks passed:
+  login succeeds without a collegeId and returns `college: null`;
+  `/api/auth/college` returns 401 when called without a session (confirming
+  it requires login first); `/api/colleges` unchanged. Full live login with
+  real central mailbox credentials was not re-verified in this session (the
+  password isn't in `.env`, which only holds old CLI-script credentials per
+  the setup notes below); visual browser review of the new login-first ->
+  college-picker -> console sequence remains with the user. This step does
   not filter mail/students by college: backend enforcement is Step 6.
 - [ ] **Step 6 — Enforce selected-college scoping.** Pending and Replied
   show only that college's threads. Scope student lists, searches, imports,

@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { login } from "./api";
-import type { College, Session } from "./types";
+import type { Session } from "./types";
 
 interface Props {
-    college: College;
-    onChangeCollege: () => void;
     onLoggedIn: (session: Session) => void;
 }
 
-export default function Login({ college, onChangeCollege, onLoggedIn }: Props) {
+export default function Login({ onLoggedIn }: Props) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -20,7 +18,7 @@ export default function Login({ college, onChangeCollege, onLoggedIn }: Props) {
         setSubmitting(true);
 
         try {
-            const session = await login(email, password, college.id);
+            const session = await login(email, password);
             onLoggedIn(session);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Login failed");
@@ -33,13 +31,10 @@ export default function Login({ college, onChangeCollege, onLoggedIn }: Props) {
         <div className="login-page">
             <form className="login-card" onSubmit={handleSubmit}>
                 <p className="brand-name">ISM Edutech</p>
-                <h1>{college.name}</h1>
+                <h1>Student Mail Console</h1>
                 <p className="login-subtitle">
                     Sign in with your central mailbox address and password.
                 </p>
-                <button type="button" className="change-college" onClick={onChangeCollege} disabled={submitting}>
-                    ← Change college
-                </button>
 
                 <label className="login-field">
                     <span>Central email</span>

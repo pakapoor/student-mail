@@ -4,11 +4,10 @@ import { fetchCurrentSession } from "./api";
 import Login from "./Login";
 import Console from "./Console";
 import CollegePicker from "./CollegePicker";
-import type { College, Session } from "./types";
+import type { Session } from "./types";
 
 function App() {
     const [session, setSession] = useState<Session | null>(null);
-    const [college, setCollege] = useState<College | null>(null);
     const [sessionError, setSessionError] = useState(false);
     const [checkingSession, setCheckingSession] = useState(true);
 
@@ -31,13 +30,15 @@ function App() {
     }
 
     if (!session) {
-        if (!college) return <CollegePicker onSelect={setCollege} />;
-        return <Login college={college} onChangeCollege={() => setCollege(null)} onLoggedIn={setSession} />;
+        return <Login onLoggedIn={setSession} />;
+    }
+
+    if (!session.college) {
+        return <CollegePicker onSelect={setSession} />;
     }
 
     return <Console email={session.email} college={session.college} onLoggedOut={() => {
         setSession(null);
-        setCollege(null);
     }} />;
 }
 

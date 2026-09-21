@@ -4,7 +4,7 @@ import type { College } from "./colleges.js";
 
 interface Session {
     email: string;
-    college: College;
+    college: College | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -37,10 +37,20 @@ export async function verifyImapLogin(
     }
 }
 
-export function createSession(email: string, college: College): string {
+export function createSession(email: string): string {
     const token = crypto.randomUUID();
-    sessions.set(token, { email, college });
+    sessions.set(token, { email, college: null });
     return token;
+}
+
+export function setSessionCollege(token: string, college: College): boolean {
+    const session = sessions.get(token);
+    if (!session) {
+        return false;
+    }
+
+    session.college = college;
+    return true;
 }
 
 export function getSession(token: string | undefined): Session | undefined {

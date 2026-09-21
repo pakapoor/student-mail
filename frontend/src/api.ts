@@ -28,18 +28,35 @@ export async function fetchColleges(): Promise<College[]> {
     return res.json();
 }
 
-export async function login(email: string, password: string, collegeId: string): Promise<Session> {
+export async function login(email: string, password: string): Promise<Session> {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, collegeId }),
+        body: JSON.stringify({ email, password }),
     });
 
     const payload = await res.json();
 
     if (!res.ok) {
         throw new Error(payload.error || `Login failed (${res.status})`);
+    }
+
+    return payload;
+}
+
+export async function selectCollege(collegeId: string): Promise<Session> {
+    const res = await fetch(`${API_BASE}/api/auth/college`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collegeId }),
+    });
+
+    const payload = await res.json();
+
+    if (!res.ok) {
+        throw new Error(payload.error || `Failed to select college (${res.status})`);
     }
 
     return payload;

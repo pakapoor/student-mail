@@ -20,6 +20,7 @@ import {
     createSession,
     destroySession,
     getSession,
+    setSessionCollege,
     SESSION_COOKIE,
     verifyImapLogin,
 } from "./auth.js";
@@ -59,7 +60,7 @@ function requireAuth(
     }
 
     res.locals.centralEmail = session.email;
-    res.locals.collegeId = session.college.id;
+    res.locals.collegeId = session.college?.id;
     next();
 }
 
@@ -78,19 +79,6 @@ app.post("/api/auth/login", async (req, res) => {
         return;
     }
 
-    const collegeId = req.body?.collegeId;
-    // IDs are strings because PostgreSQL BIGINT values are returned as strings.
-    if (typeof collegeId !== "string" || !/^[1-9][0-9]{0,18}$/.test(collegeId)
-        || BigInt(collegeId) > 9223372036854775807n) {
-        res.status(400).json({ error: "Select a valid college" });
-        return;
-    }
-    const college = await findCollege(collegeId);
-    if (!college) {
-        res.status(400).json({ error: "Select a valid college" });
-        return;
-    }
-
     const ok = await verifyImapLogin(email, password);
 
     if (!ok) {
@@ -102,7 +90,7 @@ app.post("/api/auth/login", async (req, res) => {
     ensureWatcher(email, password);
     triggerSync(email, password);
 
-    const token = createSession(email, college);
+    const token = createSession(email);
 
     res.cookie(SESSION_COOKIE, token, {
         httpOnly: true,
@@ -111,7 +99,29 @@ app.post("/api/auth/login", async (req, res) => {
         maxAge: 1000 * 60 * 60 * 24 * 7,
     });
 
-    res.json({ email, college });
+    res.json({ email, college: null });
+});
+
+app.post("/api/auth/college", requireAuth, async (req, res) => {
+    const token = req.cookies?.[SESSION_COOKIE];
+
+    const collegeId = req.body?.collegeId;
+    // IDs are strings because PostgreSQL BIGINT values are returned as strings.
+    if (typeof collegeId !== "string" || !/^[1-9][0-9]{0,18}$/.test(collegeId)
+        || BigInt(collegeId) > 9223372036854775807n) {
+        res.status(400).json({ error: "Select a valid college" });
+        return;
+    }
+
+    const college = await findCollege(collegeId);
+    if (!college) {
+        res.status(400).json({ error: "Select a valid college" });
+        return;
+    }
+
+    setSessionCollege(token, college);
+
+    res.json({ email: res.locals.centralEmail, college });
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -128,7 +138,7 @@ app.get("/api/auth/me", (req, res) => {
         return;
     }
 
-    res.json({ email: session.email, college: session.college });
+    res.json({ email: session.email, college: session.college ?? null });
 });
 
 app.get("/api/students", requireAuth, async (req, res) => {
