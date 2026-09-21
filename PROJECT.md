@@ -564,6 +564,24 @@ deployment authorization. Discuss exact edits before making them.
      naturally-readable plain-text fallback - with the test message's
      state cleanly reset afterward. Both TypeScript checks and the
      production frontend build passed; backend restarted.
+
+  **Follow-up 2026-09-21 (raised by user before a real 1200-student KRMA
+  import):** found and fixed a real bug rather than telling the user to
+  work around it. `express.json()`'s default 100kb body limit meant a
+  large CSV paste could get rejected with a 413 before ever reaching
+  auth or the import logic - confirmed empirically both ways: a
+  realistic 1200-row CSV (varied names/emails) measured at 79.5KB, right
+  at that boundary, and a 150KB test body was confirmed to 413 under the
+  old limit. Raised the limit to 10mb in `server.ts` (comfortably covers
+  the full ~1600-student roster with room to grow) and confirmed the
+  same 150KB body now correctly reaches the auth layer (401, not 413).
+  Separately performance-tested `importStudents` directly with a
+  synthetic 1200-row batch: a clean import completed in 1.6s
+  (~1.4ms/row), and re-importing the identical batch (exercising the
+  all-skip "already imported" path) took 157ms - no chunking into
+  batches of 100 is needed on performance grounds; the only real
+  constraint was the body-size bug, now fixed. Test rows cleaned up
+  afterward. Backend restarted, TypeScript check passed.
 - [ ] **Step 14 — Discuss AWS migration after Steps 0–13.** Moving the app
   to AWS is a future discussion, not current deployment authorization.
   Agree on architecture, costs, security/credentials, data migration,

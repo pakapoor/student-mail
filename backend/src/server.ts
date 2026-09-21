@@ -44,7 +44,12 @@ const app = express();
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 
 app.use(cors({ origin: frontendOrigin, credentials: true }));
-app.use(express.json());
+// Default express.json() body limit is 100kb, which a bulk student CSV
+// paste (the roster target is ~1600 students) can realistically exceed -
+// confirmed empirically: ~1200 rows of realistic name/email/password data
+// landed right at that boundary. 10mb comfortably covers the full roster
+// with room to grow, while still being a bounded cap, not unlimited.
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
 function requireAuth(
