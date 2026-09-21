@@ -177,6 +177,30 @@ continue without re-deriving them.
    is now the sole process syncing the IMAP mailboxes. Confirmed no
    `tsx` processes remain locally.
 
+15. ✅ Fixed a real bug found during first browser test: 500 from Nginx
+   was a `/home/ubuntu` permission issue blocking `www-data` traversal
+   (fixed with `chmod o+x` on the directory chain + `chmod -R o+rX` on
+   `frontend/dist`). Then found the frontend's `API_BASE` was hardcoded
+   to `http://localhost:3001` (fine for local dev, broken in production)
+   — fixed by making it a Vite env var (`VITE_API_BASE`, empty string in
+   `frontend/.env.production` so it resolves to relative `/api/...`
+   paths through the Nginx proxy), commit `4e95c8e`. Rebuilt frontend on
+   EC2 after pulling the fix. **`https://app.myemailinfo.com` now loads
+   correctly in the browser.**
+16. ✅ Manual end-to-end testing surfaced a real thread-ordering bug (not
+   an AWS-specific issue, found during production testing): Closed tab
+   was sorting by newest incoming message (`received_at`), not by when
+   the thread was actually closed/replied to. Fixed in
+   `backend/src/thread.ts`'s `fetchThreadSummaries` — pending threads
+   still sort by newest incoming message, but closed threads now sort
+   by `resolvedAt` (last reply/follow-up `sent_at` or the Close button's
+   timestamp), so a thread closed just now surfaces above one closed
+   earlier regardless of when its last email arrived. Follow-up
+   messages on closed threads naturally bump sort order too, since they
+   share the same `replies` table row that `latestResolvedAt` already
+   maxes over. Verified against real closed-thread data with a scratch
+   script before cleanup - order is no longer strictly `received_at`.
+
 ## Next steps, in order (give ONE at a time, per user's explicit request —
 ## do not dump the whole list on them at once)
 

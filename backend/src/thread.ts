@@ -364,54 +364,64 @@ export async function fetchThreadSummaries(
     const threadGroups = groupIntoThreads(messages);
     const allReplies = await fetchAllReplies();
 
-    const summaries: ThreadSummary[] = threadGroups.map((groupMessages) => {
-        const latest = groupMessages.reduce((a, b) =>
-            new Date(b.received_at) > new Date(a.received_at) ? b : a
-        );
+    const summaries: (ThreadSummary & { sortAt: number })[] = threadGroups.map(
+        (groupMessages) => {
+            const latest = groupMessages.reduce((a, b) =>
+                new Date(b.received_at) > new Date(a.received_at) ? b : a
+            );
 
-        const groupStudentEmail = groupMessages[0]?.student_email;
-        const threadMessageIds = new Set(groupMessages.map((m) => m.message_id));
-        const threadReplies = allReplies.filter(
-            (r) => threadMessageIds.has(r.incoming_message_id) && r.student_email === groupStudentEmail
-        );
-        const resolvedAt = latestResolvedAt(groupMessages, threadReplies);
+            const groupStudentEmail = groupMessages[0]?.student_email;
+            const threadMessageIds = new Set(groupMessages.map((m) => m.message_id));
+            const threadReplies = allReplies.filter(
+                (r) => threadMessageIds.has(r.incoming_message_id) && r.student_email === groupStudentEmail
+            );
+            const resolvedAt = latestResolvedAt(groupMessages, threadReplies);
 
-        const pending = groupMessages.filter((m) => stillPending(m, resolvedAt));
-        const pendingCount = pending.length;
+            const pending = groupMessages.filter((m) => stillPending(m, resolvedAt));
+            const pendingCount = pending.length;
 
-        const representative =
-            pendingCount > 0
-                ? pending.reduce((a, b) =>
-                      new Date(b.received_at) < new Date(a.received_at) ? b : a
-                  )
-                : latest;
+            const representative =
+                pendingCount > 0
+                    ? pending.reduce((a, b) =>
+                          new Date(b.received_at) < new Date(a.received_at) ? b : a
+                      )
+                    : latest;
 
-        return {
-            threadId: representative.id,
-            subject: latest.subject,
-            student_email: latest.student_email,
-            sender_email: latest.sender_email,
-            received_at: latest.received_at,
-            message_count: groupMessages.length,
-            pending_count: pendingCount,
-            preview: makePreview(representative.body_text, representative.body_html),
-        };
-    });
+            // Pending threads sort by their newest incoming message (what needs
+            // attention most recently); closed threads sort by resolvedAt - the
+            // last reply/follow-up sent or Close button press - so a thread
+            // closed just now surfaces above one closed earlier, regardless of
+            // when its last email actually arrived.
+            const sortAt =
+                pendingCount > 0
+                    ? new Date(latest.received_at).getTime()
+                    : resolvedAt;
+
+            return {
+                threadId: representative.id,
+                subject: latest.subject,
+                student_email: latest.student_email,
+                sender_email: latest.sender_email,
+                received_at: latest.received_at,
+                message_count: groupMessages.length,
+                pending_count: pendingCount,
+                preview: makePreview(representative.body_text, representative.body_html),
+                sortAt,
+            };
+        }
+    );
 
     const filtered = summaries.filter((s) =>
         status === "pending" ? s.pending_count > 0 : s.pending_count === 0
     );
 
-    // Thread list is always newest-first, regardless of status filter. This
-    // only orders which threads appear where in the list - it doesn't change
-    // which individual message within a thread is offered up for reply
-    // (that's still always the oldest unreplied message in that thread).
-    filtered.sort(
-        (a, b) =>
-            new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
-    );
+    // Thread list is always newest-first, regardless of status filter - see
+    // sortAt above for what "newest" means per tab.
+    filtered.sort((a, b) => b.sortAt - a.sortAt);
 
-    const page = filtered.slice(offset, offset + limit);
+    const page = filtered
+        .slice(offset, offset + limit)
+        .map(({ sortAt, ...summary }) => summary);
 
     return {
         threads: page,
