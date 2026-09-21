@@ -110,20 +110,15 @@ continue without re-deriving them.
    EC2 Instance Connect, username `ubuntu`, IPv4 `52.86.63.127`).
    **The terminal session is open and this is where all further setup
    commands run.**
-5. 🔄 **IN PROGRESS**: ran `sudo apt update && sudo apt upgrade -y` in
-   the instance terminal — waiting on this to finish before moving to
-   installing Node.js/PostgreSQL/Nginx. Confirm it completed (and handle
-   any keep-local/package-maintainer config-file prompts by accepting
-   defaults) before giving the next command.
+5. ✅ `sudo apt update && sudo apt upgrade -y` completed on the instance.
+6. ✅ Node.js, PostgreSQL, and Nginx installed via NodeSource LTS setup
+   script + `apt install postgresql nginx`. Confirmed versions: Node
+   v24.21.0, PostgreSQL 18.6, Nginx 1.28.3.
 
 ## Next steps, in order (give ONE at a time, per user's explicit request —
 ## do not dump the whole list on them at once)
 
-1. **Confirm `apt update && apt upgrade` finished**, then install
-   Node.js, PostgreSQL, and Nginx on the Ubuntu 26.04 instance (exact
-   commands not yet given - use NodeSource's setup script for a current
-   Node LTS, `apt install postgresql nginx`).
-2. **Get the code onto the instance.** Not yet decided how — options are
+1. **Get the code onto the instance.** Not yet decided how — options are
    `git clone` from GitHub (need the repo URL and confirmation the user
    has actually pushed the latest local commits — recall that `git push`
    has failed in *this* sandboxed dev session all along due to missing
@@ -135,12 +130,15 @@ continue without re-deriving them.
 3. **Install dependencies and build**: `npm install` in both `backend/`
    and `frontend/`, then `npm run build` in `frontend/` for the
    production static build.
-4. **Migrate the database**: `pg_dump` the current local dev database,
-   transfer the dump to the instance, restore it into a fresh Postgres
-   instance there (this restores schema + all real data already imported
-   today — the ~1265/573/422 real KSMA/IHSM CENTRAL/IHSM ELITE students,
-   test students, etc. — so this should be a full data migration, not a
-   fresh `schema.sql` run).
+4. **Migrate the database**: one-time `pg_dump` of the current local dev
+   database (schema + data), transfer the dump to the instance, restore
+   into a fresh Postgres instance there (this restores schema + all real
+   data already imported today — the ~1265/573/422 real KSMA/IHSM
+   CENTRAL/IHSM ELITE students, test students, etc.). This is explicitly
+   a **one-time transfer, not an ongoing sync** — user confirmed AWS
+   becomes the sole source of truth after this; the local dev DB is not
+   kept in sync with it afterward. No incremental migration tooling
+   needed given the data size.
 5. **Configure `.env`** on the instance with real IMAP/SMTP/DB
    credentials, set `FRONTEND_ORIGIN` to `https://app.myemailinfo.com`,
    and update the session cookie's `secure: false` (currently hardcoded
