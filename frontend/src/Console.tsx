@@ -13,6 +13,10 @@ import { collegeLogo, ISM_EDUTECH_LOGO } from "./branding";
 import type { College, StatusFilter, ThreadItem, ThreadSummary } from "./types";
 
 const TABS: StatusFilter[] = ["pending", "replied"];
+// "replied" is kept as the internal status value (matches the DB column and
+// API param) - only the user-facing label changed from "Replied" to
+// "Closed" per the customer's request.
+const TAB_LABELS: Record<StatusFilter, string> = { pending: "Pending", replied: "Closed" };
 
 interface Props {
     email: string;
@@ -174,7 +178,7 @@ function Console({ email, college, onLoggedOut }: Props) {
                         className={tab === status ? "tab active" : "tab"}
                         onClick={() => setStatus(tab)}
                     >
-                        {tab[0].toUpperCase() + tab.slice(1)}
+                        {TAB_LABELS[tab]}
                     </button>
                 ))}
             </nav>

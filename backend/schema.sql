@@ -17,7 +17,7 @@ CREATE TABLE colleges (
 );
 
 INSERT INTO colleges (name) VALUES
-    ('KRMA CENTRAL'), ('IHSM CENTRAL'), ('IHSM ELITE');
+    ('KSMA CENTRAL'), ('IHSM CENTRAL'), ('IHSM ELITE');
 
 -- One row per student mailbox (e.g. test.student11@pilot.system-design.in).
 -- Global directory across every central mailbox/operator - central_email is

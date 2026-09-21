@@ -582,6 +582,55 @@ deployment authorization. Discuss exact edits before making them.
   batches of 100 is needed on performance grounds; the only real
   constraint was the body-size bug, now fixed. Test rows cleaned up
   afterward. Backend restarted, TypeScript check passed.
+
+**Post-demo customer feedback 2026-09-21 (three changes, completed same
+day):**
+1. **College name reverted: KRMA CENTRAL -> KSMA CENTRAL.** The customer
+   confirmed after the demo that the original name was correct after all.
+   New migration `007_rename_krma_back_to_ksma.sql` (the earlier
+   `006_rename_ksma_to_krma.sql` was left as historical record, matching
+   the established convention of never editing an applied migration) -
+   same scope as before, inverted: `colleges.name`, the `students.college`
+   text column (now correctly covering all 1270 KSMA students, including
+   the 1263 real ones imported today under the "KRMA" name), and the
+   "KRMA" label in the 5 test students' `name`/`last_name` fields.
+   `schema.sql` and `branding.ts` updated to match. Mailbox addresses were
+   never touched by either rename. Verified via `GET /api/colleges` and a
+   direct query confirming all 1270 KSMA-college students now consistently
+   say "KSMA CENTRAL".
+2. **"Replied" tab relabeled to "Closed".** Deliberately a display-only
+   change - `messages.replied`, the `StatusFilter` type, and the API's
+   `status` parameter values all keep the internal name "replied" to avoid
+   a much larger, riskier rename across the backend for something purely
+   cosmetic to the user. `Console.tsx` gained a `TAB_LABELS` map instead of
+   the previous auto-capitalized tab name; `MessageList.tsx`'s badge text
+   updated to match. This is a deliberate reversal of the earlier decision
+   in Step 12 ("retain Pending/Replied... rather than the earlier proposed
+   Handled rename") - noted here since it directly contradicts prior
+   documented guidance, now superseded by this explicit customer request.
+3. **Universal "Close" button, no restrictions.** The existing "Mark as
+   handled" button was narrowly gated (only appeared for an automated
+   sender with a real link, and required the operator open that link
+   first) - the customer's actual usage is expected to be ~90% "just
+   received a code, nothing to reply to," so the gate was removed
+   entirely per their explicit direction ("A close button broad, not
+   narrow"). The button (renamed "Close") is now offered unconditionally
+   whenever a thread has a pending message, for any sender, with or
+   without a link. Implementation reused the existing backend
+   `markHandled`/`handled_without_reply` mechanism unchanged - only the
+   frontend gating (`canMarkHandled`, `linkNotYetClicked`, the
+   click-tracking state, and the "open the link first" hint) was removed,
+   along with the now-unused `containsLink`/`isAutomatedSender` exports
+   from `linkify.ts`. Because it reuses the same mechanism, the existing
+   timing-based reopen-on-new-message logic (`latestResolvedAt`/
+   `stillPending` in `thread.ts`) applies automatically with no additional
+   code - confirmed by test rather than assumed: closed an ordinary
+   pending message (human sender, no link - a case the old gate would
+   have blocked entirely) via `markHandled` directly, confirmed it moved
+   from pending to closed, then inserted a synthetic follow-up message and
+   confirmed the thread correctly reopened in pending. Message state was
+   reset afterward; no test data left behind.
+   Verified: frontend TypeScript check and production build both passed.
 - [ ] **Step 14 — Discuss AWS migration after Steps 0–13.** Moving the app
   to AWS is a future discussion, not current deployment authorization.
   Agree on architecture, costs, security/credentials, data migration,

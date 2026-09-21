@@ -32,7 +32,7 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
                         >
                             {thread.pending_count > 0
                                 ? `${thread.pending_count} pending`
-                                : "Replied"}
+                                : "Closed"}
                         </span>
                     </div>
                     <div className="subject">{thread.subject || "(no subject)"}</div>

@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingThreadItem, ThreadItem } from "./types";
 import { markHandled, sendReply } from "./api";
-import {
-    containsLink,
-    isAutomatedSender,
-    linkifyPlainText,
-    sanitizeHtml,
-} from "./linkify";
+import { linkifyPlainText, sanitizeHtml } from "./linkify";
 
 interface Props {
     items: ThreadItem[];
@@ -18,10 +13,9 @@ export default function ThreadView({ items, onReplySent }: Props) {
     const [hasContent, setHasContent] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
     const [sending, setSending] = useState(false);
-    const [markingHandled, setMarkingHandled] = useState(false);
+    const [closing, setClosing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [justSent, setJustSent] = useState(false);
-    const [clickedLinkIds, setClickedLinkIds] = useState<Set<number>>(new Set());
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const subject =
@@ -59,32 +53,6 @@ export default function ThreadView({ items, onReplySent }: Props) {
             new Date(current.at) < new Date(oldest.at) ? current : oldest
         );
     }, [items]);
-
-    const replyTargetHasLink = replyTarget
-        ? containsLink(replyTarget.body_html, replyTarget.body_text)
-        : false;
-
-    // "Mark as handled" is for messages that genuinely can't get a real
-    // reply - an automated notification (donotreply@/noreply@) containing a
-    // link to act on (e.g. a verification link), not a real person or
-    // office waiting on a written response.
-    const canMarkHandled =
-        replyTarget !== null &&
-        replyTargetHasLink &&
-        isAutomatedSender(replyTarget.sender_email);
-
-    const linkNotYetClicked =
-        replyTarget !== null &&
-        canMarkHandled &&
-        !clickedLinkIds.has(replyTarget.id);
-
-    function handleLinkClick(itemId: number) {
-        setClickedLinkIds((prev) => {
-            const next = new Set(prev);
-            next.add(itemId);
-            return next;
-        });
-    }
 
     function removeFile(name: string) {
         setFiles((prev) => prev.filter((file) => file.name !== name));
@@ -146,24 +114,22 @@ export default function ThreadView({ items, onReplySent }: Props) {
         }
     }
 
-    async function handleMarkHandled() {
+    async function handleClose() {
         if (!replyTarget) {
             return;
         }
 
         setError(null);
-        setMarkingHandled(true);
+        setClosing(true);
 
         try {
             await markHandled(replyTarget.id);
             setJustSent(true);
             onReplySent();
         } catch (err) {
-            setError(
-                err instanceof Error ? err.message : "Failed to mark as handled"
-            );
+            setError(err instanceof Error ? err.message : "Failed to close");
         } finally {
-            setMarkingHandled(false);
+            setClosing(false);
         }
     }
 
@@ -173,11 +139,7 @@ export default function ThreadView({ items, onReplySent }: Props) {
 
             <div className="thread-items">
                 {items.map((item) => (
-                    <ThreadBubble
-                        key={`${item.type}-${item.id}`}
-                        item={item}
-                        onLinkClick={handleLinkClick}
-                    />
+                    <ThreadBubble key={`${item.type}-${item.id}`} item={item} />
                 ))}
             </div>
 
@@ -321,36 +283,21 @@ export default function ThreadView({ items, onReplySent }: Props) {
                         <button
                             className="send-button"
                             onClick={handleSend}
-                            disabled={sending || markingHandled || !hasContent}
+                            disabled={sending || closing || !hasContent}
                         >
                             {sending && <span className="spinner" />}
                             {sending ? "Sending" : "Send reply"}
                         </button>
 
-                        {canMarkHandled && (
-                            <button
-                                className="secondary-button"
-                                onClick={handleMarkHandled}
-                                disabled={sending || markingHandled || linkNotYetClicked}
-                                title={
-                                    linkNotYetClicked
-                                        ? "Open the link in this message before marking it handled"
-                                        : undefined
-                                }
-                            >
-                                {markingHandled && <span className="spinner spinner-dark" />}
-                                {markingHandled ? "Marking..." : "Mark as handled"}
-                            </button>
-                        )}
+                        <button
+                            className="secondary-button"
+                            onClick={handleClose}
+                            disabled={sending || closing}
+                        >
+                            {closing && <span className="spinner spinner-dark" />}
+                            {closing ? "Closing..." : "Close"}
+                        </button>
                     </div>
-
-                    {linkNotYetClicked && (
-                        <p className="hint-text">
-                            This message contains a link. Open it at least once before
-                            marking it handled, in case it needs action (e.g. a
-                            verification link).
-                        </p>
-                    )}
                 </div>
             ) : (
                 !justSent && (
@@ -365,13 +312,7 @@ export default function ThreadView({ items, onReplySent }: Props) {
 
 const CLAMP_HEIGHT_PX = 420;
 
-function ThreadBubble({
-    item,
-    onLinkClick,
-}: {
-    item: ThreadItem;
-    onLinkClick: (itemId: number) => void;
-}) {
+function ThreadBubble({ item }: { item: ThreadItem }) {
     const renderedBody = useMemo(() => {
         if (item.type === "incoming" && item.body_html) {
             return sanitizeHtml(item.body_html);
@@ -405,13 +346,6 @@ function ThreadBubble({
         setIsOverflowing(!!el && el.scrollHeight > CLAMP_HEIGHT_PX + 1);
     }, [renderedBody]);
 
-    function handleBodyClick(e: React.MouseEvent<HTMLDivElement>) {
-        const target = e.target as HTMLElement;
-        if (target.tagName === "A") {
-            onLinkClick(item.id);
-        }
-    }
-
     const bodyClassName =
         "bubble-body" + (isOverflowing && !expanded ? " bubble-body-clamped" : "");
 
@@ -420,7 +354,6 @@ function ThreadBubble({
             <div
                 ref={bodyRef}
                 className={bodyClassName}
-                onClick={item.type === "incoming" ? handleBodyClick : undefined}
                 dangerouslySetInnerHTML={{ __html: renderedBody }}
             />
             {isOverflowing && (
@@ -448,7 +381,7 @@ function ThreadBubble({
                     {body}
                 </div>
                 {item.handled_without_reply && (
-                    <div className="system-note">Marked as handled &mdash; no reply sent</div>
+                    <div className="system-note">Closed &mdash; no reply sent</div>
                 )}
             </>
         );
