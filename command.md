@@ -266,6 +266,44 @@ backup/history. Not automated - relies on the user remembering to
 snapshot periodically. Revisit if this turns out to be too easy to
 forget.
 
+## Deferred: CloudWatch health monitoring (not urgent, do whenever)
+
+User wants basic health alerting (e.g. instance status check failed,
+high CPU) so problems surface proactively instead of via an operator
+complaint. Cost is effectively $0/month at this scale: basic EC2
+metrics (CPU/network/disk/status checks) are free at 5-min granularity,
+first 10 CloudWatch alarms are free, and log shipping at current volume
+(~16MB) would cost pennies. Skip "detailed monitoring" (1-min
+granularity, ~$2/mo, unnecessary here) and skip full log-shipping to
+CloudWatch Logs (journalctl already covers this - see the logging
+section above).
+
+To actually do this, the instance needs AWS API credentials (SSHing in
+doesn't grant AWS API access by itself):
+1. Console: IAM → Roles → Create role → AWS service → EC2 → attach
+   `CloudWatchAgentServerPolicy`.
+2. Console: EC2 → select instance → Actions → Security → Modify IAM
+   role → attach the role just created. No restart needed.
+3. Once attached, `aws cloudwatch put-metric-alarm` can be run directly
+   over SSH (see below for the SSH alias) to set up two alarms:
+   instance status check failed, and CPU > ~80%.
+
+## Convenience: direct SSH access from local WSL (done)
+
+No SSH key pair existed on the instance (deliberate simplicity choice
+at launch, see above) - added one afterward for convenience without
+touching the "no key pair" launch config:
+- Generated an ed25519 keypair on the local WSL machine
+  (`~/.ssh/id_ed25519`), appended the public key to
+  `~/.ssh/authorized_keys` on the instance via the EC2 Instance Connect
+  browser terminal.
+- `ssh ubuntu@52.86.63.127` now works directly from WSL - no browser
+  needed. IP is permanent (it's the Elastic IP allocated earlier, not
+  the instance's default public IP - survives reboots).
+- Added a bash alias for convenience: `student-mail-ssh` in
+  `~/.bashrc` (local WSL machine only, not in the repo) → `ssh
+  ubuntu@52.86.63.127`.
+
 ## AWS deployment: DONE
 
 All 9 planned steps are complete. `https://app.myemailinfo.com` is the
