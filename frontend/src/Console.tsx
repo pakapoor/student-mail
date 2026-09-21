@@ -19,12 +19,11 @@ const TABS: StatusFilter[] = ["pending", "replied"];
 const TAB_LABELS: Record<StatusFilter, string> = { pending: "Pending", replied: "Closed" };
 
 interface Props {
-    email: string;
     college: College;
     onLoggedOut: () => void;
 }
 
-function Console({ email, college, onLoggedOut }: Props) {
+function Console({ college, onLoggedOut }: Props) {
     const [status, setStatus] = useState<StatusFilter>("pending");
     const [threads, setThreads] = useState<ThreadSummary[]>([]);
     const [hasMore, setHasMore] = useState(false);
@@ -167,7 +166,6 @@ function Console({ email, college, onLoggedOut }: Props) {
                     </div>
                 </div>
                 <div className="session-bar">
-                    <span>{email}</span>
                     <button
                         className="logout-button"
                         onClick={() => setShowManageStudents(true)}

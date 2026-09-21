@@ -37,7 +37,7 @@ function App() {
         return <CollegePicker onSelect={setSession} />;
     }
 
-    return <Console email={session.email} college={session.college} onLoggedOut={() => {
+    return <Console college={session.college} onLoggedOut={() => {
         setSession(null);
     }} />;
 }

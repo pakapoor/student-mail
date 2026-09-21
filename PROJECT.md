@@ -676,6 +676,18 @@ day):**
    before vs. after. Test reply row removed afterward.
    Verified: both TypeScript checks and the production frontend build
    passed; backend restarted.
+3. **Central mailbox address removed from the header.** `Console.tsx`'s
+   session bar no longer shows the raw central mailbox email
+   (`central.ksma@myemailinfo.com`) - with `ACTIVE_CENTRAL_EMAIL`
+   restricting login to exactly one mailbox, it never distinguished
+   anything for the operator; the college name (already shown) is the
+   piece of context that actually matters day to day. Removed the now-
+   unused `email` prop from `Console` and its pass-through in `App.tsx`
+   rather than leaving dead code. If genuine multi-operator support with
+   different central mailboxes ever becomes real, this may be worth
+   revisiting.
+   Verified: frontend TypeScript check and production build both passed.
+   No backend change needed.
 
 - [ ] **Step 14 — AWS migration.** Not yet executed - discussion only so
   far, per the original scope (architecture, costs, security, data
