@@ -283,11 +283,35 @@ deployment authorization. Discuss exact edits before making them.
   without header, header matched case-insensitively) - all imported
   correctly, test rows cleaned up, both TypeScript checks passed, backend
   restarted.
-- [ ] **Step 9 — Search by Application No.** Provide type-to-search partial
+- [x] **Step 9 — Search by Application No.** Provide type-to-search partial
   matching across student name, email, and Application No, scoped to the
   selected college. Display Application No in the roster. "Elastic type"
   describes the search experience; use existing PostgreSQL capabilities,
   not a new Elasticsearch service.
+  Completed 2026-09-21: displaying Application No in the roster was
+  already done as part of a Step 6 follow-up. The actual gap was that
+  `searchAdminStudents`'s ILIKE search concatenation never included
+  `admission_id` at all, so searching an Application No returned nothing
+  even though the column was now visible. Added
+  `coalesce(admission_id,'')` to that concatenation in `studentsAdmin.ts`.
+  Added migration `003_search_admission_id.sql` to rebuild
+  `idx_students_search_trgm` with the matching expression (a GIN trgm
+  expression index is only usable when the WHERE clause expression matches
+  it exactly) and updated `schema.sql` to match for fresh installs.
+  Updated the search box placeholder to mention Application No. The
+  existing 300ms-debounced type-to-search UI already provided the
+  "elastic type" partial-match experience described - no UI logic change
+  needed there, only extending what the underlying query searches.
+  Applied migration `003` to the app database (the same live-database
+  change pattern already used for migrations `001`/`002`). Verified
+  directly against the dev database: searching the partial string `9729`
+  matches `Test Student 1 KSMA` (admission_id `97299038`); confirmed via
+  `EXPLAIN` with `enable_seqscan` forced off that the rebuilt index is a
+  valid, usable match for the search expression (a `Bitmap Index Scan` on
+  `idx_students_search_trgm`) - it isn't chosen at today's 23-row scale
+  (correct planner behavior, not a bug) but will be used automatically
+  once the table is larger. Both TypeScript checks passed, backend
+  restarted.
 - [ ] **Step 10 — Diagnose and fix central-inbox-to-UI latency.** The user
   observed 3–4 minutes after central inbox arrival; whether insertion or UI
   notification is delayed remains unmeasured. Time detection, fetch,

@@ -318,7 +318,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                     <input
                         className="admin-search"
                         type="text"
-                        placeholder="Search name, email, or college..."
+                        placeholder="Search name, email, or Application No..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />

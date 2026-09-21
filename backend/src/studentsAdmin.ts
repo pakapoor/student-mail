@@ -78,7 +78,8 @@ export async function searchAdminStudents(opts: {
         conditions.push(`
             (coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
              coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
-             coalesce(college,'') || ' ' || coalesce(year_enrolled::text,'')) ILIKE $${params.length}
+             coalesce(college,'') || ' ' || coalesce(year_enrolled::text,'') || ' ' ||
+             coalesce(admission_id,'')) ILIKE $${params.length}
         `);
     }
 
