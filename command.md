@@ -256,6 +256,16 @@ sudo journalctl -u student-mail | grep "someone@x.com" # search
 sudo journalctl -u student-mail --since "2026-09-22 15:00" --until "2026-09-22 15:30"
 ```
 
+## Backup strategy: manual EBS snapshots (user's choice)
+
+No automated `pg_dump`/S3 cron set up. User's chosen approach instead:
+periodically take manual EBS volume snapshots of the instance via the
+EC2 console (covers DB + code + config in one snapshot, not just the
+database). Also keeps pushing code changes to git as the code-level
+backup/history. Not automated - relies on the user remembering to
+snapshot periodically. Revisit if this turns out to be too easy to
+forget.
+
 ## AWS deployment: DONE
 
 All 9 planned steps are complete. `https://app.myemailinfo.com` is the
