@@ -206,6 +206,33 @@ continue without re-deriving them.
    follow-up on a closed thread, pending count badge, and (after the
    fix above) Closed tab ordering — all confirmed working by the user.
 
+## Deferred: auto-deploy-on-push (not urgent, do whenever)
+
+User wants pushes to `main` to auto-deploy to AWS eventually. Site is
+live and stable now, no rush - do this next time there's a real code
+change to ship. Agreed design (webhook, not cron polling - user wants
+the standard pattern):
+
+- A **separate, standalone Node listener** (not part of
+  `student-mail.service`) running as its own systemd service, bound to
+  `127.0.0.1:9000` only (not exposed directly). Separate from the main
+  app specifically so restarting the app doesn't kill the listener
+  mid-request.
+- **Nginx**: new location block proxying
+  `https://app.myemailinfo.com/webhook/deploy` → `127.0.0.1:9000` -
+  reuses the existing HTTPS cert, no new security group port needed.
+- **GitHub**: repo Settings → Webhooks → add a webhook POSTing to that
+  URL on push to `main`, signed with a shared secret (`X-Hub-Signature-256`).
+- Listener logic: verify the HMAC signature against the secret (reject
+  anything unsigned/forged) → `git pull` → `npm install` in both
+  `backend/` and `frontend/` → `npm run build` in `frontend/` →
+  `sudo systemctl restart student-mail`. Needs passwordless sudo scoped
+  to just that one systemctl command for the `ubuntu` user, or run the
+  listener as a user with permission to restart that specific service.
+- Kept intentionally minimal: no framework, no third-party webhook
+  relay service - one new script, one new systemd unit, one Nginx
+  location block, one GitHub webhook config entry.
+
 ## AWS deployment: DONE
 
 All 9 planned steps are complete. `https://app.myemailinfo.com` is the
