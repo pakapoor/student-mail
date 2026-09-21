@@ -9,8 +9,8 @@ aren't visible from the code alone.
 
 This section records the user's reviewed target plan, not implemented behavior.
 It supersedes older roadmap assumptions where they conflict. The existing
-implementation and historical notes below remain useful context. Steps 0–2
-have been authorized and completed. Stop for confirmation before Step 3 or any
+implementation and historical notes below remain useful context. Steps 0–4
+have been authorized and completed. Stop for confirmation before Step 5 or any
 later step. Do not treat approval of this plan as blanket implementation or
 deployment authorization. Discuss exact edits before making them.
 
@@ -47,15 +47,37 @@ deployment authorization. Discuss exact edits before making them.
   restarted; new login/session/pending-thread requests returned HTTP 200,
   old login returned 401, and only the new mailbox is selected for sync.
   Both TypeScript checks passed. No new test students have been inserted yet.
-- [ ] **Step 3 — Test student records.** Register the 15 already-created
+- [x] **Step 3 — Test student records.** Register the 15 already-created
   mailboxes listed below in the ordinary students table with `is_test = true`.
   Add `is_test` as a boolean defaulting to false for real students; do not
   create a separate test-emails table. Test records must exercise the normal
   inbox, reply, import, search, and college-scoping workflow.
-- [ ] **Step 4 — Student identity fields and constraints.** Store student
+  Completed 2026-09-21 with Step 4: all 15 approved roster rows were inserted
+  and checked against the names, college IDs, Application Numbers, central
+  mailbox, test flags, and privately supplied credentials. Five test
+  students belong to each college. The eight pre-existing student records
+  were compared before/after insertion and preserved unchanged. No separate
+  test table or tracked password fixture was created. College-scoped UI and
+  the new import/search behavior remain pending in their own steps.
+- [x] **Step 4 — Student identity fields and constraints.** Store student
   name, globally unique email, `college_id`, Application No as text in
   `admission_id`, and `is_test`. Application No is unique within a college
   (college_id + admission_id), not globally. Duplicate names are allowed.
+  Completed 2026-09-21: migration `002_student_identity.sql` adds nullable
+  college_id (foreign key) and admission_id (text), plus non-null is_test
+  default false and `students_college_admission_unique`. Existing unassigned
+  students retain null college/admission IDs; no implicit reassignment.
+  `schema.sql` contains the same fields/constraints for fresh deployment.
+  Verified from scratch in a separate database on an isolated temporary
+  PostgreSQL 16 instance: schema creation, college seed rows, leading zeros,
+  default test flag, allowed duplicate names, application reuse across
+  colleges, rejection of same-college duplicates/global duplicate emails,
+  foreign-key enforcement, and compatibility with unassigned legacy rows.
+  These independent scratch checks did not connect to the app database;
+  an earlier check used a temporary schema in a rolled-back app-database
+  transaction before the user requested full database isolation. Scratch
+  instance stopped afterward. The approved migration and roster insertion
+  intentionally changed the app database. Both TypeScript checks passed.
 - [ ] **Step 5 — College picker before login.** Show three college buttons
   on the landing page. Carry the selection through login. Operators using
   the shared central credentials may select any college; no separate
@@ -250,11 +272,13 @@ own `students` import.
 
 ## Database
 
-See `backend/schema.sql` for the authoritative recreate-from-scratch schema
-(dumped from the live DB and hand-annotated - **written but not yet verified
-against a fresh empty database**; do that before relying on it, e.g. after
-the demo this file was written for). Tables: `students`, `messages`,
-`replies`, `central_mailboxes`. Requires the `pg_trgm` extension.
+See `backend/schema.sql` for the authoritative recreate-from-scratch schema.
+Verified 2026-09-21 against an empty scratch database on an isolated
+PostgreSQL 16 instance, including the Step 4 identity constraints. Tables:
+`colleges`, `students`, `messages`, `replies`, `central_mailboxes`. Requires
+`pg_trgm`. Incremental migrations are in `backend/migrations/`; apply in
+numeric order to an existing database, not after loading the current fresh
+schema. Scratch validation does not constitute an AWS deployment test.
 
 Local demo setup: PostgreSQL 16 in WSL, DB `student_mail`, app user
 `student_mail_app`, **localhost trust auth** configured in
@@ -457,8 +481,8 @@ needs real DB auth/secrets.
 ## Setup (fresh machine)
 
 1. PostgreSQL: create DB + app user, then `psql -f backend/schema.sql`
-   (**unverified as of writing - test this on an empty DB before trusting
-   it**).
+   (fresh-schema creation verified in an isolated PostgreSQL 16 scratch DB
+   on 2026-09-21; configure deployment-specific access/permissions separately).
 2. `backend/.env` - copy `backend/.env.example`, fill in DB creds, IMAP
    host/port, SMTP host/port, `FRONTEND_ORIGIN`. Central mailbox credentials
    are supplied via login, not env vars (except `CENTRAL_EMAIL`/
@@ -490,7 +514,9 @@ needs real DB auth/secrets.
   the demo needed.
 - Migadu API mailbox provisioning: blocked on Migadu account verification
   (see above); nothing wired into the import flow yet even once unblocked.
-- `backend/schema.sql` needs a real from-scratch verification run.
+- Keep `backend/schema.sql` synchronized with every migration. Fresh-schema
+  and student identity checks passed in a separate scratch DB in Step 4;
+  repeat relevant validation when later schema changes are made.
 - Inline per-student editing (name/college/password) on the roster page -
   deliberately deferred; re-pasting through the import box is the only
   update path today.

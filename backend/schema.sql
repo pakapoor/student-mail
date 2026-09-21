@@ -35,7 +35,12 @@ CREATE TABLE students (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     -- Soft delete: NULL = active. Deleted students (and their messages) are
     -- hidden everywhere in the console until restored, but never purged.
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+    -- Nullable for retained legacy records until explicitly assigned.
+    college_id BIGINT REFERENCES colleges(id),
+    admission_id TEXT,
+    is_test BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT students_college_admission_unique UNIQUE (college_id, admission_id)
 );
 
 CREATE INDEX idx_students_central_email ON students (central_email);
