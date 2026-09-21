@@ -233,6 +233,29 @@ the standard pattern):
   relay service - one new script, one new systemd unit, one Nginx
   location block, one GitHub webhook config entry.
 
+## Logging/tracing for missed emails (done)
+
+User raised a real concern: if a student email goes missing, there was
+no way to diagnose why. `backend/src/sync.ts` had 4 silent `continue`
+paths (no message source, no Message-ID, no matching student for the
+To address, no parseable sender) that dropped a message with zero
+trace - fixed by adding `console.warn` at each with enough context
+(UID, Message-ID, To/From, subject) to diagnose a specific missing
+email later (commit `52d3ac1`).
+
+Confirmed `/var/log/journal` already existed on the instance, so
+systemd journal logging was already persistent across reboots (not
+volatile-only). Capped it at `SystemMaxUse=200M` in
+`/etc/systemd/journald.conf` so it can't grow to fill the 8GB disk.
+
+**Where to view logs** (on the EC2 instance):
+```
+sudo journalctl -u student-mail -f                    # live tail
+sudo journalctl -u student-mail -n 200 --no-pager      # last 200 lines
+sudo journalctl -u student-mail | grep "someone@x.com" # search
+sudo journalctl -u student-mail --since "2026-09-22 15:00" --until "2026-09-22 15:30"
+```
+
 ## AWS deployment: DONE
 
 All 9 planned steps are complete. `https://app.myemailinfo.com` is the
