@@ -312,7 +312,7 @@ deployment authorization. Discuss exact edits before making them.
   (correct planner behavior, not a bug) but will be used automatically
   once the table is larger. Both TypeScript checks passed, backend
   restarted.
-- [ ] **Step 10 — Diagnose and fix central-inbox-to-UI latency.** The user
+- [x] **Step 10 — Diagnose and fix central-inbox-to-UI latency.** The user
   observed 3–4 minutes after central inbox arrival; whether insertion or UI
   notification is delayed remains unmeasured. Time detection, fetch,
   database insertion, broadcast, and browser receipt. Verify actual IDLE
@@ -327,6 +327,96 @@ deployment authorization. Discuss exact edits before making them.
   multi-student recipient handling and global Message-ID deduplication so
   one bulk message does not hide other students' copies or mix their
   conversations across colleges. Verify the fix with measured test results.
+  Completed 2026-09-21.
+
+  **Diagnosis (measured, not guessed):** added `[TIMING]` logging at every
+  stage (IDLE `exists` event, IMAP arrival timestamp, DB insert, SSE
+  broadcast) and ran real tests through the actual forwarding chain (test
+  students' own stored credentials, and the user's own external Gmail
+  send). Every clean test - single message, a 4-message concurrent burst,
+  and the user's live Gmail send - completed in **6-12 seconds** end to
+  end, contradicting a persistent systemic delay. The user confirmed the
+  3-4 minute delay happened once, during yesterday's demo, was reproduced
+  by refreshing/re-logging in (so the message genuinely wasn't in Postgres
+  yet, not a UI/SSE display issue), and no backend restarts occurred
+  during it. This pointed at a real, unfixed gap in `mailboxSync.ts`:
+  `triggerSync`'s `runningSync` guard had no timeout, so a single stalled
+  IMAP operation (plausible on a live demo network) would hang forever,
+  silently blocking **both** future IDLE triggers and the 60-second
+  fallback poll for that mailbox until the stall eventually timed out on
+  its own and everything caught up at once - matching the "stuck, then
+  all at once" pattern reported. Not provable from yesterday's un-logged
+  run, but the most plausible explanation for a genuinely reproducible,
+  single-mailbox, non-restart-related, minutes-long stall with real
+  infrastructure.
+
+  **Fixes implemented:**
+  - `mailboxSync.ts`: `triggerSync` now has a 45-second watchdog
+    (`withWatchdog`) wrapping `syncInbox()`, so `runningSync` always
+    clears within bounded time regardless of what hangs underneath -
+    closing the deadlock gap directly. A trigger arriving while a sync is
+    already running now sets a `pendingRerun` flag instead of being
+    silently dropped; the in-flight sync re-triggers itself immediately
+    on completion, so nothing arriving mid-sync has to wait for the next
+    IDLE event or poll tick.
+  - `server.ts`: the fallback poll interval default dropped from 60s to
+    5s. Safe to run this tightly because (a) `triggerSync` is
+    fire-and-forget async I/O in a `setInterval`, never awaited, so it
+    can't block the event loop or any API request, and (b) syncs are now
+    cheap when nothing's new (see below), not an expensive full rescan
+    every tick. `.env.example` updated to match.
+  - `sync.ts`: rewritten to track a UID watermark (`last_uid`,
+    `uid_validity` - new columns on `central_mailboxes`, migration
+    `004_step10_sync_improvements.sql`) per mailbox instead of always
+    refetching the last 50 messages by sequence number. Every sync after
+    the first fetches strictly `UID > last_uid` - whether that's 0, 1, or
+    500 new messages, with no ceiling either way - eliminating both the
+    correctness ceiling (more than 50 new messages between syncs
+    previously meant silent, permanent loss of the overflow) and the
+    wasted re-parsing of up to 50 full messages on every tick. First-ever
+    sync for a mailbox (no stored watermark) still does the old bounded
+    last-50 catch-up as a baseline; a UIDVALIDITY change (rare server-side
+    UID reset) is detected and triggers the same bounded catch-up rather
+    than fetching from a now-meaningless stored UID.
+  - `sync.ts` also fixes the multi-student dedup bug: previously
+    `toAddresses.find(...)` kept only the first matching student per IMAP
+    message, and `messages.message_id` was globally `UNIQUE`, so a single
+    external message addressed to several students (each forwarding
+    independently to the central mailbox) only ever got recorded for one
+    of them - the rest silently vanished with no error. Migration `004`
+    changes the constraint to `UNIQUE(message_id, student_email)`, and
+    `sync.ts` now loops over every matching student, inserting one row
+    each (`ON CONFLICT (message_id, student_email) DO NOTHING`).
+  - `thread.ts`: fixed to match. Since two different students can now
+    legitimately share a `message_id`, `groupIntoThreads`'s union-find
+    keys were changed to `student_email + message_id` composites (a
+    reply/reference chain for one student's copy only ever refers to that
+    same student's own messages), and every place that matched replies by
+    `incoming_message_id` alone (`fetchThread`, `fetchThreadSummaries`,
+    `countEffectivelyPendingByEmail`) now also requires the reply's
+    `student_email` to match, closing a cross-student reply-leak that the
+    message_id-only matching would otherwise have allowed. A second bug
+    was caught during verification (not just assumed fixed): `fetchThread`
+    looked up "which group does my target message belong to" using
+    `message_id` alone, which could still grab the wrong student's group
+    since both groups contain a message with that id - fixed to also
+    require `student_email` match.
+
+  **Verification:** both TypeScript checks passed; migration `004`
+  applied to the dev database (confirmed via `\d`). Live tests via
+  real SMTP sends through the actual student-mailbox forwarding chain
+  (not synthetic bypasses): a UID-tracking check (first sync did the
+  bounded 21-message catch-up, the very next 5-second poll tick showed
+  `skipped=0` with no full rescan, confirming incremental mode); a real
+  message to two students at once, confirmed as two separate DB rows via
+  direct query and two separate, correctly-isolated threads via
+  `fetchThreadSummaries`/`fetchThread` (this is where the second
+  `fetchThread` bug above was caught and fixed); and the user's own live
+  external Gmail send, which appeared in the UI as expected. All
+  synthetic test messages this investigation created were deleted
+  afterward; the user's own live test message was left in place. Backend
+  restarted with the final code; `central_mailboxes.last_uid`/
+  `uid_validity` persisted correctly across that restart.
 - [ ] **Step 11 — Branding.** User will provide high-resolution ISM Edutech
   and college logos. Landing: ISM Edutech branding plus college buttons.
   Selected-college login and inner/mail pages: ISM Edutech and selected

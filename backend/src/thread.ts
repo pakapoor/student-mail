@@ -157,23 +157,34 @@ async function fetchAllReplies(): Promise<ReplyRow[]> {
     return result.rows;
 }
 
+// Keys are scoped by student_email, not just message_id: since a single
+// external message can now be recorded once per matching student (see
+// sync.ts), two different students' copies can share the same message_id.
+// A reply/reference chain for one student's forwarded copy only ever refers
+// to that SAME student's own earlier messages, so scoping by student_email
+// keeps their conversations as separate threads instead of merging them.
+function threadKey(studentEmail: string, messageId: string): string {
+    return `${studentEmail}\u0000${messageId}`;
+}
+
 function groupIntoThreads(messages: MessageRow[]): MessageRow[][] {
     const uf = new UnionFind();
 
     for (const m of messages) {
-        const ids = [m.message_id, m.in_reply_to, ...(m.reference_ids || [])].filter(
+        const ownKey = threadKey(m.student_email, m.message_id);
+        const relatedIds = [m.in_reply_to, ...(m.reference_ids || [])].filter(
             (v): v is string => Boolean(v)
         );
 
-        for (const id of ids) {
-            uf.union(m.message_id, id);
+        for (const id of relatedIds) {
+            uf.union(ownKey, threadKey(m.student_email, id));
         }
     }
 
     const groups = new Map<string, MessageRow[]>();
 
     for (const m of messages) {
-        const root = uf.find(m.message_id);
+        const root = uf.find(threadKey(m.student_email, m.message_id));
         const list = groups.get(root);
 
         if (list) {
@@ -227,9 +238,10 @@ export async function countEffectivelyPendingByEmail(
     const counts: Record<string, number> = {};
 
     for (const groupMessages of threadGroups) {
+        const groupStudentEmail = groupMessages[0]?.student_email;
         const threadMessageIds = new Set(groupMessages.map((m) => m.message_id));
-        const threadReplies = allReplies.filter((r) =>
-            threadMessageIds.has(r.incoming_message_id)
+        const threadReplies = allReplies.filter(
+            (r) => threadMessageIds.has(r.incoming_message_id) && r.student_email === groupStudentEmail
         );
         const resolvedAt = latestResolvedAt(groupMessages, threadReplies);
 
@@ -258,15 +270,17 @@ export async function fetchThread(
     const threadGroups = groupIntoThreads(messages);
     const threadMessages =
         threadGroups.find((group) =>
-            group.some((m) => m.message_id === target.message_id)
+            group.some(
+                (m) => m.message_id === target.message_id && m.student_email === target.student_email
+            )
         ) || [];
 
     const threadMessageIds = new Set(threadMessages.map((m) => m.message_id));
 
     const allReplies = await fetchAllReplies();
 
-    const threadReplies = allReplies.filter((r) =>
-        threadMessageIds.has(r.incoming_message_id)
+    const threadReplies = allReplies.filter(
+        (r) => threadMessageIds.has(r.incoming_message_id) && r.student_email === target.student_email
     );
 
     const items: ThreadItem[] = [
@@ -338,9 +352,10 @@ export async function fetchThreadSummaries(
             new Date(b.received_at) > new Date(a.received_at) ? b : a
         );
 
+        const groupStudentEmail = groupMessages[0]?.student_email;
         const threadMessageIds = new Set(groupMessages.map((m) => m.message_id));
-        const threadReplies = allReplies.filter((r) =>
-            threadMessageIds.has(r.incoming_message_id)
+        const threadReplies = allReplies.filter(
+            (r) => threadMessageIds.has(r.incoming_message_id) && r.student_email === groupStudentEmail
         );
         const resolvedAt = latestResolvedAt(groupMessages, threadReplies);
 

@@ -61,9 +61,13 @@ CREATE INDEX idx_students_search_trgm ON students
 -- One row per individual incoming message (the unit of reply-tracking is the
 -- Message-ID, not the thread - a new message in an existing thread starts
 -- out unreplied even if earlier messages in the same thread were answered).
+-- Uniqueness is (message_id, student_email), not message_id alone: a single
+-- external message sent to several students at once (each forwarding
+-- independently to the same central mailbox) is recorded as one row per
+-- student, since each student's copy is its own tracked conversation.
 CREATE TABLE messages (
     id BIGSERIAL PRIMARY KEY,
-    message_id TEXT UNIQUE NOT NULL,
+    message_id TEXT NOT NULL,
     student_email VARCHAR(320) NOT NULL,
     sender_email VARCHAR(320) NOT NULL,
     subject TEXT,
@@ -77,7 +81,8 @@ CREATE TABLE messages (
     -- True when an operator dismissed this message via "Mark as handled"
     -- (only offered when the message contains a link) instead of replying.
     handled_without_reply BOOLEAN DEFAULT FALSE,
-    central_email VARCHAR(320)
+    central_email VARCHAR(320),
+    CONSTRAINT messages_message_id_student_unique UNIQUE (message_id, student_email)
 );
 
 CREATE INDEX idx_messages_central_email ON messages (central_email);

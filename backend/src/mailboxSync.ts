@@ -3,29 +3,73 @@ import { syncInbox } from "./sync.js";
 import { broadcast } from "./realtime.js";
 
 const runningSync = new Set<string>();
+// Set when a trigger arrives while a sync is already in flight for that
+// mailbox - instead of just dropping it (which could leave a message
+// arriving mid-sync waiting on the next IDLE event or fallback poll tick),
+// the in-flight sync re-runs itself immediately once it finishes.
+const pendingRerun = new Set<string>();
 const activeWatchers = new Set<string>();
+
+// Hard ceiling on a single sync run. imapflow has no documented per-call
+// timeout, so a stalled network operation would otherwise hang forever -
+// which, combined with the runningSync guard, would permanently block both
+// future IDLE triggers and the fallback poll for that mailbox until the
+// process was restarted. This guarantees runningSync always clears within
+// bounded time regardless of what's hanging underneath.
+const SYNC_WATCHDOG_MS = 45000;
+
+function withWatchdog<T>(promise: Promise<T>, email: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`syncInbox [${email}] exceeded ${SYNC_WATCHDOG_MS}ms watchdog`));
+        }, SYNC_WATCHDOG_MS);
+
+        promise.then(
+            (value) => {
+                clearTimeout(timer);
+                resolve(value);
+            },
+            (error) => {
+                clearTimeout(timer);
+                reject(error);
+            }
+        );
+    });
+}
 
 export async function triggerSync(
     email: string,
     password: string
 ): Promise<void> {
     if (runningSync.has(email)) {
+        console.log(`[TIMING] triggerSync [${email}]: already running, queued a follow-up pass at ${new Date().toISOString()}`);
+        pendingRerun.add(email);
         return;
     }
 
     runningSync.add(email);
+    const start = Date.now();
 
     try {
-        const { inserted } = await syncInbox(email, password);
+        const { inserted } = await withWatchdog(syncInbox(email, password), email);
+        const durationMs = Date.now() - start;
 
         if (inserted > 0) {
-            console.log(`Sync [${email}]: ${inserted} new message(s) inserted`);
+            console.log(`Sync [${email}]: ${inserted} new message(s) inserted (took ${durationMs}ms)`);
+            const broadcastAt = Date.now();
             broadcast("update", { reason: "new-mail", inserted }, email);
+            console.log(`[TIMING] broadcast sent [${email}] at ${new Date(broadcastAt).toISOString()}`);
+        } else {
+            console.log(`[TIMING] Sync [${email}]: no new messages (took ${durationMs}ms)`);
         }
     } catch (error) {
         console.error(`Sync failed [${email}]:`, error);
     } finally {
         runningSync.delete(email);
+
+        if (pendingRerun.delete(email)) {
+            triggerSync(email, password);
+        }
     }
 }
 
@@ -83,6 +127,7 @@ async function watchOnce(email: string, password: string): Promise<void> {
     await client.mailboxOpen("INBOX");
 
     client.on("exists", () => {
+        console.log(`[TIMING] IDLE 'exists' fired [${email}] at ${new Date().toISOString()}`);
         triggerSync(email, password);
     });
 

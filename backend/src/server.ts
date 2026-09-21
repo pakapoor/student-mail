@@ -430,8 +430,13 @@ app.post("/api/messages/:id/mark-handled", requireAuth, requireCollege, async (r
 });
 
 const port = Number(process.env.PORT || 3001);
+// Now that syncInbox is UID-incremental (cheap when nothing's new - no more
+// always-refetch-last-50), this can run tightly as a safety net alongside
+// IDLE without meaningfully loading the IMAP server or blocking anything:
+// triggerSync is fire-and-forget async I/O, so this never blocks the
+// event loop or any API request.
 const fallbackSyncIntervalMs = Number(
-    process.env.FALLBACK_SYNC_INTERVAL_MS || 60000
+    process.env.FALLBACK_SYNC_INTERVAL_MS || 5000
 );
 
 app.listen(port, "0.0.0.0", async () => {
