@@ -108,6 +108,7 @@ export async function syncInbox(
             }
 
             if (!message.source) {
+                console.warn(`[sync] [${centralEmail}] UID ${message.uid}: no message source returned by IMAP fetch, skipping`);
                 continue;
             }
 
@@ -116,6 +117,7 @@ export async function syncInbox(
             const messageId = parsed.messageId;
 
             if (!messageId) {
+                console.warn(`[sync] [${centralEmail}] UID ${message.uid}: no Message-ID header, skipping (subject: "${parsed.subject || "(no subject)"}")`);
                 continue;
             }
 
@@ -141,12 +143,16 @@ export async function syncInbox(
             );
 
             if (matchingStudents.length === 0) {
+                console.warn(
+                    `[sync] [${centralEmail}] UID ${message.uid} "${messageId}": To address(es) [${toAddresses.join(", ") || "none"}] matched no registered student, skipping (subject: "${parsed.subject || "(no subject)"}")`
+                );
                 continue;
             }
 
             const senderEmail = parsed.from?.value[0]?.address?.toLowerCase();
 
             if (!senderEmail) {
+                console.warn(`[sync] [${centralEmail}] UID ${message.uid} "${messageId}": no parseable From address, skipping`);
                 continue;
             }
 
