@@ -94,7 +94,7 @@ export default function ThreadView({ items, onReplySent }: Props) {
         setHasContent((editorRef.current?.textContent?.trim().length ?? 0) > 0);
     }
 
-    function applyFormat(command: "bold" | "italic") {
+    function applyFormat(command: "bold" | "italic" | "underline") {
         editorRef.current?.focus();
         document.execCommand(command);
         updateHasContent();
@@ -113,6 +113,9 @@ export default function ThreadView({ items, onReplySent }: Props) {
         } else if (e.key.toLowerCase() === "i") {
             e.preventDefault();
             applyFormat("italic");
+        } else if (e.key.toLowerCase() === "u") {
+            e.preventDefault();
+            applyFormat("underline");
         }
     }
 
@@ -217,6 +220,17 @@ export default function ThreadView({ items, onReplySent }: Props) {
                             title="Italic (Ctrl/Cmd+I)"
                         >
                             <em>I</em>
+                        </button>
+                        <button
+                            type="button"
+                            className="toolbar-button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyFormat("underline")}
+                            disabled={sending}
+                            aria-label="Underline"
+                            title="Underline (Ctrl/Cmd+U)"
+                        >
+                            <u>U</u>
                         </button>
 
                         <span className="toolbar-divider" />

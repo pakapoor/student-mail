@@ -5,7 +5,7 @@
 // This is the actual trust boundary - a request can reach this endpoint
 // without going through the browser's contentEditable serialization at all,
 // so sanitizing here (not just in the frontend) is what actually matters.
-const ALLOWED_TAGS = new Set(["b", "strong", "i", "em", "br", "div"]);
+const ALLOWED_TAGS = new Set(["b", "strong", "i", "em", "u", "br", "div"]);
 
 export function sanitizeReplyHtml(html: string): string {
     return html.replace(/<\/?([a-zA-Z0-9]+)[^>]*>/g, (match, rawTag: string) => {

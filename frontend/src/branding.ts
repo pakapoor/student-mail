@@ -3,7 +3,7 @@
 // right next to it, which is what actually disambiguates the two, not the
 // image itself.
 const COLLEGE_LOGOS: Record<string, string> = {
-    "KSMA CENTRAL": "/logos/ksma.png",
+    "KRMA CENTRAL": "/logos/ksma.png",
     "IHSM CENTRAL": "/logos/ihsm.png",
     "IHSM ELITE": "/logos/ihsm.png",
 };

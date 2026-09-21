@@ -30,7 +30,7 @@ deployment authorization. Discuss exact edits before making them.
   Credentials were supplied privately; never place their values in this
   document, tracked test data, or logs.
 - [x] **Step 2 — Colleges, domain, and central mailbox.** Create manually
-  entered college records named exactly `KSMA CENTRAL`, `IHSM CENTRAL`, and
+  entered college records named exactly `KRMA CENTRAL`, `IHSM CENTRAL`, and
   `IHSM ELITE`. Use `myemailinfo.com` for the new setup. All three colleges'
   student mailboxes forward to `central.ksma@myemailinfo.com`. Do not use
   `system-design.in` as the new test domain. The older domain/mailboxes
@@ -198,14 +198,14 @@ deployment authorization. Discuss exact edits before making them.
   `admin-admission`) now shows Application No instead of College.
   Verified by re-running the exact `searchAdminStudents` SQL directly
   against the dev database - `admission_id` values return correctly
-  (confirmed against the real KSMA CENTRAL roster, including the two
+  (confirmed against the real KRMA CENTRAL roster, including the two
   `Sample Student A/B` rows the user had already imported live). Both
   TypeScript checks passed, backend restarted.
 - [x] **Step 7/8 — Header-based bulk student CSV import with password
   column.** Merged at implementation time: `students.smtp_password` is
   `NOT NULL`, so Step 7's format alone (no password) couldn't actually
   insert a row - Step 8's password column was required from the start.
-  Require exact full college names, with no `KSMA` or `IHSM` aliases.
+  Require exact full college names, with no `KRMA` or `IHSM` aliases.
   Accept only rows belonging to the selected college and explain rejected
   rows. Existing email with identical supplied details: skip as already
   imported. Existing email with conflicting details: flag for review,
@@ -305,7 +305,7 @@ deployment authorization. Discuss exact edits before making them.
   Applied migration `003` to the app database (the same live-database
   change pattern already used for migrations `001`/`002`). Verified
   directly against the dev database: searching the partial string `9729`
-  matches `Test Student 1 KSMA` (admission_id `97299038`); confirmed via
+  matches `Test Student 1 KRMA` (admission_id `97299038`); confirmed via
   `EXPLAIN` with `enable_seqscan` forced off that the rebuilt index is a
   valid, usable match for the search expression (a `Bitmap Index Scan` on
   `idx_students_search_trgm`) - it isn't chosen at today's 23-row scale
@@ -423,7 +423,7 @@ deployment authorization. Discuss exact edits before making them.
   college logos, with the selected college's full name.
   Completed 2026-09-21: user supplied 3 logo files (ISM Edutech brand mark,
   a shared IHSM seal used for both IHSM CENTRAL and IHSM ELITE, and a
-  KGMA/KSMA seal), saved to `frontend/public/logos/`. Since every place a
+  KGMA/KRMA seal), saved to `frontend/public/logos/`. Since every place a
   logo appears already shows the full college name as text right next to
   it (CollegePicker buttons, Console header), that existing text is what
   actually disambiguates IHSM CENTRAL from IHSM ELITE sharing one image -
@@ -507,6 +507,38 @@ deployment authorization. Discuss exact edits before making them.
   message's replied-state was then reset so the test student's pending
   count wasn't left artificially changed. Production frontend build also
   passed.
+  Follow-up 2026-09-21 (user-requested):
+  1. Added Underline alongside Bold/Italic - `u` added to
+     `sanitizeReplyHtml.ts`'s tag allowlist, a third toolbar button and
+     Ctrl/Cmd+U shortcut added to `ThreadView.tsx`. Verified the sanitizer
+     keeps `<u>` while still stripping attributes on it (e.g.
+     `<u onclick=...>` keeps the tag, drops the handler).
+  2. The college named `KSMA CENTRAL` was actually supposed to be
+     `KRMA CENTRAL` (a naming error caught after Steps 2-9 already used
+     the wrong name). Renamed via new migration
+     `006_rename_ksma_to_krma.sql` (applied to the app database):
+     `colleges.name`, the 7 KRMA students' `college` free-text column, and
+     the "KSMA" abbreviation baked into the 5 test students' `name`/
+     `last_name` fields (e.g. "Test Student 1 KSMA" -> "... KRMA").
+     `schema.sql`'s seed data and `branding.ts`'s logo-lookup key updated
+     to match. Migration `001_colleges.sql` itself was deliberately left
+     as historical record (matches the existing convention from Step 4 of
+     adding a new migration rather than editing an applied one).
+     Deliberately NOT renamed: any mailbox email address
+     (`central.ksma@...`, `test.ksma1-5@...`, `sample.ksma.*@...`) - those
+     are real provisioned Migadu mailboxes whose addresses are live login
+     credentials, not display text; renaming them would mean actually
+     recreating the mailboxes at Migadu, a separate real-world action this
+     session can't take. All PROJECT.md prose referencing the college name
+     was also updated (via a word-boundary-safe replace that only touched
+     uppercase `KSMA`, never the lowercase email addresses).
+     Verified: the exact `searchAdminStudents` query re-run directly
+     against the database confirms all 7 KRMA-college students (5 test +
+     2 sample) still resolve correctly under `college_id = 1` - the rename
+     only changed the `name` column, not any id, so nothing keyed by
+     `college_id` was affected. `GET /api/colleges` confirmed returning
+     `KRMA CENTRAL`. Both TypeScript checks and the production frontend
+     build passed; backend restarted.
 - [ ] **Step 14 — Discuss AWS migration after Steps 0–13.** Moving the app
   to AWS is a future discussion, not current deployment authorization.
   Agree on architecture, costs, security/credentials, data migration,
@@ -519,11 +551,11 @@ These Application Numbers replace the earlier shared `TEST` values.
 
 | Student Name | College | Application No | Email |
 |---|---|---|---|
-| Test Student 1 KSMA | KSMA CENTRAL | 97299038 | test.ksma1@myemailinfo.com |
-| Test Student 2 KSMA | KSMA CENTRAL | 88067600 | test.ksma2@myemailinfo.com |
-| Test Student 3 KSMA | KSMA CENTRAL | 58323203 | test.ksma3@myemailinfo.com |
-| Test Student 4 KSMA | KSMA CENTRAL | 10610719 | test.ksma4@myemailinfo.com |
-| Test Student 5 KSMA | KSMA CENTRAL | 60253661 | test.ksma5@myemailinfo.com |
+| Test Student 1 KRMA | KRMA CENTRAL | 97299038 | test.ksma1@myemailinfo.com |
+| Test Student 2 KRMA | KRMA CENTRAL | 88067600 | test.ksma2@myemailinfo.com |
+| Test Student 3 KRMA | KRMA CENTRAL | 58323203 | test.ksma3@myemailinfo.com |
+| Test Student 4 KRMA | KRMA CENTRAL | 10610719 | test.ksma4@myemailinfo.com |
+| Test Student 5 KRMA | KRMA CENTRAL | 60253661 | test.ksma5@myemailinfo.com |
 | Test Student 1 IHSM | IHSM CENTRAL | 92134630 | test.ihsm1@myemailinfo.com |
 | Test Student 2 IHSM | IHSM CENTRAL | 22264851 | test.ihsm2@myemailinfo.com |
 | Test Student 3 IHSM | IHSM CENTRAL | 81945572 | test.ihsm3@myemailinfo.com |
