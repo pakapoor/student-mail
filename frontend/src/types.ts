@@ -1,3 +1,13 @@
+export interface College {
+    id: string;
+    name: string;
+}
+
+export interface Session {
+    email: string;
+    college: College;
+}
+
 export interface ThreadSummary {
     threadId: number;
     subject: string | null;

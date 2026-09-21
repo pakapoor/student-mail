@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 import { ImapFlow } from "imapflow";
+import type { College } from "./colleges.js";
 
 interface Session {
     email: string;
+    college: College;
 }
 
 const sessions = new Map<string, Session>();
@@ -35,9 +37,9 @@ export async function verifyImapLogin(
     }
 }
 
-export function createSession(email: string): string {
+export function createSession(email: string, college: College): string {
     const token = crypto.randomUUID();
-    sessions.set(token, { email });
+    sessions.set(token, { email, college });
     return token;
 }
 

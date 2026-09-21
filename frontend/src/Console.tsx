@@ -9,16 +9,17 @@ import {
 import MessageList from "./MessageList";
 import ThreadView from "./ThreadView";
 import ManageStudents from "./ManageStudents";
-import type { StatusFilter, ThreadItem, ThreadSummary } from "./types";
+import type { College, StatusFilter, ThreadItem, ThreadSummary } from "./types";
 
 const TABS: StatusFilter[] = ["pending", "replied"];
 
 interface Props {
     email: string;
+    college: College;
     onLoggedOut: () => void;
 }
 
-function Console({ email, onLoggedOut }: Props) {
+function Console({ email, college, onLoggedOut }: Props) {
     const [status, setStatus] = useState<StatusFilter>("pending");
     const [threads, setThreads] = useState<ThreadSummary[]>([]);
     const [hasMore, setHasMore] = useState(false);
@@ -133,7 +134,7 @@ function Console({ email, onLoggedOut }: Props) {
     return (
         <div className="app">
             <header className="app-header">
-                <h1>Student Mail Console</h1>
+                <div><h1>Student Mail Console</h1><p className="console-college">{college.name}</p></div>
                 <div className="session-bar">
                     <span>{email}</span>
                     <button

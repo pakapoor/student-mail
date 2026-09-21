@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { login } from "./api";
+import type { College, Session } from "./types";
 
 interface Props {
-    onLoggedIn: (email: string) => void;
+    college: College;
+    onChangeCollege: () => void;
+    onLoggedIn: (session: Session) => void;
 }
 
-export default function Login({ onLoggedIn }: Props) {
+export default function Login({ college, onChangeCollege, onLoggedIn }: Props) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -17,8 +20,8 @@ export default function Login({ onLoggedIn }: Props) {
         setSubmitting(true);
 
         try {
-            const loggedInEmail = await login(email, password);
-            onLoggedIn(loggedInEmail);
+            const session = await login(email, password, college.id);
+            onLoggedIn(session);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Login failed");
         } finally {
@@ -29,11 +32,14 @@ export default function Login({ onLoggedIn }: Props) {
     return (
         <div className="login-page">
             <form className="login-card" onSubmit={handleSubmit}>
-                <h1>Student Mail Console</h1>
+                <p className="brand-name">ISM Edutech</p>
+                <h1>{college.name}</h1>
                 <p className="login-subtitle">
-                    Sign in with your central mailbox address and password. You will
-                    only see students whose mail forwards to this mailbox.
+                    Sign in with your central mailbox address and password.
                 </p>
+                <button type="button" className="change-college" onClick={onChangeCollege} disabled={submitting}>
+                    ← Change college
+                </button>
 
                 <label className="login-field">
                     <span>Central email</span>
@@ -41,7 +47,7 @@ export default function Login({ onLoggedIn }: Props) {
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="central1@system-design.in"
+                        placeholder="central.ksma@myemailinfo.com"
                         autoComplete="username"
                         disabled={submitting}
                         required

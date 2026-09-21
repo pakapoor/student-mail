@@ -9,8 +9,8 @@ aren't visible from the code alone.
 
 This section records the user's reviewed target plan, not implemented behavior.
 It supersedes older roadmap assumptions where they conflict. The existing
-implementation and historical notes below remain useful context. Steps 0–4
-have been authorized and completed. Stop for confirmation before Step 5 or any
+implementation and historical notes below remain useful context. Steps 0–5
+have been authorized and completed. Stop for confirmation before Step 6 or any
 later step. Do not treat approval of this plan as blanket implementation or
 deployment authorization. Discuss exact edits before making them.
 
@@ -78,10 +78,23 @@ deployment authorization. Discuss exact edits before making them.
   transaction before the user requested full database isolation. Scratch
   instance stopped afterward. The approved migration and roster insertion
   intentionally changed the app database. Both TypeScript checks passed.
-- [ ] **Step 5 — College picker before login.** Show three college buttons
+- [x] **Step 5 — College picker before login.** Show three college buttons
   on the landing page. Carry the selection through login. Operators using
   the shared central credentials may select any college; no separate
   operator-to-college permission assignments were requested.
+  Completed 2026-09-21: public `GET /api/colleges` returns database college
+  IDs/names; `CollegePicker.tsx` shows the three buttons with loading/error
+  and retry states. Login displays the selected college and offers Change
+  college. Login requires a valid collegeId string, stores the database
+  college in the server session, and returns it from login and auth/me.
+  Refresh restores the session's selection; the console header displays it;
+  logout returns to the college picker. Text ISM Edutech branding is used
+  pending logo assets. Backend restarted. Both TypeScript checks and the
+  production frontend build passed. Live API checks passed for all three
+  colleges, malformed/missing/unknown/out-of-range IDs, independent sessions,
+  refresh/session retrieval, and logout. No automated browser runner was
+  available; visual browser review remains with the user. This step does
+  not filter mail/students by college: backend enforcement is Step 6.
 - [ ] **Step 6 — Enforce selected-college scoping.** Pending and Replied
   show only that college's threads. Scope student lists, searches, imports,
   deleted records, restoration, thread access, and reply actions on the
@@ -451,9 +464,11 @@ needs real DB auth/secrets.
 
 - **Close out every completed step.** Update this file with the completed
   checkbox, changes, and verification results; commit that step's changes
-  locally and report the commit ID. Ask for confirmation before beginning
-  the next step. Documentation updates and local check-in are part of the
-  authorized step closeout. Do not mark unfinished steps complete.
+  locally using a title prefixed with its step number (for example,
+  `Step 5: Add college picker before login`), then push/sync to the remote.
+  Report the commit ID and any sync failure. Ask for confirmation before
+  beginning the next step. Documentation updates, check-in, and sync are
+  part of the authorized step closeout. Do not mark unfinished steps complete.
 - **Confirm before every edit.** State the plan in plain terms and get
   explicit approval before touching any file - every time, even mid-task,
   even after an earlier general "go ahead". This was set as an explicit

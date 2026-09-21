@@ -91,6 +91,24 @@
     color: var(--text);
 }
 
+.college-picker { box-sizing: border-box; max-width: 480px; }
+.brand-name { font-size: 14px; font-weight: 700; color: var(--accent-dark); margin-bottom: 12px; }
+.college-options { display: grid; gap: 12px; margin-top: 24px; }
+.college-option {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 16px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; color: var(--text); font: inherit; font-size: 14px;
+    font-weight: 600; cursor: pointer; text-align: left;
+}
+.college-option:hover { background: #eaf0fe; border-color: var(--accent); }
+.college-option:focus-visible, .change-college:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.change-college {
+    display: block; margin: 0 0 20px; padding: 0; border: 0;
+    background: transparent; color: var(--accent-dark); cursor: pointer; font: inherit; font-size: 13px;
+}
+.change-college:disabled { opacity: 0.5; cursor: not-allowed; }
+.console-college { margin-top: 4px; color: var(--text-muted); font-size: 13px; }
+
 .login-subtitle {
     font-size: 13px;
     color: var(--text-muted);

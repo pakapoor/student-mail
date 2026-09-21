@@ -3,14 +3,19 @@ import "./App.css";
 import { fetchCurrentSession } from "./api";
 import Login from "./Login";
 import Console from "./Console";
+import CollegePicker from "./CollegePicker";
+import type { College, Session } from "./types";
 
 function App() {
-    const [email, setEmail] = useState<string | null>(null);
+    const [session, setSession] = useState<Session | null>(null);
+    const [college, setCollege] = useState<College | null>(null);
+    const [sessionError, setSessionError] = useState(false);
     const [checkingSession, setCheckingSession] = useState(true);
 
     useEffect(() => {
         fetchCurrentSession()
-            .then(setEmail)
+            .then(setSession)
+            .catch(() => setSessionError(true))
             .finally(() => setCheckingSession(false));
     }, []);
 
@@ -18,11 +23,22 @@ function App() {
         return <div className="app-loading">Loading...</div>;
     }
 
-    if (!email) {
-        return <Login onLoggedIn={setEmail} />;
+    if (sessionError) {
+        return <div className="login-page"><div className="login-card">
+            <p role="alert">Unable to connect. Please try again.</p>
+            <button className="send-button" onClick={() => window.location.reload()}>Retry</button>
+        </div></div>;
     }
 
-    return <Console email={email} onLoggedOut={() => setEmail(null)} />;
+    if (!session) {
+        if (!college) return <CollegePicker onSelect={setCollege} />;
+        return <Login college={college} onChangeCollege={() => setCollege(null)} onLoggedIn={setSession} />;
+    }
+
+    return <Console email={session.email} college={session.college} onLoggedOut={() => {
+        setSession(null);
+        setCollege(null);
+    }} />;
 }
 
 export default App;

@@ -1,4 +1,6 @@
 import type {
+    College,
+    Session,
     AdminStudentPage,
     ImportResult,
     StatusFilter,
@@ -20,12 +22,18 @@ export interface ThreadSummaryPage {
 
 const PAGE_SIZE = 25;
 
-export async function login(email: string, password: string): Promise<string> {
+export async function fetchColleges(): Promise<College[]> {
+    const res = await fetch(`${API_BASE}/api/colleges`);
+    if (!res.ok) throw new Error("Failed to load colleges");
+    return res.json();
+}
+
+export async function login(email: string, password: string, collegeId: string): Promise<Session> {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, collegeId }),
     });
 
     const payload = await res.json();
@@ -34,7 +42,7 @@ export async function login(email: string, password: string): Promise<string> {
         throw new Error(payload.error || `Login failed (${res.status})`);
     }
 
-    return payload.email;
+    return payload;
 }
 
 export async function logout(): Promise<void> {
@@ -44,17 +52,19 @@ export async function logout(): Promise<void> {
     });
 }
 
-export async function fetchCurrentSession(): Promise<string | null> {
+export async function fetchCurrentSession(): Promise<Session | null> {
     const res = await fetch(`${API_BASE}/api/auth/me`, {
         credentials: "include",
     });
 
-    if (!res.ok) {
+    if (res.status === 401) {
         return null;
     }
 
+    if (!res.ok) throw new Error("Failed to check your session");
+
     const payload = await res.json();
-    return payload.email;
+    return payload;
 }
 
 export async function fetchThreadSummaries(
