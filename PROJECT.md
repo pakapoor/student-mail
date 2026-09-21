@@ -740,38 +740,66 @@ day):**
     instance is ever replaced) or should move to S3. Flagged, not
     resolved.
 
-  **Provisioning progress (resolved the AWS-CLI-vs-Console question by
-  proceeding entirely through the AWS Console, guided step by step - no
-  AWS credentials were ever configured in this working environment):**
-  - EC2 instance launched and running: `i-0c104f1bad8f6009b`
-    (`student-mail-app`), Ubuntu 26.04, 8GB gp3 unencrypted, no SSH key
-    pair (access via browser-based EC2 Instance Connect instead). User
-    logged into AWS via the root account rather than a dedicated IAM
-    user, given the deadline - flagged as worth fixing later, not urgent.
-  - Elastic IP `52.86.63.127` allocated and associated with the instance.
-  - GoDaddy DNS A record added: `app.myemailinfo.com` → `52.86.63.127`.
-  - Security group ended up with SSH/HTTP/HTTPS all open to
-    Anywhere-IPv4 permanently, including SSH - tightening SSH to the
-    EC2-Instance-Connect-specific managed prefix list was attempted but
-    AWS's console rejected mixing a prefix list with an existing CIDR
-    rule on the same line, and the user deliberately chose to keep
-    Anywhere-IPv4 for speed (the practical risk is low here since no
-    key pair/password auth exists for an attacker to target anyway).
-  - Connected to the instance via the browser-based EC2 Instance Connect
-    terminal; currently running initial `apt update && apt upgrade`.
-  - Not yet started: installing Node/Postgres/Nginx, getting the code
-    onto the instance, database migration (`pg_dump`/`pg_restore` from
-    the local dev database), `.env` configuration, Nginx + Certbot setup,
-    running the backend as a systemd service, the local-to-AWS sync
-    cutover, and end-to-end testing on the real domain.
-  - Cutover plan not yet finalized: once AWS is live, the **local
-    instance's IMAP sync must stop** (or two processes would race reading
-    the same mailboxes, corrupting the per-mailbox UID watermark from
-    Step 10) - this needs to happen as a clean cutover, not a "run both"
-    period.
-  - Cookie `secure: false` (currently hardcoded for local plain-HTTP dev)
-    needs to become `true` once real HTTPS is live on AWS - not yet
-    changed.
+  **Status: DEPLOYED. `https://app.myemailinfo.com` is live in
+  production**, deployed entirely through the AWS Console (no AWS
+  credentials were ever configured in this working environment) -
+  `command.md` has the full click-by-click history if needed.
+
+  - EC2 instance running: `i-0c104f1bad8f6009b` (`student-mail-app`),
+    Ubuntu 26.04, 8GB gp3 unencrypted, no SSH key pair (access via
+    browser-based EC2 Instance Connect instead). Logged into AWS via
+    the root account rather than a dedicated IAM user, given the
+    deadline - flagged as worth fixing later, not urgent.
+  - Elastic IP `52.86.63.127`, GoDaddy DNS A record
+    (`app.myemailinfo.com` → `52.86.63.127`), security group with
+    SSH/HTTP/HTTPS all open to Anywhere-IPv4 permanently (including
+    SSH - the EC2-Instance-Connect-specific prefix list couldn't
+    coexist with the CIDR rule in the console UI, and the practical
+    risk is low with no key pair/password auth to attack). Settled,
+    not to be revisited.
+  - Node.js, PostgreSQL, Nginx installed; code deployed via `git clone`
+    (private repo, PAT-based auth, credential helper configured so
+    future `git pull`s don't re-prompt).
+  - Database migrated via one-time `pg_dump`/`pg_restore` (not an
+    ongoing sync - AWS is now the sole source of truth). Had to set
+    Postgres's local host connections to `trust` auth in `pg_hba.conf`
+    to mirror local dev's passwordless setup.
+  - `.env` configured on the instance with real credentials plus
+    `FRONTEND_ORIGIN=https://app.myemailinfo.com` and
+    `NODE_ENV=production`. Session cookie's `secure` flag changed from
+    hardcoded `false` to `process.env.NODE_ENV === "production"`
+    (`backend/src/server.ts`) so local dev still works over plain HTTP.
+  - Nginx reverse-proxies `/api/` to the backend (port 3001, with
+    `proxy_buffering off` for the `/api/events` SSE endpoint) and
+    serves the built frontend as static files with SPA fallback.
+    Certbot issued and auto-deployed a Let's Encrypt cert; auto-renewal
+    scheduled.
+  - Backend runs as a systemd service (`student-mail.service`).
+  - Local dev backend stopped - clean cutover done, no risk of two
+    processes racing on the IMAP UID watermark.
+  - **Found and fixed during first production testing (not AWS-specific
+    bugs, just first time this code path got real end-to-end exercise):**
+    - Frontend's `API_BASE` was hardcoded to `http://localhost:3001` -
+      broke entirely in production. Fixed by making it a Vite env var
+      (`VITE_API_BASE`, empty in `frontend/.env.production` so it
+      resolves to relative `/api/...` paths through the Nginx proxy).
+    - `/home/ubuntu` directory permissions blocked Nginx's `www-data`
+      user from traversing into `frontend/dist` (500 errors) - fixed
+      with `chmod o+x` on the directory chain.
+    - Closed tab was sorting threads by newest incoming message
+      instead of by when they were actually closed/replied to - fixed
+      in `backend/src/thread.ts`'s `fetchThreadSummaries`: pending
+      threads still sort by newest incoming message, closed threads
+      now sort by `resolvedAt` (last reply/follow-up `sent_at`, or the
+      Close button's timestamp).
+  - End-to-end tested on the real domain: login, college picker,
+    student list, rich-text reply, Close button, follow-up on a closed
+    thread, pending count badge, Closed tab ordering - all confirmed
+    working.
+  - Not done, optional hardening for later: auto-deploy-on-push to
+    main (user's stated intent, not built yet), S3 for attachments
+    (currently local disk, lost if the instance is replaced), IAM user
+    instead of root login, EBS encryption, automated DB backups.
 
 ### Approved test roster (passwords intentionally omitted)
 

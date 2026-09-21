@@ -201,15 +201,19 @@ continue without re-deriving them.
    maxes over. Verified against real closed-thread data with a scratch
    script before cleanup - order is no longer strictly `received_at`.
 
-## Next steps, in order (give ONE at a time, per user's explicit request —
-## do not dump the whole list on them at once)
+17. ✅ End-to-end tested on `https://app.myemailinfo.com`: login,
+   college picker, student list, rich-text reply, Close button,
+   follow-up on a closed thread, pending count badge, and (after the
+   fix above) Closed tab ordering — all confirmed working by the user.
 
-1. **Test end-to-end on the real domain**: login → college picker →
-   Manage Students / CSV import → reply with rich text (Bold/Italic/
-   Underline/lists) → Close button → follow-up message on a closed
-   thread → confirm pending count badge works — i.e., re-verify
-   everything built earlier today, but now on the real production
-   deployment, not localhost.
+## AWS deployment: DONE
+
+All 9 planned steps are complete. `https://app.myemailinfo.com` is the
+live production deployment - backend running as a systemd service,
+Postgres with the real migrated data, Nginx + Certbot HTTPS, local dev
+backend stopped (clean cutover). No more steps queued here; further
+work (auto-deploy-on-push, S3 for attachments, IAM user instead of
+root, EBS encryption, backups) is optional hardening, not blocking.
 
 ## Things NOT to re-ask the user
 
