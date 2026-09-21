@@ -151,6 +151,7 @@ function Console({ email, college, onLoggedOut }: Props) {
 
             {showManageStudents && (
                 <ManageStudents
+                    collegeName={college.name}
                     onClose={() => setShowManageStudents(false)}
                     onImported={() => loadMessages(status)}
                 />

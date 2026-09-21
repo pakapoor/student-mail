@@ -77,11 +77,10 @@ export interface RejectedRow {
     line: number;
     email: string;
     reason: string;
-    owner?: string;
 }
 
 export interface ImportResult {
     imported: number;
-    updated: number;
+    skipped: number;
     rejected: RejectedRow[];
 }

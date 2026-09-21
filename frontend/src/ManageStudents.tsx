@@ -10,6 +10,7 @@ import {
 import type { AdminStudentRow, ImportResult, StudentRow } from "./types";
 
 interface Props {
+    collegeName: string;
     onClose: () => void;
     onImported: () => void;
 }
@@ -23,7 +24,7 @@ function displayName(s: AdminStudentRow): string {
     return combined || s.name || "(no name)";
 }
 
-export default function ManageStudents({ onClose, onImported }: Props) {
+export default function ManageStudents({ collegeName, onClose, onImported }: Props) {
     // Import section - unrelated to the roster below, kept from the original
     // per-mailbox modal.
     const [ownStudents, setOwnStudents] = useState<StudentRow[]>([]);
@@ -247,20 +248,27 @@ export default function ManageStudents({ onClose, onImported }: Props) {
                 {rosterTab === "add" && (
                     <div className="import-section">
                         <p className="hint-text">
-                            One student per line:{" "}
-                            <code>name,email,password,college,year_enrolled</code>{" "}
-                            (college and year enrolled are optional; year is a
-                            4-digit year). The password is that student's Migadu
-                            mailbox password, used for sending replies. Re-pasting
-                            a student that was previously deleted restores them
-                            automatically.
+                            First line must be the exact header{" "}
+                            <code>Student Name,College,Application No,Email,Password</code>,
+                            one student per line after that. College must be
+                            the exact full college name (no KSMA/IHSM
+                            shorthand) and must match your currently selected
+                            college, <strong>{collegeName}</strong> - rows for
+                            another college are rejected, not imported.
+                            Password is that student's mailbox password, used
+                            for sending replies. Re-pasting an unchanged row
+                            for a student that was previously deleted restores
+                            them; re-pasting a row with different details for
+                            an existing email is flagged for review, never
+                            silently overwritten.
                         </p>
 
                         <textarea
-                            rows={4}
+                            rows={5}
                             placeholder={
-                                "Jane Doe,jane.doe@pilot.system-design.in,S3cret!,IIT Delhi,2026\n" +
-                                "John Roe,john.roe@pilot.system-design.in,S3cret!,NSUT,2026"
+                                "Student Name,College,Application No,Email,Password\n" +
+                                `Jane Doe,${collegeName},10012345,jane.doe@myemailinfo.com,S3cret!\n` +
+                                `John Roe,${collegeName},10012346,john.roe@myemailinfo.com,S3cret!`
                             }
                             value={csv}
                             onChange={(e) => setCsv(e.target.value)}
@@ -281,15 +289,14 @@ export default function ManageStudents({ onClose, onImported }: Props) {
                         {result && (
                             <div className="import-result">
                                 <p>
-                                    {result.imported} added, {result.updated} updated,{" "}
-                                    {result.rejected.length} rejected.
+                                    {result.imported} added, {result.skipped} already
+                                    imported, {result.rejected.length} rejected.
                                 </p>
                                 {result.rejected.length > 0 && (
                                     <ul className="rejected-list">
                                         {result.rejected.map((r) => (
                                             <li key={r.line}>
                                                 Line {r.line} ({r.email}): {r.reason}
-                                                {r.owner ? ` - owned by ${r.owner}` : ""}
                                             </li>
                                         ))}
                                     </ul>

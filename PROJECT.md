@@ -187,20 +187,61 @@ deployment authorization. Discuss exact edits before making them.
   `/api/auth/college` still 401s with no session at all. User confirmed
   fixed live in the browser (college selection and Manage Students/Add
   students both working).
-- [ ] **Step 7 — Header-based bulk student CSV import.** Require exact full
-  college names, with no `KSMA` or `IHSM` aliases. Accept only rows belonging
-  to the selected college and explain rejected rows. Existing email with
-  identical supplied details: skip as already imported. Existing email with
-  conflicting details: flag for review, never silently overwrite. New email
-  with an Application No already used in that college: flag for review.
-  Otherwise import, even if a name matches. Check conflicts both within a
-  batch and against previous batches. Report imported/skipped/rejected rows
-  and reasons. Set is_test separately from CSV; the supplied 15 are tests.
-- [ ] **Step 8 — Password column for sending credentials.** Final CSV format
-  is `Student Name,College,Application No,Email,Password`. Each row supplies
-  its student mailbox password for SMTP replies. The user supplied one
-  common value for the 15 test accounts; use it only when execution is
-  authorized and do not reproduce it in tracked documentation or fixtures.
+- [x] **Step 7/8 — Header-based bulk student CSV import with password
+  column.** Merged at implementation time: `students.smtp_password` is
+  `NOT NULL`, so Step 7's format alone (no password) couldn't actually
+  insert a row - Step 8's password column was required from the start.
+  Require exact full college names, with no `KSMA` or `IHSM` aliases.
+  Accept only rows belonging to the selected college and explain rejected
+  rows. Existing email with identical supplied details: skip as already
+  imported. Existing email with conflicting details: flag for review,
+  never silently overwrite. New email with an Application No already used
+  in that college: flag for review. Otherwise import, even if a name
+  matches. Check conflicts both within a batch and against previous
+  batches. Report imported/skipped/rejected rows and reasons. Set is_test
+  separately from CSV; the supplied 15 are tests. Final CSV format is
+  `Student Name,College,Application No,Email,Password`. Each row supplies
+  its student mailbox password for SMTP replies.
+  Completed 2026-09-21: rewrote `importStudents` in `students.ts` to
+  replace the old ad hoc `name,email,password,college,year_enrolled`
+  paste format entirely (that format, and CSV-settable `year_enrolled`,
+  are gone from this import path; the columns/values stay in the schema
+  and existing rows). New `InvalidHeaderError` rejects the whole batch up
+  front if the first line isn't exactly
+  `Student Name,College,Application No,Email,Password` (case-insensitive).
+  College text must exactly match one of the `colleges` table's full names
+  (via `listColleges()`, not hardcoded) and must match the operator's
+  currently selected college from the session - a row for another college
+  is rejected with a message naming both colleges, never redirected or
+  imported anyway. Duplicate email or Application No is checked both
+  within the pasted batch (rejects the later occurrence, naming the
+  earlier line) and against the database. An existing email with every
+  field identical is a no-op (`skipped`), except a soft-deleted match is
+  restored (counted as `imported`) - preserving the existing repaste-to-
+  restore feature - while any differing field is rejected for manual
+  review and never overwritten. A new email whose Application No is
+  already used by a different email in that college is rejected. `is_test`
+  is hardcoded `FALSE` on every CSV-inserted row - never settable via this
+  import path. `ImportResult` changed from `{imported, updated, rejected}`
+  to `{imported, skipped, rejected}`; `RejectedRow` dropped its `owner`
+  field (the reason string is now self-descriptive). Frontend
+  (`ManageStudents.tsx`'s Add-students tab, `Console.tsx` passing
+  `college.name` down) updated to match: new hint text, header-inclusive
+  placeholder using the operator's real selected college name, and
+  imported/skipped/rejected counts in the result summary.
+  Verified: both TypeScript checks passed. Ran 10 scenarios directly
+  against the real dev database (bad header; a clean 2-row import; an
+  identical re-paste; a conflicting-details re-paste; a wrong-college row;
+  an abbreviated college name; a duplicate email within a batch; a
+  duplicate Application No within a batch; a new email colliding with an
+  existing Application No; a soft-deleted identical row restoring) - all
+  10 passed, and all test rows (`zzztest*@myemailinfo.com`) were deleted
+  afterward, confirmed by a follow-up count query that the real 15
+  active/8 soft-deleted student rows were unaffected. Backend restarted.
+  Could not exercise the actual `POST /api/students/import` HTTP route or
+  the browser UI (no real login here); visual browser review of the new
+  Add-students flow, including a real header-based paste, remains with
+  the user.
 - [ ] **Step 9 — Search by Application No.** Provide type-to-search partial
   matching across student name, email, and Application No, scoped to the
   selected college. Display Application No in the roster. "Elastic type"
