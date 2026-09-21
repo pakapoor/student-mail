@@ -8,7 +8,7 @@ export interface ThreadSummary {
     pending_count: number;
 }
 
-export type StatusFilter = "pending" | "all" | "replied";
+export type StatusFilter = "pending" | "replied";
 
 export interface IncomingThreadItem {
     type: "incoming";

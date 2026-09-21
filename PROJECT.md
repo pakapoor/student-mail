@@ -236,6 +236,33 @@ needs real DB auth/secrets.
    (`pendingCountsForStudents`) was updated to use the same definition via a
    new `countEffectivelyPendingByEmail()` export, so it never disagrees with
    what the console shows.
+8. **New mail took 30s to over a minute to appear - the IMAP IDLE watcher
+   was silently never working.** Root cause, confirmed by reading the
+   installed `imapflow` source directly: `mailboxSync.ts`'s watcher called
+   `client.getMailboxLock("INBOX")` and held that lock for its entire
+   lifetime. `imapflow`'s auto-IDLE only starts once the connection is not
+   "busy" (`connectionBusy()` checks `this.currentLock`, which stays set for
+   as long as a lock is held), so IDLE was never actually issued to the
+   server, and `client.on("exists", ...)` never fired from a real push -
+   every single "new mail" detection was actually coming from the 60s
+   fallback poll (`FALLBACK_SYNC_INTERVAL_MS`) the whole time, which is
+   exactly the 0-60s (average ~30s) delay that was observed. Fixed by using
+   `client.mailboxOpen("INBOX")` instead of `getMailboxLock()` for the
+   watcher (selects the mailbox without taking a lock, matching imapflow's
+   own documented usage pattern for relying on auto-IDLE) - live-tested
+   after the fix: a real test email was detected within ~14 seconds of
+   arriving at the central mailbox, not the old up-to-60s delay. This also
+   explains why the 50-message bulk re-fetch in `sync.ts` (see open items
+   below) wasn't obviously a problem yet - it was only ever running on that
+   same slow 60s cadence.
+9. **Dropped the "All" tab/status** from both the UI (`Console.tsx`) and the
+   backend (`/api/threads` and `fetchThreadSummaries` in `thread.ts`, now
+   `"pending" | "replied"` only) - every thread is always exactly one of
+   Pending or Replied (no third state), so "All" was purely the union of the
+   other two with nothing unique in it, just extra UI surface for clerks.
+   The older `/api/messages` per-message endpoint (not used by the current
+   UI) still accepts `status=all` - left alone since it wasn't part of this
+   change and isn't reachable from the console.
 
 ## Standing working rules for this project
 
@@ -280,6 +307,23 @@ needs real DB auth/secrets.
 
 ## Not yet built / open items
 
+- **`sync.ts`'s IMAP fetch is sequence-number-based, not UID-based - fix
+  before scaling up.** It always fetches the last 50 messages by sequence
+  number (`mailboxExists - 49` to `*`) every sync run, relying on `ON
+  CONFLICT (message_id) DO NOTHING` for dedup. This is safe at demo scale
+  (a handful of students) but has a real correctness ceiling, not just
+  inefficiency: if more than 50 new messages land in a central mailbox
+  between two sync runs (a backlog after downtime, or just natural volume
+  approaching 1600 students), anything beyond that window is never fetched
+  at all - silently missed, not delayed. It also re-downloads/re-parses full
+  message source for up to 50 messages on every sync tick even when only one
+  is new. Proper fix: track the last-processed IMAP UID per mailbox (e.g. a
+  new column on `central_mailboxes`) and fetch only messages with UID
+  greater than that each time, advancing the cursor after each successful
+  sync. Now that the IDLE watcher fix (above) means sync actually runs
+  promptly on real new mail rather than only every 60s, this matters more,
+  not less - deliberately left alone tonight since it's a bigger change than
+  the demo needed.
 - Migadu API mailbox provisioning: blocked on Migadu account verification
   (see above); nothing wired into the import flow yet even once unblocked.
 - `backend/schema.sql` needs a real from-scratch verification run.

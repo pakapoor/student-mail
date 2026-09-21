@@ -11,7 +11,7 @@ import ThreadView from "./ThreadView";
 import ManageStudents from "./ManageStudents";
 import type { StatusFilter, ThreadItem, ThreadSummary } from "./types";
 
-const TABS: StatusFilter[] = ["pending", "all", "replied"];
+const TABS: StatusFilter[] = ["pending", "replied"];
 
 interface Props {
     email: string;

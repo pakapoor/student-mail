@@ -315,7 +315,7 @@ export interface ThreadSummaryPage {
 }
 
 export async function fetchThreadSummaries(
-    status: "pending" | "replied" | "all",
+    status: "pending" | "replied",
     centralEmail: string,
     limit = 25,
     offset = 0
@@ -356,17 +356,9 @@ export async function fetchThreadSummaries(
         };
     });
 
-    const filtered = summaries.filter((s) => {
-        if (status === "pending") {
-            return s.pending_count > 0;
-        }
-
-        if (status === "replied") {
-            return s.pending_count === 0;
-        }
-
-        return true;
-    });
+    const filtered = summaries.filter((s) =>
+        status === "pending" ? s.pending_count > 0 : s.pending_count === 0
+    );
 
     // Thread list is always newest-first, regardless of status filter. This
     // only orders which threads appear where in the list - it doesn't change

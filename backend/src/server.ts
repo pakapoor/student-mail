@@ -200,8 +200,7 @@ app.get("/api/messages", requireAuth, async (req, res) => {
 app.get("/api/threads", requireAuth, async (req, res) => {
     const status = req.query.status;
 
-    const normalized =
-        status === "all" || status === "replied" ? status : "pending";
+    const normalized = status === "replied" ? status : "pending";
 
     const limitParam = Number(req.query.limit);
     const offsetParam = Number(req.query.offset);

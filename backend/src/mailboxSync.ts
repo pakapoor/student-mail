@@ -71,7 +71,16 @@ async function watchOnce(email: string, password: string): Promise<void> {
 
     await client.connect();
 
-    const lock = await client.getMailboxLock("INBOX");
+    // mailboxOpen() (not getMailboxLock()) is deliberate: a held mailbox
+    // lock keeps imapflow's connectionBusy() true forever, which permanently
+    // blocks its auto-IDLE (see autoidle() in imapflow's source - it bails
+    // out whenever the connection is "busy"). Without auto-IDLE, the server
+    // never gets told to push new-mail notifications, so "exists" only ever
+    // fired via the 60s fallback poll - up to a minute of latency on every
+    // new message. mailboxOpen() selects the mailbox without taking a lock,
+    // so the connection goes idle and imapflow issues real IMAP IDLE ~15s
+    // after going quiet, letting "exists" fire within seconds of new mail.
+    await client.mailboxOpen("INBOX");
 
     client.on("exists", () => {
         triggerSync(email, password);
@@ -79,12 +88,8 @@ async function watchOnce(email: string, password: string): Promise<void> {
 
     console.log(`IMAP idle watcher connected [${email}]`);
 
-    try {
-        await new Promise<void>((resolve, reject) => {
-            client.on("close", () => resolve());
-            client.on("error", (error: Error) => reject(error));
-        });
-    } finally {
-        lock.release();
-    }
+    await new Promise<void>((resolve, reject) => {
+        client.on("close", () => resolve());
+        client.on("error", (error: Error) => reject(error));
+    });
 }
