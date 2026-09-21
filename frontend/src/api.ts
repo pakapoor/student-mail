@@ -86,10 +86,11 @@ export async function fetchCurrentSession(): Promise<Session | null> {
 
 export async function fetchThreadSummaries(
     status: StatusFilter,
-    offset = 0
+    offset = 0,
+    limit = PAGE_SIZE
 ): Promise<ThreadSummaryPage> {
     const res = await fetch(
-        `${API_BASE}/api/threads?status=${status}&limit=${PAGE_SIZE}&offset=${offset}`,
+        `${API_BASE}/api/threads?status=${status}&limit=${limit}&offset=${offset}`,
         { credentials: "include" }
     );
 
@@ -142,6 +143,33 @@ export async function sendReply(
 
     if (!res.ok) {
         throw new Error(payload.error || `Failed to send reply (${res.status})`);
+    }
+
+    return payload;
+}
+
+export async function sendFollowUp(
+    id: number,
+    bodyHtml: string,
+    attachments: File[]
+): Promise<{ sent: true; sentMessageId: string }> {
+    const formData = new FormData();
+    formData.append("bodyHtml", bodyHtml);
+
+    for (const file of attachments) {
+        formData.append("attachments", file);
+    }
+
+    const res = await fetch(`${API_BASE}/api/messages/${id}/follow-up`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+    });
+
+    const payload = await res.json();
+
+    if (!res.ok) {
+        throw new Error(payload.error || `Failed to send message (${res.status})`);
     }
 
     return payload;

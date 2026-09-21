@@ -11,6 +11,7 @@ import {
     fetchMessageById,
     fetchMessages,
     markHandled,
+    sendFollowUp,
     sendReply,
 } from "./reply.js";
 import { fetchThread, fetchThreadSummaries } from "./thread.js";
@@ -401,6 +402,65 @@ app.post(
 
             console.error("REPLY FAILED", error);
             res.status(502).json({ error: "Failed to send reply" });
+        }
+    }
+);
+
+// A proactive extra message on a thread that's already fully closed (no
+// pending message left to answer) - :id is the most recent message in the
+// thread, used only to carry over the right subject/recipient/threading
+// headers. Unlike /reply, this never touches messages.replied, so it can't
+// reopen or resolve anything - the thread's status stays whatever it was.
+app.post(
+    "/api/messages/:id/follow-up",
+    requireAuth,
+    requireCollege,
+    upload.array("attachments"),
+    async (req, res) => {
+        const id = Number(req.params.id);
+
+        if (!Number.isInteger(id)) {
+            res.status(400).json({ error: "Invalid message id" });
+            return;
+        }
+
+        const centralEmail = res.locals.centralEmail;
+        const message = await fetchMessageById(id, centralEmail, res.locals.collegeId);
+
+        if (!message) {
+            res.status(404).json({ error: "Message not found" });
+            return;
+        }
+
+        const bodyHtmlRaw =
+            typeof req.body?.bodyHtml === "string" ? req.body.bodyHtml : "";
+        const bodyHtml = sanitizeReplyHtml(bodyHtmlRaw);
+        const bodyText = htmlToPlainText(bodyHtml);
+
+        if (!bodyText) {
+            res.status(400).json({ error: "Message body is required" });
+            return;
+        }
+
+        const files = Array.isArray(req.files) ? req.files : [];
+
+        const attachments = files.map((file) => ({
+            filename: file.originalname,
+            path: file.path,
+        }));
+
+        try {
+            const info = await sendFollowUp(message, bodyText, bodyHtml, attachments);
+            broadcast("update", { reason: "follow-up-sent", id }, centralEmail);
+            res.json({ sent: true, sentMessageId: info.messageId });
+        } catch (error) {
+            if (error instanceof StudentDeletedError) {
+                res.status(409).json({ error: error.message });
+                return;
+            }
+
+            console.error("FOLLOW-UP FAILED", error);
+            res.status(502).json({ error: "Failed to send message" });
         }
     }
 );

@@ -34,6 +34,7 @@ function Console({ email, college, onLoggedOut }: Props) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showManageStudents, setShowManageStudents] = useState(false);
+    const [pendingCount, setPendingCount] = useState(0);
 
     const loadMessages = useCallback(async (statusFilter: StatusFilter) => {
         setLoading(true);
@@ -47,6 +48,18 @@ function Console({ email, college, onLoggedOut }: Props) {
             setError(err instanceof Error ? err.message : "Failed to load messages");
         } finally {
             setLoading(false);
+        }
+    }, []);
+
+    // Kept in sync independently of whichever tab is active, so the Pending
+    // tab can always show a live count - the main workflow this console
+    // supports, per the customer's own framing of typical usage.
+    const loadPendingCount = useCallback(async () => {
+        try {
+            const page = await fetchThreadSummaries("pending", 0, 1);
+            setPendingCount(page.total);
+        } catch {
+            // Non-critical - the tab just keeps showing its last known count.
         }
     }, []);
 
@@ -75,9 +88,10 @@ function Console({ email, college, onLoggedOut }: Props) {
 
     useEffect(() => {
         loadMessages(status);
+        loadPendingCount();
         setSelectedId(null);
         setThreadItems(null);
-    }, [status, loadMessages]);
+    }, [status, loadMessages, loadPendingCount]);
 
     useEffect(() => {
         fetchStudents()
@@ -112,19 +126,22 @@ function Console({ email, college, onLoggedOut }: Props) {
 
     useEffect(() => {
         return subscribeToUpdates(() => {
-            // A new-mail sync or any operator's reply/mark-handled action
-            // changes the pending set - reload from the top so everyone's
-            // view (list + open thread) stays consistent with the server.
+            // A new-mail sync or any operator's reply/close action changes
+            // the pending set - reload from the top so everyone's view
+            // (list + open thread + pending count) stays consistent with
+            // the server.
             loadMessages(statusRef.current);
+            loadPendingCount();
 
             if (selectedIdRef.current !== null) {
                 loadThread(selectedIdRef.current);
             }
         });
-    }, [loadMessages, loadThread]);
+    }, [loadMessages, loadPendingCount, loadThread]);
 
     function handleReplySent() {
         loadMessages(status);
+        loadPendingCount();
 
         if (selectedId !== null) {
             loadThread(selectedId);
@@ -167,7 +184,10 @@ function Console({ email, college, onLoggedOut }: Props) {
                 <ManageStudents
                     collegeName={college.name}
                     onClose={() => setShowManageStudents(false)}
-                    onImported={() => loadMessages(status)}
+                    onImported={() => {
+                        loadMessages(status);
+                        loadPendingCount();
+                    }}
                 />
             )}
 
@@ -178,7 +198,7 @@ function Console({ email, college, onLoggedOut }: Props) {
                         className={tab === status ? "tab active" : "tab"}
                         onClick={() => setStatus(tab)}
                     >
-                        {TAB_LABELS[tab]}
+                        {tab === "pending" ? `${TAB_LABELS[tab]} (${pendingCount})` : TAB_LABELS[tab]}
                     </button>
                 ))}
             </nav>

@@ -110,6 +110,82 @@ export async function fetchStudent(email: string) {
     return result.rows[0];
 }
 
+// Shared by sendReply (resolves a pending message) and sendFollowUp (an
+// operator proactively sending another message on an already-closed
+// thread) - both send the same way and record the same reply row, they
+// just differ in whether there's a pending-message claim around the call.
+async function composeAndSend(
+    message: MessageRow,
+    bodyText: string,
+    bodyHtml: string,
+    attachments: ReplyAttachment[]
+) {
+    const student = await fetchStudent(message.student_email);
+
+    if (!student) {
+        throw new Error(`No student record found for ${message.student_email}`);
+    }
+
+    if (student.deleted_at) {
+        throw new StudentDeletedError(message.student_email);
+    }
+
+    const subject =
+        message.subject && /^re:/i.test(message.subject)
+            ? message.subject
+            : `Re: ${message.subject ?? ""}`;
+
+    const references = [...(message.reference_ids || []), message.message_id];
+
+    const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 465),
+        secure: process.env.SMTP_SECURE !== "false",
+        auth: {
+            user: student.email,
+            pass: student.smtp_password,
+        },
+    });
+
+    const info = await transporter.sendMail({
+        from: student.email,
+        to: message.sender_email,
+        bcc: message.central_email,
+        subject,
+        text: bodyText,
+        html: bodyHtml,
+        inReplyTo: message.message_id,
+        references,
+        attachments,
+    });
+
+    await db.query(
+        `
+        INSERT INTO replies (
+            incoming_message_id,
+            student_email,
+            recipient_email,
+            sent_message_id,
+            attachment_count,
+            body_text,
+            body_html
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `,
+        [
+            message.message_id,
+            student.email,
+            message.sender_email,
+            info.messageId,
+            attachments.length,
+            bodyText,
+            bodyHtml,
+        ]
+    );
+
+    return info;
+}
+
 export async function sendReply(
     message: MessageRow,
     bodyText: string,
@@ -135,75 +211,7 @@ export async function sendReply(
     }
 
     try {
-        const student = await fetchStudent(message.student_email);
-
-        if (!student) {
-            throw new Error(
-                `No student record found for ${message.student_email}`
-            );
-        }
-
-        if (student.deleted_at) {
-            throw new StudentDeletedError(message.student_email);
-        }
-
-        const subject =
-            message.subject && /^re:/i.test(message.subject)
-                ? message.subject
-                : `Re: ${message.subject ?? ""}`;
-
-        const references = [
-            ...(message.reference_ids || []),
-            message.message_id,
-        ];
-
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT || 465),
-            secure: process.env.SMTP_SECURE !== "false",
-            auth: {
-                user: student.email,
-                pass: student.smtp_password,
-            },
-        });
-
-        const info = await transporter.sendMail({
-            from: student.email,
-            to: message.sender_email,
-            bcc: message.central_email,
-            subject,
-            text: bodyText,
-            html: bodyHtml,
-            inReplyTo: message.message_id,
-            references,
-            attachments,
-        });
-
-        await db.query(
-            `
-            INSERT INTO replies (
-                incoming_message_id,
-                student_email,
-                recipient_email,
-                sent_message_id,
-                attachment_count,
-                body_text,
-                body_html
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            `,
-            [
-                message.message_id,
-                student.email,
-                message.sender_email,
-                info.messageId,
-                attachments.length,
-                bodyText,
-                bodyHtml,
-            ]
-        );
-
-        return info;
+        return await composeAndSend(message, bodyText, bodyHtml, attachments);
     } catch (error) {
         // SMTP (or student lookup) failed - release the claim so the
         // message goes back to Pending, per the "replied must remain
@@ -219,6 +227,22 @@ export async function sendReply(
 
         throw error;
     }
+}
+
+// A proactive extra message on a thread that's already fully resolved (no
+// pending message to answer) - e.g. the operator wants to follow up after
+// the fact. Unlike sendReply, there's nothing to claim/unclaim: `message`
+// here is just the most recent message in the thread, used only to carry
+// over the right subject/recipient/threading headers. It never touches
+// messages.replied, so it can't accidentally reopen or further "resolve"
+// anything - the thread's status is unaffected either way.
+export async function sendFollowUp(
+    message: MessageRow,
+    bodyText: string,
+    bodyHtml: string,
+    attachments: ReplyAttachment[] = []
+) {
+    return composeAndSend(message, bodyText, bodyHtml, attachments);
 }
 
 export async function markHandled(

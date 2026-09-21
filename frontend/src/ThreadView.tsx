@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingThreadItem, ThreadItem } from "./types";
-import { markHandled, sendReply } from "./api";
+import { markHandled, sendFollowUp, sendReply } from "./api";
 import { linkifyPlainText, sanitizeHtml } from "./linkify";
 
 interface Props {
@@ -54,6 +54,27 @@ export default function ThreadView({ items, onReplySent }: Props) {
         );
     }, [items]);
 
+    // Used only when the thread is fully closed (replyTarget is null) -
+    // lets the operator proactively send another message on an
+    // already-resolved thread. The most recent incoming message carries the
+    // right subject/recipient/threading headers to keep it in the same
+    // email conversation.
+    const mostRecentIncoming = useMemo(() => {
+        const incoming = items.filter(
+            (item): item is IncomingThreadItem => item.type === "incoming"
+        );
+
+        if (incoming.length === 0) {
+            return null;
+        }
+
+        return incoming.reduce((latest, current) =>
+            new Date(current.at) > new Date(latest.at) ? current : latest
+        );
+    }, [items]);
+
+    const composeTarget = replyTarget ?? mostRecentIncoming;
+
     function removeFile(name: string) {
         setFiles((prev) => prev.filter((file) => file.name !== name));
     }
@@ -90,7 +111,7 @@ export default function ThreadView({ items, onReplySent }: Props) {
     }
 
     async function handleSend() {
-        if (!replyTarget || !editorRef.current) {
+        if (!composeTarget || !editorRef.current) {
             return;
         }
 
@@ -98,7 +119,11 @@ export default function ThreadView({ items, onReplySent }: Props) {
         setSending(true);
 
         try {
-            await sendReply(replyTarget.id, editorRef.current.innerHTML, files);
+            if (replyTarget) {
+                await sendReply(replyTarget.id, editorRef.current.innerHTML, files);
+            } else {
+                await sendFollowUp(composeTarget.id, editorRef.current.innerHTML, files);
+            }
             editorRef.current.innerHTML = "";
             setHasContent(false);
             setFiles([]);
@@ -108,7 +133,7 @@ export default function ThreadView({ items, onReplySent }: Props) {
             setJustSent(true);
             onReplySent();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to send reply");
+            setError(err instanceof Error ? err.message : "Failed to send message");
         } finally {
             setSending(false);
         }
@@ -155,11 +180,12 @@ export default function ThreadView({ items, onReplySent }: Props) {
                 </div>
             )}
 
-            {replyTarget ? (
+            {composeTarget ? (
                 <div className="reply-panel">
-                    <h3>Reply</h3>
+                    <h3>{replyTarget ? "Reply" : "Send another message"}</h3>
                     <p className="replying-as">
-                        Replying as <strong>{replyTarget.student_email}</strong>
+                        {replyTarget ? "Replying as" : "Sending as"}{" "}
+                        <strong>{composeTarget.student_email}</strong>
                     </p>
 
                     <div className="composer-toolbar">
@@ -241,7 +267,9 @@ export default function ThreadView({ items, onReplySent }: Props) {
                     <div className="rich-editor-wrapper">
                         {!hasContent && (
                             <span className="rich-editor-placeholder">
-                                Type the reply to send from the student's mailbox...
+                                {replyTarget
+                                    ? "Type the reply to send from the student's mailbox..."
+                                    : "Type a message to send from the student's mailbox..."}
                             </span>
                         )}
                         <div
@@ -286,23 +314,25 @@ export default function ThreadView({ items, onReplySent }: Props) {
                             disabled={sending || closing || !hasContent}
                         >
                             {sending && <span className="spinner" />}
-                            {sending ? "Sending" : "Send reply"}
+                            {sending ? "Sending" : replyTarget ? "Send reply" : "Send message"}
                         </button>
 
-                        <button
-                            className="secondary-button"
-                            onClick={handleClose}
-                            disabled={sending || closing}
-                        >
-                            {closing && <span className="spinner spinner-dark" />}
-                            {closing ? "Closing..." : "Close"}
-                        </button>
+                        {replyTarget && (
+                            <button
+                                className="secondary-button"
+                                onClick={handleClose}
+                                disabled={sending || closing}
+                            >
+                                {closing && <span className="spinner spinner-dark" />}
+                                {closing ? "Closing..." : "Close"}
+                            </button>
+                        )}
                     </div>
                 </div>
             ) : (
                 !justSent && (
                     <p className="empty-state">
-                        This thread has no pending messages.
+                        This thread has no messages.
                     </p>
                 )
             )}

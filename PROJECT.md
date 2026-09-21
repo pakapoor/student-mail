@@ -631,10 +631,109 @@ day):**
    confirmed the thread correctly reopened in pending. Message state was
    reset afterward; no test data left behind.
    Verified: frontend TypeScript check and production build both passed.
-- [ ] **Step 14 — Discuss AWS migration after Steps 0–13.** Moving the app
-  to AWS is a future discussion, not current deployment authorization.
-  Agree on architecture, costs, security/credentials, data migration,
-  backups, and rollout before provisioning or deploying anything.
+
+**Second post-demo feedback round 2026-09-21 (two more changes, same
+day):**
+1. **Pending tab shows a live count** (`Pending (N)`). Kept independent of
+   whichever tab is actually open: `Console.tsx` added a `pendingCount`
+   state and `loadPendingCount()`, which calls the existing
+   `/api/threads?status=pending` endpoint with `limit=1` purely to read
+   `.total` (no new backend endpoint needed - the existing thread-summary
+   computation is the same cost regardless of how many rows are returned).
+   Refreshed at every point `loadMessages` already refreshes (mount/tab
+   change, the SSE update handler, after a reply/close, after a student
+   import). "Closed" intentionally has no count - the customer's own
+   framing was specifically that Pending is the primary workload signal.
+   `TAB_LABELS` no longer needs to change for this - the count is appended
+   only for the "pending" tab in the render, not baked into the label map.
+2. **"Send another message" on fully-closed threads.** Previously, once a
+   thread had no pending message left, `ThreadView` showed a flat "no
+   pending messages" message with no way to compose anything further. The
+   customer wanted a way to proactively follow up on an already-closed
+   thread without it affecting status - reopening should only happen from
+   a genuine new external reply, never from the operator's own follow-up
+   send. This needed a real second code path, not just a UI toggle: the
+   existing reply flow atomically *claims* the specific pending message
+   before sending (`UPDATE messages SET replied = TRUE WHERE ... replied =
+   FALSE`) specifically to prevent duplicate sends - that claim
+   necessarily fails once a message is already resolved, by design.
+   `reply.ts` was refactored to extract the shared SMTP-send-plus-record
+   logic (`composeAndSend`) out of `sendReply`, then a new `sendFollowUp`
+   calls that same shared logic with **no claim/unclaim at all** - it
+   never touches `messages.replied`, so it structurally cannot resolve or
+   reopen anything itself. New route `POST /api/messages/:id/follow-up`
+   (same shape as `/reply` - sanitizes `bodyHtml` server-side, derives the
+   plain-text fallback, accepts attachments - but does not check or
+   require the target message to already be replied). Frontend:
+   `ThreadView.tsx` computes `mostRecentIncoming` (for subject/recipient/
+   threading headers only) whenever there's no `replyTarget`, and reuses
+   the exact same rich-text composer, just relabeled ("Send another
+   message" / "Sending as" / "Send message") and without the Close button
+   (nothing to close). Verified with a real SMTP send against an
+   already-`replied=true` message: confirmed the email actually sent,
+   the `replies` row was recorded correctly, and - checked directly, not
+   assumed - `messages.replied`/`replied_at` were completely unchanged
+   before vs. after. Test reply row removed afterward.
+   Verified: both TypeScript checks and the production frontend build
+   passed; backend restarted.
+
+- [ ] **Step 14 — AWS migration.** Not yet executed - discussion only so
+  far, per the original scope (architecture, costs, security, data
+  migration, backups, rollout agreed before provisioning anything).
+  Currently mid-flight against a real deadline: customer demo'd tonight
+  (2026-09-21) and wants a working AWS deployment by 10am tomorrow
+  (2026-09-22).
+
+  **Decisions made so far:**
+  - Compute: one EC2 instance (recommended size `t3.small`), running both
+    the Node/Express backend and the built frontend behind Nginx
+    (reverse proxy + static file host + TLS termination) - matches this
+    app's existing "intentionally simple" architecture, no separate
+    services.
+  - Database: Postgres on the same EC2 instance (not RDS) - the user's
+    explicit choice, prioritizing zero extra cost over RDS's managed
+    automated backups. Recommended (not yet set up) mitigation: a cron'd
+    `pg_dump` to S3 for a lightweight backup, given this holds real
+    student data.
+  - TLS: Certbot (Let's Encrypt) directly on the EC2 instance, not an
+    ACM-issued cert - ACM certs only attach to AWS-integrated services
+    (ALB/CloudFront), which would mean adding a load balancer (~$16-20/mo
+    extra) purely for free-vs-managed cert tradeoff. Certbot is free and
+    matches the same cost-conscious choice as the database. Needs a small
+    recurring cron job for renewal (Let's Encrypt certs expire ~90 days).
+  - **Domain: `myemailinfo.com`**, registered today via GoDaddy (the same
+    domain student mailboxes already use, MX/SPF/DKIM/DMARC managed
+    through Migadu separately from this app). Plan is a subdomain (e.g.
+    `app.myemailinfo.com`) with an A record added in GoDaddy's DNS panel
+    pointing at the EC2 instance's IP once it exists.
+  - Secrets: same `.env`-file approach as local dev, placed on the EC2
+    instance with tight file permissions - no Secrets Manager at this
+    scale.
+  - Attachments: currently local disk (`backend/uploads/`) - not yet
+    decided whether that's acceptable on EC2 (attachments lost if the
+    instance is ever replaced) or should move to S3. Flagged, not
+    resolved.
+
+  **Still open / not yet done:**
+  - AWS CLI is not installed and no credentials are configured in this
+    working environment - nothing has been provisioned from here.
+    Undecided: whether the user drives the AWS Console with step-by-step
+    instructions (keeps credentials out of this session entirely) or
+    configures AWS CLI here so commands can be run directly - this
+    question was raised but not yet answered (interrupted by an urgent
+    live-testing request; still pending).
+  - Actual EC2 launch, security group configuration, Nginx/Node/Postgres
+    install, code deployment, database migration (`pg_dump`/`pg_restore`
+    from the current local dev database), DNS record creation, and
+    Certbot cert issuance are all **not started**.
+  - Cutover plan not yet finalized: once AWS is live, the **local
+    instance's IMAP sync must stop** (or two processes would race reading
+    the same mailboxes, corrupting the per-mailbox UID watermark from
+    Step 10) - this needs to happen as a clean cutover, not a "run both"
+    period.
+  - Cookie `secure: false` (currently hardcoded for local plain-HTTP dev)
+    needs to become `true` once real HTTPS is live on AWS - not yet
+    changed.
 
 ### Approved test roster (passwords intentionally omitted)
 
