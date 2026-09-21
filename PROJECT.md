@@ -696,12 +696,26 @@ day):**
   (2026-09-21) and wants a working AWS deployment by 10am tomorrow
   (2026-09-22).
 
+  **Note:** a separate `command.md` file at the repo root tracks the
+  live, granular AWS Console click-by-click progress (exact resource
+  IDs, security group state, etc.) as a working handoff doc across
+  sessions - this PROJECT.md entry covers the substantive decisions and
+  status, not every console click.
+
   **Decisions made so far:**
-  - Compute: one EC2 instance (recommended size `t3.small`), running both
-    the Node/Express backend and the built frontend behind Nginx
-    (reverse proxy + static file host + TLS termination) - matches this
-    app's existing "intentionally simple" architecture, no separate
-    services.
+  - Compute: one EC2 instance running both the Node/Express backend and
+    the built frontend behind Nginx (reverse proxy + static file host +
+    TLS termination) - matches this app's existing "intentionally
+    simple" architecture, no separate services. Instance type ended up
+    as **`t8i.small`** (2 vCPU, 2GB RAM), not the originally-discussed
+    `t3.small` - chosen after checking the user's actual AWS free-tier
+    credit balance ($100 remaining, on the newer post-July-2025
+    credit-based free tier). `m7i-flex.large` (8GB RAM) was considered
+    for the extra headroom but would burn the full $100 credit in ~6
+    weeks of continuous runtime; `t8i.small` costs ~$54 for the
+    project's full ~3-month lifetime, comfortably inside budget, and
+    offers better CPU/network/EBS performance than `t3.small` at a
+    similar price point.
   - Database: Postgres on the same EC2 instance (not RDS) - the user's
     explicit choice, prioritizing zero extra cost over RDS's managed
     automated backups. Recommended (not yet set up) mitigation: a cron'd
@@ -726,18 +740,30 @@ day):**
     instance is ever replaced) or should move to S3. Flagged, not
     resolved.
 
-  **Still open / not yet done:**
-  - AWS CLI is not installed and no credentials are configured in this
-    working environment - nothing has been provisioned from here.
-    Undecided: whether the user drives the AWS Console with step-by-step
-    instructions (keeps credentials out of this session entirely) or
-    configures AWS CLI here so commands can be run directly - this
-    question was raised but not yet answered (interrupted by an urgent
-    live-testing request; still pending).
-  - Actual EC2 launch, security group configuration, Nginx/Node/Postgres
-    install, code deployment, database migration (`pg_dump`/`pg_restore`
-    from the current local dev database), DNS record creation, and
-    Certbot cert issuance are all **not started**.
+  **Provisioning progress (resolved the AWS-CLI-vs-Console question by
+  proceeding entirely through the AWS Console, guided step by step - no
+  AWS credentials were ever configured in this working environment):**
+  - EC2 instance launched and running: `i-0c104f1bad8f6009b`
+    (`student-mail-app`), Ubuntu 26.04, 8GB gp3 unencrypted, no SSH key
+    pair (access via browser-based EC2 Instance Connect instead). User
+    logged into AWS via the root account rather than a dedicated IAM
+    user, given the deadline - flagged as worth fixing later, not urgent.
+  - Elastic IP `52.86.63.127` allocated and associated with the instance.
+  - GoDaddy DNS A record added: `app.myemailinfo.com` → `52.86.63.127`.
+  - Security group ended up with SSH/HTTP/HTTPS all open to
+    Anywhere-IPv4 permanently, including SSH - tightening SSH to the
+    EC2-Instance-Connect-specific managed prefix list was attempted but
+    AWS's console rejected mixing a prefix list with an existing CIDR
+    rule on the same line, and the user deliberately chose to keep
+    Anywhere-IPv4 for speed (the practical risk is low here since no
+    key pair/password auth exists for an attacker to target anyway).
+  - Connected to the instance via the browser-based EC2 Instance Connect
+    terminal; currently running initial `apt update && apt upgrade`.
+  - Not yet started: installing Node/Postgres/Nginx, getting the code
+    onto the instance, database migration (`pg_dump`/`pg_restore` from
+    the local dev database), `.env` configuration, Nginx + Certbot setup,
+    running the backend as a systemd service, the local-to-AWS sync
+    cutover, and end-to-end testing on the real domain.
   - Cutover plan not yet finalized: once AWS is live, the **local
     instance's IMAP sync must stop** (or two processes would race reading
     the same mailboxes, corrupting the per-mailbox UID watermark from
