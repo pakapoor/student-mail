@@ -14,6 +14,7 @@ import {
     sendReply,
 } from "./reply.js";
 import { fetchThread, fetchThreadSummaries } from "./thread.js";
+import { htmlToPlainText, sanitizeReplyHtml } from "./sanitizeReplyHtml.js";
 import { ensureWatcher, triggerSync } from "./mailboxSync.js";
 import { addClient, broadcast, removeClient } from "./realtime.js";
 import {
@@ -361,8 +362,10 @@ app.post(
             return;
         }
 
-        const bodyText =
-            typeof req.body?.body === "string" ? req.body.body.trim() : "";
+        const bodyHtmlRaw =
+            typeof req.body?.bodyHtml === "string" ? req.body.bodyHtml : "";
+        const bodyHtml = sanitizeReplyHtml(bodyHtmlRaw);
+        const bodyText = htmlToPlainText(bodyHtml);
 
         if (!bodyText) {
             res.status(400).json({ error: "Reply body is required" });
@@ -377,7 +380,7 @@ app.post(
         }));
 
         try {
-            const info = await sendReply(message, bodyText, attachments);
+            const info = await sendReply(message, bodyText, bodyHtml, attachments);
             broadcast("update", { reason: "reply-sent", id }, centralEmail);
             res.json({ sent: true, sentMessageId: info.messageId });
         } catch (error) {

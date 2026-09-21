@@ -122,11 +122,11 @@ export function subscribeToUpdates(onUpdate: () => void): () => void {
 
 export async function sendReply(
     id: number,
-    body: string,
+    bodyHtml: string,
     attachments: File[]
 ): Promise<{ sent: true; sentMessageId: string }> {
     const formData = new FormData();
-    formData.append("body", body);
+    formData.append("bodyHtml", bodyHtml);
 
     for (const file of attachments) {
         formData.append("attachments", file);

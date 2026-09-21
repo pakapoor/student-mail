@@ -36,6 +36,7 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
                         </span>
                     </div>
                     <div className="subject">{thread.subject || "(no subject)"}</div>
+                    {thread.preview && <div className="message-preview">{thread.preview}</div>}
                     <div className="message-row-bottom">
                         <span className="sender">{thread.sender_email}</span>
                         <span className="received-at">

@@ -14,7 +14,8 @@ interface Props {
 }
 
 export default function ThreadView({ items, onReplySent }: Props) {
-    const [body, setBody] = useState("");
+    const editorRef = useRef<HTMLDivElement>(null);
+    const [hasContent, setHasContent] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
     const [sending, setSending] = useState(false);
     const [markingHandled, setMarkingHandled] = useState(false);
@@ -89,8 +90,34 @@ export default function ThreadView({ items, onReplySent }: Props) {
         setFiles((prev) => prev.filter((file) => file.name !== name));
     }
 
+    function updateHasContent() {
+        setHasContent((editorRef.current?.textContent?.trim().length ?? 0) > 0);
+    }
+
+    function applyFormat(command: "bold" | "italic") {
+        editorRef.current?.focus();
+        document.execCommand(command);
+        updateHasContent();
+    }
+
+    function handleEditorKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+        const meta = e.ctrlKey || e.metaKey;
+
+        if (!meta) {
+            return;
+        }
+
+        if (e.key.toLowerCase() === "b") {
+            e.preventDefault();
+            applyFormat("bold");
+        } else if (e.key.toLowerCase() === "i") {
+            e.preventDefault();
+            applyFormat("italic");
+        }
+    }
+
     async function handleSend() {
-        if (!replyTarget) {
+        if (!replyTarget || !editorRef.current) {
             return;
         }
 
@@ -98,8 +125,9 @@ export default function ThreadView({ items, onReplySent }: Props) {
         setSending(true);
 
         try {
-            await sendReply(replyTarget.id, body, files);
-            setBody("");
+            await sendReply(replyTarget.id, editorRef.current.innerHTML, files);
+            editorRef.current.innerHTML = "";
+            setHasContent(false);
             setFiles([]);
             if (fileInputRef.current) {
                 fileInputRef.current.value = "";
@@ -163,27 +191,68 @@ export default function ThreadView({ items, onReplySent }: Props) {
             {replyTarget ? (
                 <div className="reply-panel">
                     <h3>Reply</h3>
+                    <p className="replying-as">
+                        Replying as <strong>{replyTarget.student_email}</strong>
+                    </p>
 
-                    <textarea
-                        rows={5}
-                        placeholder="Type the reply to send from the student's mailbox..."
-                        value={body}
-                        onChange={(e) => setBody(e.target.value)}
-                        disabled={sending}
-                    />
-
-                    <label className="file-picker">
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            onChange={(e) =>
-                                setFiles(Array.from(e.target.files || []))
-                            }
+                    <div className="composer-toolbar">
+                        <button
+                            type="button"
+                            className="toolbar-button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyFormat("bold")}
                             disabled={sending}
+                            aria-label="Bold"
+                            title="Bold (Ctrl/Cmd+B)"
+                        >
+                            <strong>B</strong>
+                        </button>
+                        <button
+                            type="button"
+                            className="toolbar-button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => applyFormat("italic")}
+                            disabled={sending}
+                            aria-label="Italic"
+                            title="Italic (Ctrl/Cmd+I)"
+                        >
+                            <em>I</em>
+                        </button>
+
+                        <span className="toolbar-divider" />
+
+                        <label className="file-picker toolbar-button">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                onChange={(e) =>
+                                    setFiles(Array.from(e.target.files || []))
+                                }
+                                disabled={sending}
+                            />
+                            Attach files
+                        </label>
+                    </div>
+
+                    <div className="rich-editor-wrapper">
+                        {!hasContent && (
+                            <span className="rich-editor-placeholder">
+                                Type the reply to send from the student's mailbox...
+                            </span>
+                        )}
+                        <div
+                            ref={editorRef}
+                            className="rich-editor"
+                            contentEditable={!sending}
+                            spellCheck={true}
+                            onInput={updateHasContent}
+                            onKeyDown={handleEditorKeyDown}
+                            role="textbox"
+                            aria-multiline="true"
+                            aria-label="Reply body"
                         />
-                        Attach files
-                    </label>
+                    </div>
 
                     {files.length > 0 && (
                         <ul className="attachment-list">
@@ -211,7 +280,7 @@ export default function ThreadView({ items, onReplySent }: Props) {
                         <button
                             className="send-button"
                             onClick={handleSend}
-                            disabled={sending || markingHandled || body.trim().length === 0}
+                            disabled={sending || markingHandled || !hasContent}
                         >
                             {sending && <span className="spinner" />}
                             {sending ? "Sending" : "Send reply"}
@@ -265,6 +334,15 @@ function ThreadBubble({
     const renderedBody = useMemo(() => {
         if (item.type === "incoming" && item.body_html) {
             return sanitizeHtml(item.body_html);
+        }
+
+        // Outgoing replies' body_html was already sanitized server-side at
+        // send time (sanitizeReplyHtml.ts) - it's our own composed content,
+        // not untrusted external mail, so it's rendered as-is here rather
+        // than re-run through the incoming-mail sanitizer, which assumes
+        // different things (e.g. unwrapping mailto: links).
+        if (item.type === "outgoing" && item.body_html) {
+            return item.body_html;
         }
 
         return linkifyPlainText(

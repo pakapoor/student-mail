@@ -25,6 +25,7 @@ interface ReplyRow {
     sent_at: string;
     attachment_count: number;
     body_text: string | null;
+    body_html: string | null;
 }
 
 export interface IncomingThreadItem {
@@ -52,6 +53,7 @@ export interface OutgoingThreadItem {
     at: string;
     attachment_count: number;
     body_text: string | null;
+    body_html: string | null;
 }
 
 export type ThreadItem = IncomingThreadItem | OutgoingThreadItem;
@@ -149,7 +151,7 @@ async function fetchAllReplies(): Promise<ReplyRow[]> {
     const result = await db.query<ReplyRow>(
         `
         SELECT id, incoming_message_id, student_email, recipient_email,
-               sent_message_id, sent_at, attachment_count, body_text
+               sent_message_id, sent_at, attachment_count, body_text, body_html
         FROM replies
         `
     );
@@ -311,6 +313,7 @@ export async function fetchThread(
                 at: r.sent_at,
                 attachment_count: r.attachment_count,
                 body_text: r.body_text,
+                body_html: r.body_html,
             })
         ),
     ];
@@ -328,6 +331,20 @@ export interface ThreadSummary {
     received_at: string;
     message_count: number;
     pending_count: number;
+    preview: string;
+}
+
+const PREVIEW_LENGTH = 140;
+
+function makePreview(bodyText: string | null, bodyHtml: string | null): string {
+    const raw = bodyText || (bodyHtml ? bodyHtml.replace(/<[^>]+>/g, " ") : "");
+    const collapsed = raw.replace(/\s+/g, " ").trim();
+
+    if (collapsed.length <= PREVIEW_LENGTH) {
+        return collapsed;
+    }
+
+    return `${collapsed.slice(0, PREVIEW_LENGTH).trimEnd()}...`;
 }
 
 export interface ThreadSummaryPage {
@@ -377,6 +394,7 @@ export async function fetchThreadSummaries(
             received_at: latest.received_at,
             message_count: groupMessages.length,
             pending_count: pendingCount,
+            preview: makePreview(representative.body_text, representative.body_html),
         };
     });
 

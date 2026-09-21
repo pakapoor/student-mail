@@ -16,6 +16,7 @@ export interface ThreadSummary {
     received_at: string;
     message_count: number;
     pending_count: number;
+    preview: string;
 }
 
 export type StatusFilter = "pending" | "replied";
@@ -45,6 +46,7 @@ export interface OutgoingThreadItem {
     at: string;
     attachment_count: number;
     body_text: string | null;
+    body_html: string | null;
 }
 
 export type ThreadItem = IncomingThreadItem | OutgoingThreadItem;

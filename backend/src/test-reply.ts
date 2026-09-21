@@ -46,7 +46,7 @@ async function main() {
         "This is a test reply sent automatically to verify SMTP " +
         "threading, BCC, and reply-state tracking.";
 
-    const info = await sendReply(message, bodyText, attachments);
+    const info = await sendReply(message, bodyText, bodyText, attachments);
 
     console.log("SMTP SEND SUCCEEDED");
     console.log("  sent message_id:", info.messageId);

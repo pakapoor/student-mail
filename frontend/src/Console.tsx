@@ -9,6 +9,7 @@ import {
 import MessageList from "./MessageList";
 import ThreadView from "./ThreadView";
 import ManageStudents from "./ManageStudents";
+import { collegeLogo, ISM_EDUTECH_LOGO } from "./branding";
 import type { College, StatusFilter, ThreadItem, ThreadSummary } from "./types";
 
 const TABS: StatusFilter[] = ["pending", "replied"];
@@ -134,7 +135,16 @@ function Console({ email, college, onLoggedOut }: Props) {
     return (
         <div className="app">
             <header className="app-header">
-                <div><h1>Student Mail Console</h1><p className="console-college">{college.name}</p></div>
+                <div className="header-brand">
+                    <img className="header-logo" src={ISM_EDUTECH_LOGO} alt="ISM Edutech" />
+                    {collegeLogo(college.name) && (
+                        <img className="header-logo header-college-logo" src={collegeLogo(college.name)} alt="" />
+                    )}
+                    <div>
+                        <h1>Student Mail Console</h1>
+                        <p className="console-college">{college.name}</p>
+                    </div>
+                </div>
                 <div className="session-bar">
                     <span>{email}</span>
                     <button

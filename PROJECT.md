@@ -417,18 +417,52 @@ deployment authorization. Discuss exact edits before making them.
   afterward; the user's own live test message was left in place. Backend
   restarted with the final code; `central_mailboxes.last_uid`/
   `uid_validity` persisted correctly across that restart.
-- [ ] **Step 11 — Branding.** User will provide high-resolution ISM Edutech
+- [x] **Step 11 — Branding.** User will provide high-resolution ISM Edutech
   and college logos. Landing: ISM Edutech branding plus college buttons.
   Selected-college login and inner/mail pages: ISM Edutech and selected
   college logos, with the selected college's full name.
-- [ ] **Step 12 — Professional inbox UI.** Preserve consistent full width.
+  Completed 2026-09-21: user supplied 3 logo files (ISM Edutech brand mark,
+  a shared IHSM seal used for both IHSM CENTRAL and IHSM ELITE, and a
+  KGMA/KSMA seal), saved to `frontend/public/logos/`. Since every place a
+  logo appears already shows the full college name as text right next to
+  it (CollegePicker buttons, Console header), that existing text is what
+  actually disambiguates IHSM CENTRAL from IHSM ELITE sharing one image -
+  no image editing/text-overlay was needed. New `branding.ts` maps college
+  name to logo path. `CollegePicker.tsx`'s "ISM Edutech" text became the
+  actual logo image, each college button got its own logo; `Login.tsx`'s
+  text became the ISM Edutech logo (no college logo there - login happens
+  before college selection per Step 5's reorder, so no college is known
+  yet at that screen); `Console.tsx`'s header got both the ISM Edutech and
+  selected-college logos next to the existing text. Verified: frontend
+  TypeScript check and production build both passed, and the build output
+  confirmed the logo files were correctly bundled into `dist/logos/`.
+- [x] **Step 12 — Professional inbox UI.** Preserve consistent full width.
   Use a compact branded header with college and logged-in mailbox, a fixed
   desktop thread-list width and flexible reading pane, clear student
   name/email, subject, preview, timestamp, and selection state. Improve
   message readability and attachment/composer layout; show the student's
   sending address. Retain Pending / Replied labels per the latest approved
   wording, rather than the earlier proposed Handled rename.
-- [ ] **Step 13 — Rich-text composition and native spellchecking.** Add
+  Completed 2026-09-21: much of this was already true before this step -
+  `.main-layout` already used a fixed 380px sidebar plus a flexible `1fr`
+  reading pane, and Pending/Replied were never touched. What was actually
+  missing: (1) the thread list never showed a body preview - added a
+  `preview` field to `ThreadSummary`/`fetchThreadSummaries` (derived from
+  the representative message's body_text, falling back to stripped
+  body_html, truncated to 140 chars) and rendered it in
+  `MessageList.tsx`; (2) the composer never visibly stated which student
+  mailbox a reply sends from (only implied in placeholder text) - added a
+  visible "Replying as: student@domain" label; (3) the attach-files
+  control was restructured into a `composer-toolbar` row (built to also
+  hold Step 13's Bold/Italic buttons, done in the same pass to avoid
+  touching the composer twice). Also reinstated `.app`'s max-width at
+  2000px (was `max-width: none`, i.e. fully fluid) - a prior documented
+  fix had deliberately capped it at 2000px specifically for message
+  readability on ultra-wide monitors, and it had since drifted back to
+  unbounded; re-capping it matches this step's explicit readability goal.
+  Header branding (logos) landed together with Step 11 in the same pass.
+  Verified: frontend TypeScript check and production build both passed.
+- [x] **Step 13 — Rich-text composition and native spellchecking.** Add
   Bold and Italic toolbar controls and Ctrl/Cmd+B and Ctrl/Cmd+I shortcuts.
   Preserve formatting in sent mail and conversation history; store/send
   sanitized HTML with a plain-text fallback while retaining attachments
@@ -436,6 +470,43 @@ deployment authorization. Discuss exact edits before making them.
   browser-provided suggestions and manual corrections. Availability varies
   by browser/language. No automatic rewriting or integrated grammar service
   in this scope; grammar-service integration is deferred.
+  Completed 2026-09-21: replaced the plain `<textarea>` composer in
+  `ThreadView.tsx` with a `contentEditable` div (no new library - matches
+  how `linkify.ts` already hand-rolls its own incoming-mail sanitizer
+  rather than pulling in a dependency), with Bold/Italic toolbar buttons
+  and Ctrl/Cmd+B / Ctrl/Cmd+I shortcuts via `document.execCommand`, and
+  `spellCheck={true}` explicit (browsers often default it off for
+  `contentEditable` divs).
+  The actual security boundary is server-side, not the browser: new
+  `sanitizeReplyHtml.ts` strips every tag outside a narrow allowlist
+  (`b`/`strong`/`i`/`em`/`br`/`div`) and strips all attributes even on
+  allowed tags (so `<b onmouseover=...>` keeps the `<b>` but drops the
+  handler) - this matters because a request can reach the reply endpoint
+  without ever going through the browser's contentEditable serialization.
+  `htmlToPlainText()` derives the plain-text fallback from the
+  already-sanitized HTML server-side (not a separately client-supplied
+  string), so the two can never disagree. `replies.body_html` added via
+  migration `005_reply_body_html.sql` (nullable - older replies keep
+  rendering as plain text, no backfill). `reply.ts`'s `sendReply` now
+  sends both `text:` and `html:` via nodemailer (previously `text:`
+  only) and stores both columns; the `/api/messages/:id/reply` route
+  reads a new `bodyHtml` field, sanitizes it, and derives `bodyText` from
+  the sanitized result rather than trusting a separate client-supplied
+  plain-text field. `ThreadView.tsx`'s outgoing bubbles render
+  `body_html` directly when present (already sanitized at write time, so
+  not re-run through the incoming-mail sanitizer, which assumes different
+  things like unwrapping mailto: links).
+  Verified: both TypeScript checks passed. 10 sanitizer scenarios run
+  directly (script/img/onmouseover/javascript: URL/case-insensitive BR/
+  entity-escaping all handled correctly - one test's own expected value
+  was initially wrong, caught and fixed rather than assumed passing), plus
+  a real end-to-end reply sent through the actual `sendReply` pipeline
+  (real SMTP send via a test student's Migadu credentials) confirming the
+  malicious `onclick` attribute was stripped, Bold/Italic markup survived,
+  and both `body_text`/`body_html` were stored correctly - the test
+  message's replied-state was then reset so the test student's pending
+  count wasn't left artificially changed. Production frontend build also
+  passed.
 - [ ] **Step 14 — Discuss AWS migration after Steps 0–13.** Moving the app
   to AWS is a future discussion, not current deployment authorization.
   Agree on architecture, costs, security/credentials, data migration,

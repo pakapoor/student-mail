@@ -98,7 +98,11 @@ CREATE TABLE replies (
     sent_message_id TEXT,
     sent_at TIMESTAMPTZ DEFAULT NOW(),
     attachment_count INTEGER DEFAULT 0,
-    body_text TEXT
+    body_text TEXT,
+    -- Sanitized rich-text HTML (Bold/Italic only - see sanitizeReplyHtml.ts).
+    -- Nullable: replies sent before Step 13 have none and render as plain
+    -- text from body_text, with no backfill needed.
+    body_html TEXT
 );
 
 -- One row per central/operator mailbox that has logged in. Auth verifies

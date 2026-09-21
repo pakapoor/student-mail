@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { login } from "./api";
+import { ISM_EDUTECH_LOGO } from "./branding";
 import type { Session } from "./types";
 
 interface Props {
@@ -30,7 +31,9 @@ export default function Login({ onLoggedIn }: Props) {
     return (
         <div className="login-page">
             <form className="login-card" onSubmit={handleSubmit}>
-                <p className="brand-name">ISM Edutech</p>
+                {/* No college logo here - login happens before college
+                    selection (Step 5), so no college is known yet. */}
+                <img className="brand-logo" src={ISM_EDUTECH_LOGO} alt="ISM Edutech" />
                 <h1>Student Mail Console</h1>
                 <p className="login-subtitle">
                     Sign in with your central mailbox address and password.

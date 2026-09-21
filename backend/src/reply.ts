@@ -113,6 +113,7 @@ export async function fetchStudent(email: string) {
 export async function sendReply(
     message: MessageRow,
     bodyText: string,
+    bodyHtml: string,
     attachments: ReplyAttachment[] = []
 ) {
     // Atomically claim this message before doing any slow work (SMTP is
@@ -172,6 +173,7 @@ export async function sendReply(
             bcc: message.central_email,
             subject,
             text: bodyText,
+            html: bodyHtml,
             inReplyTo: message.message_id,
             references,
             attachments,
@@ -185,9 +187,10 @@ export async function sendReply(
                 recipient_email,
                 sent_message_id,
                 attachment_count,
-                body_text
+                body_text,
+                body_html
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             `,
             [
                 message.message_id,
@@ -196,6 +199,7 @@ export async function sendReply(
                 info.messageId,
                 attachments.length,
                 bodyText,
+                bodyHtml,
             ]
         );
 
