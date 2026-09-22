@@ -849,6 +849,30 @@
     outline-offset: 1px;
 }
 
+.console-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 360px;
+}
+
+.console-search .admin-search {
+    margin-bottom: 0;
+}
+
+.console-search-clear {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: var(--border);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
 .selection-bar,
 .confirm-banner {
     display: flex;

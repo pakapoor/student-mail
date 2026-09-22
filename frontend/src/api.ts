@@ -89,10 +89,12 @@ export async function fetchCurrentSession(): Promise<Session | null> {
 export async function fetchThreadSummaries(
     status: StatusFilter,
     offset = 0,
-    limit = PAGE_SIZE
+    limit = PAGE_SIZE,
+    search?: string
 ): Promise<ThreadSummaryPage> {
+    const searchParam = search?.trim() ? `&search=${encodeURIComponent(search.trim())}` : "";
     const res = await fetch(
-        `${API_BASE}/api/threads?status=${status}&limit=${limit}&offset=${offset}`,
+        `${API_BASE}/api/threads?status=${status}&limit=${limit}&offset=${offset}${searchParam}`,
         { credentials: "include" }
     );
 

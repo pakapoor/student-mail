@@ -220,6 +220,73 @@ async function fetchMessagesForStudentEmails(
     return result.rows;
 }
 
+// LIKE/ILIKE treats % and _ as wildcards even in user-typed text (e.g. an
+// admission ID like "A_102") - escape them (and the escape character itself)
+// so a search term is matched literally.
+function escapeLikePattern(value: string): string {
+    return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+// Resolves a name/email search to matching students' emails, scoped to the
+// college (same scope fetchAllMessages enforces via its student-visibility
+// check) so search can never surface another college's students. Not scoped
+// to central_email here - unlike a message, a student's current
+// central_email is just "who manages their mail today" (schema.sql), not a
+// fixed owner of their past messages, so filtering candidates by it could
+// hide a student whose messages still belong to this operator. The actual
+// central_email enforcement happens in fetchMessagesForStudentEmailsScoped
+// below, on the message itself - same place fetchAllMessages enforces it.
+// ILIKE against the same trigram-indexed concatenated column used by the
+// admin roster's search (studentsAdmin.ts's searchAdminStudents), for
+// consistent partial-match behavior and to reuse idx_students_search_trgm.
+async function findMatchingStudentEmails(
+    search: string,
+    collegeId: string
+): Promise<string[]> {
+    const result = await db.query<{ email: string }>(
+        `
+        SELECT email
+        FROM students
+        WHERE deleted_at IS NULL
+          AND college_id = $1
+          AND (coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
+               coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
+               coalesce(college,'') || ' ' || coalesce(year_enrolled::text,'') || ' ' ||
+               coalesce(admission_id,'')) ILIKE $2
+        `,
+        [collegeId, `%${escapeLikePattern(search)}%`]
+    );
+
+    return result.rows.map((r) => r.email);
+}
+
+// Same shape as fetchMessagesForStudentEmails, but scoped to the operator's
+// central_email too - unlike that function (used by
+// countEffectivelyPendingByEmail for a deliberately cross-operator count),
+// search must stay scoped the same way fetchAllMessages is, or it would leak
+// another operator's messages for a student it happens to also manage.
+async function fetchMessagesForStudentEmailsScoped(
+    emails: string[],
+    centralEmail: string
+): Promise<MessageRow[]> {
+    if (emails.length === 0) {
+        return [];
+    }
+
+    const result = await db.query<MessageRow>(
+        `
+        SELECT id, message_id, student_email, sender_email, subject, received_at,
+               replied, replied_at, body_text, body_html, in_reply_to, reference_ids,
+               handled_without_reply
+        FROM messages
+        WHERE student_email = ANY($1) AND central_email = $2
+        `,
+        [emails, centralEmail]
+    );
+
+    return result.rows;
+}
+
 // Cross-operator (not scoped to one central_email) count of effectively-
 // pending messages per student email, using the same timing-based
 // definition as fetchThreadSummaries/fetchThread - a message only counts if
@@ -358,9 +425,18 @@ export async function fetchThreadSummaries(
     centralEmail: string,
     collegeId: string,
     limit = 25,
-    offset = 0
+    offset = 0,
+    search?: string
 ): Promise<ThreadSummaryPage> {
-    const messages = await fetchAllMessages(centralEmail, collegeId);
+    const trimmedSearch = search?.trim();
+
+    const messages = trimmedSearch
+        ? await fetchMessagesForStudentEmailsScoped(
+              await findMatchingStudentEmails(trimmedSearch, collegeId),
+              centralEmail
+          )
+        : await fetchAllMessages(centralEmail, collegeId);
+
     const threadGroups = groupIntoThreads(messages);
     const allReplies = await fetchAllReplies();
 

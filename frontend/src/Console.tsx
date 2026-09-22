@@ -34,13 +34,26 @@ function Console({ college, onLoggedOut }: Props) {
     const [error, setError] = useState<string | null>(null);
     const [showManageStudents, setShowManageStudents] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
+    const [closedCount, setClosedCount] = useState<number | null>(null);
 
-    const loadMessages = useCallback(async (statusFilter: StatusFilter) => {
+    // Single search box shared across both tabs - the same term stays
+    // applied when switching Pending/Closed, so a user unsure which tab a
+    // thread landed in doesn't have to retype anything (per the customer's
+    // own framing of that workflow).
+    const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    const loadMessages = useCallback(async (statusFilter: StatusFilter, searchText: string) => {
         setLoading(true);
         setError(null);
 
         try {
-            const page = await fetchThreadSummaries(statusFilter, 0);
+            const page = await fetchThreadSummaries(statusFilter, 0, undefined, searchText);
             setThreads(page.threads);
             setHasMore(page.hasMore);
         } catch (err) {
@@ -52,11 +65,25 @@ function Console({ college, onLoggedOut }: Props) {
 
     // Kept in sync independently of whichever tab is active, so the Pending
     // tab can always show a live count - the main workflow this console
-    // supports, per the customer's own framing of typical usage.
-    const loadPendingCount = useCallback(async () => {
+    // supports, per the customer's own framing of typical usage. While
+    // searching, the Closed count is also fetched so both tabs show how many
+    // matches exist there, since the user may not know which tab a thread is in.
+    const loadPendingCount = useCallback(async (searchText: string) => {
         try {
-            const page = await fetchThreadSummaries("pending", 0, 1);
+            const page = await fetchThreadSummaries("pending", 0, 1, searchText);
             setPendingCount(page.total);
+        } catch {
+            // Non-critical - the tab just keeps showing its last known count.
+        }
+
+        if (!searchText) {
+            setClosedCount(null);
+            return;
+        }
+
+        try {
+            const page = await fetchThreadSummaries("replied", 0, 1, searchText);
+            setClosedCount(page.total);
         } catch {
             // Non-critical - the tab just keeps showing its last known count.
         }
@@ -67,7 +94,7 @@ function Console({ college, onLoggedOut }: Props) {
         setError(null);
 
         try {
-            const page = await fetchThreadSummaries(status, threads.length);
+            const page = await fetchThreadSummaries(status, threads.length, undefined, debouncedSearch);
             setThreads((prev) => [...prev, ...page.threads]);
             setHasMore(page.hasMore);
         } catch (err) {
@@ -75,7 +102,7 @@ function Console({ college, onLoggedOut }: Props) {
         } finally {
             setLoadingMore(false);
         }
-    }, [status, threads.length]);
+    }, [status, threads.length, debouncedSearch]);
 
     const loadThread = useCallback((id: number) => {
         fetchThread(id)
@@ -86,11 +113,11 @@ function Console({ college, onLoggedOut }: Props) {
     }, []);
 
     useEffect(() => {
-        loadMessages(status);
-        loadPendingCount();
+        loadMessages(status, debouncedSearch);
+        loadPendingCount(debouncedSearch);
         setSelectedId(null);
         setThreadItems(null);
-    }, [status, loadMessages, loadPendingCount]);
+    }, [status, debouncedSearch, loadMessages, loadPendingCount]);
 
     useEffect(() => {
         fetchStudents()
@@ -114,6 +141,7 @@ function Console({ college, onLoggedOut }: Props) {
 
     const statusRef = useRef(status);
     const selectedIdRef = useRef(selectedId);
+    const searchRef = useRef(debouncedSearch);
 
     useEffect(() => {
         statusRef.current = status;
@@ -124,13 +152,17 @@ function Console({ college, onLoggedOut }: Props) {
     }, [selectedId]);
 
     useEffect(() => {
+        searchRef.current = debouncedSearch;
+    }, [debouncedSearch]);
+
+    useEffect(() => {
         return subscribeToUpdates(() => {
             // A new-mail sync or any operator's reply/close action changes
             // the pending set - reload from the top so everyone's view
             // (list + open thread + pending count) stays consistent with
             // the server.
-            loadMessages(statusRef.current);
-            loadPendingCount();
+            loadMessages(statusRef.current, searchRef.current);
+            loadPendingCount(searchRef.current);
 
             if (selectedIdRef.current !== null) {
                 loadThread(selectedIdRef.current);
@@ -139,8 +171,8 @@ function Console({ college, onLoggedOut }: Props) {
     }, [loadMessages, loadPendingCount, loadThread]);
 
     function handleReplySent() {
-        loadMessages(status);
-        loadPendingCount();
+        loadMessages(status, debouncedSearch);
+        loadPendingCount(debouncedSearch);
 
         if (selectedId !== null) {
             loadThread(selectedId);
@@ -183,22 +215,54 @@ function Console({ college, onLoggedOut }: Props) {
                     collegeName={college.name}
                     onClose={() => setShowManageStudents(false)}
                     onImported={() => {
-                        loadMessages(status);
-                        loadPendingCount();
+                        loadMessages(status, debouncedSearch);
+                        loadPendingCount(debouncedSearch);
                     }}
                 />
             )}
 
-            <nav className="tabs">
-                {TABS.map((tab) => (
+            <div className="console-search">
+                <input
+                    className="admin-search"
+                    type="text"
+                    placeholder="Search by first name, last name, or email..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                {search && (
                     <button
-                        key={tab}
-                        className={tab === status ? "tab active" : "tab"}
-                        onClick={() => setStatus(tab)}
+                        className="console-search-clear"
+                        onClick={() => setSearch("")}
+                        aria-label="Clear search"
                     >
-                        {tab === "pending" ? `${TAB_LABELS[tab]} (${pendingCount})` : TAB_LABELS[tab]}
+                        &times;
                     </button>
-                ))}
+                )}
+            </div>
+
+            <nav className="tabs">
+                {TABS.map((tab) => {
+                    // No search: only Pending shows a live count (today's
+                    // behavior). While searching, both tabs show their match
+                    // count, since the user may not know which tab a thread
+                    // landed in (see loadPendingCount).
+                    const count =
+                        tab === "pending"
+                            ? pendingCount
+                            : debouncedSearch && closedCount !== null
+                              ? closedCount
+                              : null;
+
+                    return (
+                        <button
+                            key={tab}
+                            className={tab === status ? "tab active" : "tab"}
+                            onClick={() => setStatus(tab)}
+                        >
+                            {count !== null ? `${TAB_LABELS[tab]} (${count})` : TAB_LABELS[tab]}
+                        </button>
+                    );
+                })}
             </nav>
 
             {error && <p className="error">{error}</p>}

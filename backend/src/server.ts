@@ -277,12 +277,17 @@ app.get("/api/threads", requireAuth, requireCollege, async (req, res) => {
     const offset =
         Number.isInteger(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
 
+    const searchParam = req.query.search;
+    const search =
+        typeof searchParam === "string" && searchParam.trim() ? searchParam.trim() : undefined;
+
     const page = await fetchThreadSummaries(
         normalized,
         res.locals.centralEmail,
         res.locals.collegeId,
         limit,
-        offset
+        offset,
+        search
     );
     res.json(page);
 });

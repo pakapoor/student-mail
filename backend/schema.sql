@@ -87,6 +87,10 @@ CREATE TABLE messages (
 
 CREATE INDEX idx_messages_central_email ON messages (central_email);
 CREATE INDEX idx_messages_pending ON messages (replied, received_at DESC);
+-- Supports narrowing a thread fetch to just the students matched by a name/
+-- email search (see fetchMessagesForStudentEmails in thread.ts), instead of
+-- scanning every message for the college.
+CREATE INDEX idx_messages_student_email ON messages (student_email);
 
 -- One row per outgoing reply actually sent (only inserted after SMTP send
 -- succeeds - see reply.ts's claim-before-send logic).

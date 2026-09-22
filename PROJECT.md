@@ -801,6 +801,96 @@ day):**
     (currently local disk, lost if the instance is replaced), IAM user
     instead of root login, EBS encryption, automated DB backups.
 
+- [x] **Step 15 — Search on the Pending/Closed console.** Customer
+  request: search Pending/Closed by first name, last name, or email,
+  opening matches "elastic way" (partial, not just exact match).
+
+  Design decisions, settled before touching code:
+  - One search box, shared across both tabs - the same typed term
+    stays applied when switching Pending/Closed, so a user unsure
+    which tab a thread landed in doesn't have to retype anything.
+    Confirmed via a UI mockup before building.
+  - No new table/results view - filtered results render through the
+    existing `MessageList` row styling; only which rows show changes.
+    (An earlier table-view design was dropped as too big a UI change
+    for what the customer actually asked for.)
+  - Tab counts: with no search, only Pending shows a live count
+    (unchanged). While searching, both tabs show their match count,
+    since the user may not know which tab a thread is in.
+
+  Backend (`backend/src/thread.ts`):
+  - `fetchThreadSummaries` takes an optional `search` param. When
+    present, it resolves matching students first (`ILIKE` on a
+    trigram-indexed, coalesced `first_name || last_name || email ||
+    ...` column - reusing the same pattern and index as the admin
+    roster's `searchAdminStudents`), then narrows the message fetch to
+    just those students' emails (`fetchMessagesForStudentEmailsScoped`,
+    still filtered by the message's own `central_email`, same as the
+    no-search path) instead of scanning every message for the college.
+    Thread grouping and pending/resolved computation are untouched.
+  - New index: `idx_messages_student_email` on `messages(student_email)`
+    - needed once search started looking up messages by student email
+      at scale (no such index existed before). Additive only, no
+      existing data touched; safe to apply with plain `CREATE INDEX`
+      given downtime was approved for this deploy (no need for
+      `CONCURRENTLY`).
+  - Fixed during review: the search-candidate query no longer filters
+    students by `students.central_email` (only by `college_id`) -
+    that column is "who currently manages this student's mail today",
+    not a fixed owner of their past messages, so filtering by it could
+    have hidden a student whose messages still belong to this
+    operator. The real `central_email` enforcement is on the message
+    fetch itself, same place the no-search path enforces it.
+  - Fixed during review: the raw search term is now escaped
+    (`escapeLikePattern`) before being used in `ILIKE '%term%'`, so a
+    literal `_` or `%` in a search (e.g. part of an admission ID) is
+    matched literally instead of as a SQL wildcard.
+
+  Route (`backend/src/server.ts`): `GET /api/threads` reads an
+  optional `search` query param, trims it, passes it through.
+
+  Frontend (`frontend/src/Console.tsx`, `api.ts`, `App.css`): a
+  debounced (300ms) search input above the tabs, matching the existing
+  `admin-search` input styling from `ManageStudents.tsx`, with a clear
+  ("×") button. Also fixed in passing: the browser tab showed the
+  unedited Vite scaffold title ("frontend") and default favicon -
+  `frontend/index.html` now uses "Student Mail Console" and the ISM
+  Edutech logo already used in the app header.
+
+  Verified locally against a fully isolated dev setup - **not** tested
+  against production data or credentials:
+  - A standalone local Postgres instance (separate data directory,
+    port 5433, owned by the OS user directly - no `sudo`, no system
+    Postgres service involved) with `schema.sql` applied and fake
+    seed data (`backend/scripts/dev-seed.sql`, not wired into any
+    startup path or CI - only runs if invoked manually).
+  - A separate `backend/.env.local` (git-ignored, never committed)
+    pointing at that dev DB and using the user's own GoDaddy mailbox
+    (`pankaj@system-design.in`) for local login, kept deliberately
+    distinct from prod's `ACTIVE_CENTRAL_EMAIL`
+    (`central.ksma@myemailinfo.com`) and prod's DB port (5432) so a
+    local run can never reach production. Confirmed via diff/mtime
+    that prod's own `backend/.env` was never touched.
+  - Confirmed end-to-end in the browser: partial/mid-word matching,
+    email matching, the shared-search-across-tabs scenario (search
+    "gupta" on Pending, no match there, switch to Closed with the same
+    term still applied, match found), and the clear button reverting
+    both tabs to their normal unfiltered state.
+  - Confirmed via a direct call to `fetchThreadSummaries` against the
+    seeded data (bypassing login, which needs a real mailbox password
+    this session never handles) that both post-review fixes behave
+    correctly, including a literal-underscore admission ID matching
+    exactly and not over-matching.
+  - `schema.sql` diff reviewed line-by-line to confirm the only change
+    is the new additive index - no `ALTER TABLE`, no column or data
+    changes, nothing that touches existing rows.
+
+  Deployment note: the new index needs to be applied to production
+  manually as part of the deploy (`schema.sql` is a reference file,
+  not auto-applied) - a plain `CREATE INDEX idx_messages_student_email
+  ON messages (student_email);`, acceptable with the downtime already
+  approved for this change.
+
 ### Approved test roster (passwords intentionally omitted)
 
 Final import needs the Password column from Step 8, supplied privately.

@@ -288,6 +288,30 @@ doesn't grant AWS API access by itself):
    over SSH (see below for the SSH alias) to set up two alarms:
    instance status check failed, and CPU > ~80%.
 
+## Deferred: deploy Step 15 (Pending/Closed search) to production
+
+Built and verified locally only so far (see PROJECT.md Step 15) -
+never run against production data, credentials, or DB. Deploying it
+needs:
+1. `git pull` the backend/frontend changes onto the instance (same
+   flow as the original deploy: `npm install && npm run build` in
+   `frontend/`, backend picked up by the running `tsx`-based systemd
+   service on restart - no separate build step for backend).
+2. Apply the new index manually - `schema.sql` is a reference file,
+   not auto-applied on deploy:
+   `psql -h 127.0.0.1 -U student_mail_app -d student_mail -c "CREATE INDEX idx_messages_student_email ON messages (student_email);"`
+   Plain `CREATE INDEX` (not `CONCURRENTLY`) is fine here - downtime
+   for this deploy was explicitly approved, and it's a fast index on
+   an existing column, not a rewrite.
+3. Restart the systemd service (`student-mail.service`) to pick up the
+   backend code change.
+4. Smoke test on the real domain: search by name and by email on both
+   Pending and Closed tabs, confirm the shared-search-across-tabs
+   behavior, confirm tab counts show while searching.
+
+No other schema/data changes - the index is additive only, verified
+via a line-by-line `schema.sql` diff before this was written up.
+
 ## Convenience: direct SSH access from local WSL (done)
 
 No SSH key pair existed on the instance (deliberate simplicity choice
