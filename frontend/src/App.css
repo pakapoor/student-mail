@@ -201,7 +201,7 @@
 
 .main-layout {
     display: grid;
-    grid-template-columns: 460px 1fr;
+    grid-template-columns: 540px 1fr;
     gap: 20px;
     align-items: start;
 }
