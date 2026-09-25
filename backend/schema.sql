@@ -82,6 +82,11 @@ CREATE TABLE messages (
     -- (only offered when the message contains a link) instead of replying.
     handled_without_reply BOOLEAN DEFAULT FALSE,
     central_email VARCHAR(320),
+    -- How long Migadu held the email between accepting it and storing it in
+    -- the mailbox, from its Received headers (migaduDelay.ts). NULL = not
+    -- measured (rows from before migration 009, or unreadable headers).
+    migadu_hold_seconds INTEGER,
+    migadu_queue_id TEXT,
     CONSTRAINT messages_message_id_student_unique UNIQUE (message_id, student_email)
 );
 

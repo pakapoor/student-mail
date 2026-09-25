@@ -1,6 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser, type ParsedMail } from "mailparser";
 import { db } from "./db.js";
+import { logMigaduDelay, measureMigaduHold, type MigaduHold } from "./migaduDelay.js";
 
 // Shared by the central-mailbox sync below and the per-student direct check
 // (checkStudentMail.ts). Both paths key on (message_id, student_email), so a
@@ -14,7 +15,8 @@ export async function insertMessageForStudent(
     senderEmail: string,
     studentEmail: string,
     receivedAt: Date | string,
-    centralEmail: string
+    centralEmail: string,
+    migaduHold: MigaduHold | null = null
 ): Promise<boolean> {
     const referenceIds = Array.isArray(parsed.references)
         ? parsed.references
@@ -34,9 +36,11 @@ export async function insertMessageForStudent(
             body_html,
             in_reply_to,
             reference_ids,
-            central_email
+            central_email,
+            migadu_hold_seconds,
+            migadu_queue_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (message_id, student_email)
         DO NOTHING
         RETURNING id
@@ -52,6 +56,8 @@ export async function insertMessageForStudent(
             parsed.inReplyTo,
             referenceIds,
             centralEmail,
+            migaduHold ? Math.round(migaduHold.holdMs / 1000) : null,
+            migaduHold?.queueId ?? null,
         ]
     );
 
@@ -216,6 +222,16 @@ export async function syncInbox(
                 continue;
             }
 
+            // How long Migadu held the email before it reached the mailbox:
+            // stored on the row, and logged if it's an incident.
+            const hold = measureMigaduHold(message.source);
+            logMigaduDelay(hold, {
+                mailbox: centralEmail,
+                messageId,
+                senderEmail,
+                students: matchingStudents,
+            });
+
             for (const studentEmail of matchingStudents) {
                 const wasInserted = await insertMessageForStudent(
                     parsed,
@@ -223,7 +239,8 @@ export async function syncInbox(
                     senderEmail,
                     studentEmail,
                     message.internalDate || new Date(),
-                    centralEmail
+                    centralEmail,
+                    hold
                 );
 
                 if (wasInserted) {

@@ -1400,6 +1400,109 @@ needs real DB auth/secrets.
 5. Log in with a real central mailbox's IMAP credentials (this creates its
    `central_mailboxes` row and starts its IMAP watcher automatically).
 
+## Migadu delay logging (done, part of Step 17)
+
+`backend/src/migaduDelay.ts`, called from `sync.ts` for every email the
+central sync reads: compares Migadu's own Received headers - accepted
+(`by mizuN.migadu.com with ESMTPS` inbound, or `by smtp.migadu.com with
+ESMTPS` from our own mailboxes) vs stored (`by soraStorageN.migadu.com
+with LMTP`) - and, if Migadu held the email longer than
+`MIGADU_DELAY_WARN_MIN` (default 5), logs one line:
+
+`[migadu-delay] held=64m queue=e158f4f432e3a08b accepted=… stored=…
+mailbox=central.ksma@… from=confirm@edu.gov.kg student=… message=<…>`
+
+Also stored on every new message row (migration
+`009_migadu_hold.sql`): `messages.migadu_hold_seconds` (INTEGER) and
+`messages.migadu_queue_id` (TEXT), both nullable - rows from before the
+migration stay NULL (no backfill, by the user's decision: the 25 Sep
+incident only touched 2 Edugate emails, and a one-off read-only scan of
+central's 671 emails already captured the history - 24 holds > 5 min,
+all 25 Sep 11:29–17:42 UTC, none on 22–24 or 26 Sep). Filled by both the
+central sync (central's copy) and the mailbox check (the student's own
+copy - Migadu holds each recipient's copy separately). Unreadable
+headers → NULL, never a failed insert. Example query:
+`SELECT received_at, migadu_hold_seconds/60 AS min, migadu_queue_id,
+sender_email FROM messages WHERE migadu_hold_seconds > 300 ORDER BY
+received_at DESC;` **Deploy order: apply 009 before starting the new
+code** (the INSERT names the new columns). No UI change, never throws. Find incidents with
+`sudo journalctl -u student-mail --since "7 days ago" | grep migadu-delay`
+and send the queue IDs + times to Migadu support. Verified against real
+headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
+→ 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
+non-email input → no result.
+
+## Proposal (not built): Step 17b — hot-list polling of student inboxes
+
+Status: **documented contingency, deliberately not built** (decided with
+the user 2026-09-25). Build it only if the evidence below changes.
+
+Idea (proposed by another Claude session): when staff are waiting on a
+student's Edugate mail, poll that student's own INBOX directly instead of
+relying on the copy forwarded to central.
+
+Design as proposed:
+- **Hot list table** (`student_id, reason, added_at, last_code_at, stage`).
+  - Added when a console search checks a student whose Edugate emails
+    show no registration email yet (no code, or code only), or when any
+    sync inserts an Edugate code email for a student without a
+    registration email. Detection uses the `keyInfo.ts` templates, not
+    the sender alone (would need a backend copy or shared module).
+  - Removed completely as soon as an Edugate registration email (login +
+    password) arrives.
+  - Stages: **hot** = poll every 2 min; 40 min after `last_code_at` with
+    no registration → **cooling** = poll every 15 min; 6 h after
+    `last_code_at` → removed. A new code email puts the student back in
+    hot.
+- **Poller**: one in-process loop, worker pool (concurrency 5) shared
+  with the sweep; per mailbox store UIDVALIDITY + UIDNEXT and skip the
+  fetch if unchanged; 45 s timeout; auth/throttle error → back off that
+  mailbox 30 min; repeated connection errors → pause the pool 5 min.
+  Reuses `checkStudentMail.ts` (EXAMINE, Message-ID diff,
+  `insertMessageForStudent()`). Logs `[poller] student=… stage=… new=N
+  ms=…` / `[poller] FAILED … reason=…`, no UI errors. Broadcasts
+  `new-mail` with `collegeIds` so the chime plays.
+- Config: `HOT_INTERVAL_S=120`, `COOLING_INTERVAL_S=900`,
+  `HOT_TO_COOLING_MIN=40`, `COOLING_MAX_H=6`.
+- Unit tests for the stage transitions (code → hot → cooling → drop;
+  registration → removed; new code → hot again).
+
+Why it is not built (measured 2026-09-25):
+- 30 random students with Edugate mail, last 3 days (including the
+  25 Sep Migadu incident window): **62 of 63** emails in the student
+  inboxes were also in the console, and central received each of them
+  **within 1 s** of the student inbox (median 0 s). Polling students
+  would not have made anything faster.
+- 20-email send test between test students: receiver inbox → central
+  forwarding **0 s** for all 20; total send → console median 7 s, max
+  19.5 s.
+- The multi-hour delays seen that day were Migadu holding inbound mail
+  **before** it reached any mailbox (student and central alike): 58/59
+  Edugate emails were stored < 1 min after acceptance; the long holds
+  (45 min – 5 h 44 m) all fall in one incident window on 25 Sep,
+  ~11:00–17:40 UTC. Polling cannot beat that.
+- Mail "in the student's webmail but not central's" was Migadu's webmail
+  display lag - IMAP had it in both mailboxes.
+- Migadu holds each recipient's copy independently: for the 5 h 44 m
+  Edugate email to Shakil (queue `e158f4f432e3a08b`), **central's** copy
+  was stored at 12:32 UTC (held 64 min) but **Shakil's own** copy only at
+  17:12 (held 344 min). Central got it 4.7 h *before* the student inbox,
+  so student-inbox polling would have been slower there, not faster.
+- Costs if built now: constant logins all day (≈50/min with 100 hot
+  students) from one IP - a Migadu throttle would also slow the central
+  sync; tied to Edugate's exact wording; new table + state machine +
+  poller to maintain.
+
+**Tripwire - build it if this happens:** the Step 17 rolling sweep logs
+`[sweep] RECOVERED …` for every email found in a student's inbox that
+the console didn't have - exactly "the student got it, central didn't".
+If that shows up more than a few times a week, or for any Edugate email
+during working hours, build this proposal. Check with
+`sudo journalctl -u student-mail --since "7 days ago" | grep -c "sweep] RECOVERED"`.
+Before building, ask Migadu about login/connection rate limits; consider
+a live IDLE connection per hot student instead of 2-min polling (seconds
+instead of minutes, one login per student instead of one every 2 min).
+
 ## Not yet built / open items
 
 - **`sync.ts`'s IMAP fetch is sequence-number-based, not UID-based - fix

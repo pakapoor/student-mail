@@ -2,6 +2,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { db } from "./db.js";
 import { insertMessageForStudent } from "./sync.js";
+import { measureMigaduHold } from "./migaduDelay.js";
 
 // On-demand fallback for "the email hasn't shown up in the console": reads
 // ONE student's own INBOX directly (instead of relying on it having been
@@ -196,7 +197,10 @@ async function fetchMissing(
                 senderEmail,
                 student.email.toLowerCase(),
                 msg.internalDate || new Date(),
-                centralEmail
+                centralEmail,
+                // The student's own copy - Migadu holds each recipient's
+                // copy separately, so this is the hold for this mailbox.
+                measureMigaduHold(msg.source)
             );
 
             if (wasInserted) {
