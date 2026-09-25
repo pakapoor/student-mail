@@ -105,6 +105,20 @@ function classifyNotify(text: string): EdugateInfo | null {
     };
 }
 
+// Plain-English title for a recognised Edugate email - staff read English,
+// and every Edugate subject is just "Edugate" or "Абитуриент Колледж".
+// Used for the thread list rows (backend) and the thread heading (frontend).
+export function edugateTitle(info: EdugateInfo): string {
+    switch (info.kind) {
+        case "code":
+            return "Verification code";
+        case "login":
+            return "Registration: login details";
+        case "rejected":
+            return `Document rejected: ${info.document}`;
+    }
+}
+
 export function isEdugateSender(senderEmail: string): boolean {
     return EDUGATE_SENDERS.includes(senderEmail.toLowerCase());
 }

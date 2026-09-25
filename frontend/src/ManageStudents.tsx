@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { shortDateTime } from "./format";
 import {
     deleteStudents,
     fetchAdminStudents,
@@ -19,14 +20,6 @@ type RosterTab = "students" | "deleted" | "add";
 
 const MAX_DELETE_BATCH = 5;
 
-function shortTime(iso: string): string {
-    return new Date(iso).toLocaleString([], {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-    });
-}
 
 // Edugate registration status (backend registrationStatus.ts).
 function RegistrationStatus({ s }: { s: AdminStudentRow }) {
@@ -36,9 +29,9 @@ function RegistrationStatus({ s }: { s: AdminStudentRow }) {
 
         return (
             <span className="admin-cell admin-status">
-                <span className="reg-status registered">Registered · {shortTime(s.registered_at)}</span>
+                <span className="reg-status registered">Registered · {shortDateTime(s.registered_at)}</span>
                 {newCode && (
-                    <span className="reg-status-note">new code sent {shortTime(s.code_sent_at!)}</span>
+                    <span className="reg-status-note">new code sent {shortDateTime(s.code_sent_at!)}</span>
                 )}
             </span>
         );
@@ -47,7 +40,7 @@ function RegistrationStatus({ s }: { s: AdminStudentRow }) {
     if (s.registration_status === "REGISTRATION_PENDING" && s.code_sent_at) {
         return (
             <span className="admin-cell admin-status">
-                <span className="reg-status pending">Code sent · {shortTime(s.code_sent_at)}</span>
+                <span className="reg-status pending">Code sent · {shortDateTime(s.code_sent_at)}</span>
             </span>
         );
     }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { KeyInfo } from "./keyInfo";
+import { edugateDate, shortDateTime } from "./format";
 import { EDUGATE_LOGIN_URL, EDUGATE_REGISTER_URL } from "../../shared/edugate";
 
 // The box at the top of an opened thread (see keyInfo.ts). Always English,
@@ -62,15 +63,14 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
 
     const receivedAt = new Date(info.item.at);
     const ageMinutes = Math.max(0, Math.floor((now - receivedAt.getTime()) / 60000));
-    const receivedTime = receivedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const receivedTime = shortDateTime(receivedAt);
     const expired = info.kind === "code" && ageMinutes >= info.validMinutes;
     // Registration email that may be outdated (Step 18 phase 2): a newer
     // registration exists, or a newer Edugate email we don't recognise yet
     // (e.g. a password reset).
     const newerLogin = info.kind === "login" ? info.item.newer_login_at : null;
     const newerEdugate = info.kind === "login" && !newerLogin ? info.item.newer_edugate_at : null;
-    const dateTime = (iso: string) =>
-        new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    const dateTime = (iso: string) => shortDateTime(iso);
 
     // Rejected document: red, as a warning - someone has to act on it.
     if (info.kind === "rejected") {
@@ -96,7 +96,7 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                 )}
                 <div className="key-info-row wide">
                     <span className="key-info-label">Reviewed</span>
-                    <span className="key-info-text">{info.reviewedAt}</span>
+                    <span className="key-info-text">{edugateDate(info.reviewedAt)}</span>
                 </div>
 
                 {/* Staff re-upload the document on Edugate, so the student's

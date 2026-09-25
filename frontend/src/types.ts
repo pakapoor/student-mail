@@ -25,6 +25,8 @@ export interface ThreadSummary {
     code: string | null;
     code_valid_minutes: number | null;
     student_name: string | null;
+    // English title for recognised Edugate emails, else the subject.
+    title: string | null;
 }
 
 // "all" = the tab-less list (Step 18 phase 2); the others are kept for

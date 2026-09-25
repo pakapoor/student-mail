@@ -1492,3 +1492,39 @@
         grid-row: 2;
     }
 }
+
+/* Thread heading extras (Step 18 refresh). */
+.thread-student {
+    margin: -6px 0 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.original-email {
+    display: grid;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.original-toggle {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 2px;
+    border: 0;
+    border-top: 1px dashed var(--border);
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.original-meta {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 12px;
+}

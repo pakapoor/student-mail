@@ -3,14 +3,18 @@ import type { IncomingThreadItem, ThreadItem } from "./types";
 import { sendFollowUp, sendReply } from "./api";
 import { linkifyPlainText, sanitizeHtml } from "./linkify";
 import { findKeyInfo } from "./keyInfo";
+import { classifyEdugate, edugateTitle } from "../../shared/edugate";
+import { shortDateTime } from "./format";
 import KeyInfoBox from "./KeyInfoBox";
 
 interface Props {
     items: ThreadItem[];
     onReplySent: () => void;
+    // From the list row - shown under the heading.
+    studentName?: string | null;
 }
 
-export default function ThreadView({ items, onReplySent }: Props) {
+export default function ThreadView({ items, onReplySent, studentName }: Props) {
     const editorRef = useRef<HTMLDivElement>(null);
     const [hasContent, setHasContent] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
@@ -150,13 +154,24 @@ export default function ThreadView({ items, onReplySent }: Props) {
 
     return (
         <div className="thread-view">
-            <h2>{subject}</h2>
+            {/* Plain English for recognised Edugate emails (staff read
+                English; every Edugate subject is "Edugate" or Russian). */}
+            <h2>{keyInfo ? edugateTitle(keyInfo) : subject}</h2>
+            <p className="thread-student">
+                {studentName ? `${studentName} · ` : ""}
+                {items[0]?.student_email}
+            </p>
 
             {keyInfo && <KeyInfoBox info={keyInfo} />}
 
             <div className="thread-items">
                 {items.map((item) => (
-                    <ThreadBubble key={`${item.type}-${item.id}`} item={item} />
+                    item.type === "incoming" &&
+                    classifyEdugate(item.sender_email, item.body_text, item.student_email) ? (
+                        <CollapsedOriginal key={`${item.type}-${item.id}`} item={item} />
+                    ) : (
+                        <ThreadBubble key={`${item.type}-${item.id}`} item={item} />
+                    )
                 ))}
             </div>
 
@@ -323,6 +338,25 @@ export default function ThreadView({ items, onReplySent }: Props) {
 
 const CLAMP_HEIGHT_PX = 420;
 
+// A recognised Edugate email: the box above already shows everything that
+// matters, so the original (big banner, Russian + English) is folded away
+// behind a link instead of filling the screen.
+function CollapsedOriginal({ item }: { item: IncomingThreadItem }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <div className="original-email">
+            <button type="button" className="original-toggle" onClick={() => setOpen((v) => !v)}>
+                {open ? "▾ Hide original email" : "▸ Show original email"}
+                <span className="original-meta">
+                    {item.sender_email} · {shortDateTime(item.at)}
+                </span>
+            </button>
+            {open && <ThreadBubble item={item} />}
+        </div>
+    );
+}
+
 function ThreadBubble({ item }: { item: ThreadItem }) {
     const renderedBody = useMemo(() => {
         if (item.type === "incoming" && item.body_html) {
@@ -386,7 +420,7 @@ function ThreadBubble({ item }: { item: ThreadItem }) {
                     <div className="bubble-meta">
                         <span className="bubble-from">{item.sender_email}</span>
                         <span className="bubble-time">
-                            {new Date(item.at).toLocaleString()}
+                            {shortDateTime(item.at)}
                         </span>
                     </div>
                     {body}
@@ -405,7 +439,7 @@ function ThreadBubble({ item }: { item: ThreadItem }) {
                     {item.student_email} &rarr; {item.recipient_email}
                 </span>
                 <span className="bubble-time">
-                    {new Date(item.at).toLocaleString()}
+                    {shortDateTime(item.at)}
                 </span>
             </div>
             {body}

@@ -1523,6 +1523,20 @@ students):
   "still too close"), "Student Mail Console" + college name centred
   across the full width (3-column grid `1fr auto 1fr`), buttons on the
   right; under 1000 px the title drops below the logos.
+- **Visual refresh, part 1** (mockup approved, user: "all good go
+  ahead"): English everywhere - recognised Edugate threads are titled
+  "Verification code" / "Registration: login details" / "Document
+  rejected: <document>" in the list and as the thread heading
+  (`edugateTitle` in `shared/edugate.ts`, `title` on thread summaries);
+  other emails keep their subject. A student line (name · email) under the
+  heading. The original Edugate email is collapsed under "▸ Show original
+  email" (the box already shows everything). One date format everywhere
+  ("25 Sep, 7:39 AM", `frontend/src/format.ts`); Edugate's "25.09.2026
+  08:09" review time shown as "25 Sep 2026, 08:09" without timezone
+  conversion. Verified on production data: 288 registration, 38 rejection
+  and 2 code threads get English titles; the rest keep their subject.
+  Part 2 (typeface, palette, badges, app layout, loading/empty states) to
+  follow.
 - Compact rows (user's idea, option a): subject · sender and a short
   time ("25 Sep, 6:03 PM") share one line (sender shortened with … before
   the time); the preview line is dropped for Edugate threads (always the

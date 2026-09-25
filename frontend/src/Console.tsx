@@ -403,6 +403,7 @@ function Console({ college, onLoggedOut }: Props) {
                 <div className="detail-pane">
                     {threadItems ? (
                         <ThreadView
+                            studentName={threads.find((t) => t.threadId === selectedId)?.student_name ?? null}
                             key={selectedId}
                             items={threadItems}
                             onReplySent={handleReplySent}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ThreadSummary } from "./types";
+import { shortDateTime } from "./format";
 
 // Fallback only - the validity normally comes from the email itself
 // ("valid for 30 minutes"), same as the box above an opened thread.
@@ -50,14 +51,6 @@ function Badge({ thread, now }: { thread: ThreadSummary; now: number }) {
 
 const EDUGATE_BADGES = new Set<ThreadSummary["badge"]>(["registered", "rejected", "code", "used"]);
 
-function shortTime(iso: string): string {
-    return new Date(iso).toLocaleString([], {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-    });
-}
 
 interface Props {
     threads: ThreadSummary[];
@@ -109,11 +102,11 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
                     </div>
                     <div className="message-row-line">
                         <span className="subject-sender">
-                            <span className="subject">{thread.subject || "(no subject)"}</span>
+                            <span className="subject">{thread.title || thread.subject || "(no subject)"}</span>
                             {" · "}
                             {thread.sender_email}
                         </span>
-                        <span className="received-at">{shortTime(thread.received_at)}</span>
+                        <span className="received-at">{shortDateTime(thread.received_at)}</span>
                     </div>
                     {/* Edugate emails always open with the same boilerplate,
                         so their preview adds nothing; other emails (a

@@ -1,5 +1,5 @@
 import { db } from "./db.js";
-import { classifyEdugate } from "../../shared/edugate.js";
+import { classifyEdugate, edugateTitle } from "../../shared/edugate.js";
 
 interface MessageRow {
     id: number;
@@ -583,6 +583,10 @@ export interface ThreadSummary {
     // valid - the list shows the number only while it's still valid.
     code: string | null;
     code_valid_minutes: number | null;
+    // What the list row shows as its title: plain English for recognised
+    // Edugate emails ("Document rejected: HIV Test Results"), otherwise the
+    // email's own subject.
+    title: string | null;
     // First + last name from the roster (as in Manage students), or null.
     student_name: string | null;
 }
@@ -623,6 +627,22 @@ function threadBadge(
     }
 
     return { badge: pendingCount > 0 ? "new" : "replied", code_at: null, ...none };
+}
+
+// English title from the newest recognised Edugate email in the thread,
+// or null when the thread has none (then the real subject is used).
+function threadTitle(groupMessages: MessageRow[]): string | null {
+    const newestFirst = [...groupMessages].sort((a, b) => sentTime(b) - sentTime(a));
+
+    for (const m of newestFirst) {
+        const info = classifyEdugate(m.sender_email, m.body_text, m.student_email);
+
+        if (info) {
+            return edugateTitle(info);
+        }
+    }
+
+    return null;
 }
 
 const PREVIEW_LENGTH = 140;
@@ -744,6 +764,7 @@ export async function fetchThreadSummaries(
             return {
                 threadId: representative.id,
                 subject: latest.subject,
+                title: threadTitle(groupMessages) ?? latest.subject,
                 student_email: latest.student_email,
                 sender_email: latest.sender_email,
                 received_at: latest.received_at,
