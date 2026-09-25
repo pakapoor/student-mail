@@ -1,6 +1,62 @@
 import { ImapFlow } from "imapflow";
-import { simpleParser } from "mailparser";
+import { simpleParser, type ParsedMail } from "mailparser";
 import { db } from "./db.js";
+
+// Shared by the central-mailbox sync below and the per-student direct check
+// (checkStudentMail.ts). Both paths key on (message_id, student_email), so a
+// message that arrives through both - forwarded to central AND fetched
+// straight from the student's own mailbox - is only ever stored once;
+// whichever path gets there first wins and the other is a no-op.
+// Returns true if a new row was inserted.
+export async function insertMessageForStudent(
+    parsed: ParsedMail,
+    messageId: string,
+    senderEmail: string,
+    studentEmail: string,
+    receivedAt: Date | string,
+    centralEmail: string
+): Promise<boolean> {
+    const referenceIds = Array.isArray(parsed.references)
+        ? parsed.references
+        : parsed.references
+        ? [parsed.references]
+        : [];
+
+    const result = await db.query(
+        `
+        INSERT INTO messages (
+            message_id,
+            student_email,
+            sender_email,
+            subject,
+            received_at,
+            body_text,
+            body_html,
+            in_reply_to,
+            reference_ids,
+            central_email
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (message_id, student_email)
+        DO NOTHING
+        RETURNING id
+        `,
+        [
+            messageId,
+            studentEmail,
+            senderEmail,
+            parsed.subject || "",
+            receivedAt,
+            parsed.text,
+            parsed.html || null,
+            parsed.inReplyTo,
+            referenceIds,
+            centralEmail,
+        ]
+    );
+
+    return result.rowCount === 1;
+}
 
 export interface SyncResult {
     inserted: number;
@@ -156,47 +212,17 @@ export async function syncInbox(
                 continue;
             }
 
-            const referenceIds = Array.isArray(parsed.references)
-                ? parsed.references
-                : parsed.references
-                ? [parsed.references]
-                : [];
-
             for (const studentEmail of matchingStudents) {
-                const result = await db.query(
-                    `
-                    INSERT INTO messages (
-                        message_id,
-                        student_email,
-                        sender_email,
-                        subject,
-                        received_at,
-                        body_text,
-                        body_html,
-                        in_reply_to,
-                        reference_ids,
-                        central_email
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                    ON CONFLICT (message_id, student_email)
-                    DO NOTHING
-                    RETURNING id
-                    `,
-                    [
-                        messageId,
-                        studentEmail,
-                        senderEmail,
-                        parsed.subject || "",
-                        message.internalDate || new Date(),
-                        parsed.text,
-                        parsed.html || null,
-                        parsed.inReplyTo,
-                        referenceIds,
-                        centralEmail,
-                    ]
+                const wasInserted = await insertMessageForStudent(
+                    parsed,
+                    messageId,
+                    senderEmail,
+                    studentEmail,
+                    message.internalDate || new Date(),
+                    centralEmail
                 );
 
-                if (result.rowCount === 1) {
+                if (wasInserted) {
                     inserted++;
                     const insertedAt = Date.now();
                     const arrivedDate = message.internalDate ? new Date(message.internalDate) : null;

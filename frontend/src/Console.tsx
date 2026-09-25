@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    checkStudentMail,
+    fetchMailCheckMatch,
     fetchStudents,
     fetchThread,
     fetchThreadSummaries,
     logout,
     subscribeToUpdates,
+    type MailCheckStudent,
 } from "./api";
 import MessageList from "./MessageList";
 import ThreadView from "./ThreadView";
@@ -17,6 +20,15 @@ const TABS: StatusFilter[] = ["pending", "replied"];
 // API param) - only the user-facing label changed from "Replied" to
 // "Closed" per the customer's request.
 const TAB_LABELS: Record<StatusFilter, string> = { pending: "Pending", replied: "Closed" };
+
+type MailCheckState =
+    | { phase: "checking"; student: MailCheckStudent }
+    | { phase: "done"; student: MailCheckStudent; added: number; checkedAt: number };
+
+function checkedAgo(checkedAt: number): string {
+    const minutes = Math.floor((Date.now() - checkedAt) / 60000);
+    return minutes < 1 ? "just now" : `${minutes} min ago`;
+}
 
 interface Props {
     college: College;
@@ -47,6 +59,15 @@ function Console({ college, onLoggedOut }: Props) {
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
         return () => clearTimeout(timer);
     }, [search]);
+
+    // Step 16: when the search narrows to exactly one student, their own
+    // mailbox is checked directly and anything missing from the console is
+    // added. Failures deliberately show nothing (the status line just goes
+    // away) - operators can't act on them; the reason is in the server log.
+    const [mailCheck, setMailCheck] = useState<MailCheckState | null>(null);
+    // Bumped on every search change so a slow check for an earlier search
+    // can never overwrite the status line of the current one.
+    const mailCheckSeq = useRef(0);
 
     const loadMessages = useCallback(async (statusFilter: StatusFilter, searchText: string) => {
         setLoading(true);
@@ -118,6 +139,58 @@ function Console({ college, onLoggedOut }: Props) {
         setSelectedId(null);
         setThreadItems(null);
     }, [status, debouncedSearch, loadMessages, loadPendingCount]);
+
+    const runMailCheck = useCallback(
+        async (student: MailCheckStudent, force: boolean) => {
+            const seq = mailCheckSeq.current;
+            setMailCheck({ phase: "checking", student });
+
+            const outcome = await checkStudentMail(student.id, force);
+
+            if (seq !== mailCheckSeq.current) {
+                return;
+            }
+
+            if (outcome.status !== "ok") {
+                setMailCheck(null);
+                return;
+            }
+
+            setMailCheck({ phase: "done", student, added: outcome.added, checkedAt: outcome.checkedAt });
+
+            if (outcome.added > 0) {
+                // The server also broadcasts an update, but refresh directly
+                // so this operator sees the added emails even if their live
+                // connection has dropped.
+                loadMessages(statusRef.current, searchRef.current);
+                loadPendingCount(searchRef.current);
+            }
+        },
+        [loadMessages, loadPendingCount]
+    );
+
+    // Waits a little longer than the search debounce (~1.5s after typing
+    // stops in total) so a check doesn't fire while someone is mid-word and
+    // the search briefly narrows to one student.
+    useEffect(() => {
+        mailCheckSeq.current++;
+        setMailCheck(null);
+
+        if (!debouncedSearch) {
+            return;
+        }
+
+        const seq = mailCheckSeq.current;
+        const timer = setTimeout(async () => {
+            const student = await fetchMailCheckMatch(debouncedSearch);
+
+            if (student && seq === mailCheckSeq.current) {
+                runMailCheck(student, false);
+            }
+        }, 1200);
+
+        return () => clearTimeout(timer);
+    }, [debouncedSearch, runMailCheck]);
 
     useEffect(() => {
         fetchStudents()
@@ -239,6 +312,32 @@ function Console({ college, onLoggedOut }: Props) {
                     </button>
                 )}
             </div>
+
+            {mailCheck && (
+                <div className={mailCheck.phase === "checking" ? "mail-check checking" : "mail-check done"}>
+                    {mailCheck.phase === "checking" ? (
+                        <>
+                            <span className="mail-check-spinner" aria-hidden="true" />
+                            <span>Checking {mailCheck.student.name}'s mailbox…</span>
+                        </>
+                    ) : (
+                        <>
+                            <span>
+                                ✓ Mailbox checked {checkedAgo(mailCheck.checkedAt)}:{" "}
+                                {mailCheck.added === 0
+                                    ? "nothing missing. If an email is still expected, it hasn't reached the mailbox yet."
+                                    : `${mailCheck.added} missing email${mailCheck.added === 1 ? "" : "s"} added`}
+                            </span>
+                            <button
+                                className="mail-check-again"
+                                onClick={() => runMailCheck(mailCheck.student, true)}
+                            >
+                                Check again
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
 
             <nav className="tabs">
                 {TABS.map((tab) => {

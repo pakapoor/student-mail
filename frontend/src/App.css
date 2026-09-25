@@ -966,3 +966,60 @@
     flex: 0.6 1 90px;
     color: var(--text-muted);
 }
+
+/* Step 16: status line for the automatic per-student mailbox check. */
+.mail-check {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-width: 520px;
+    margin-top: 8px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.mail-check.checking {
+    background: #eaf0fe;
+    color: var(--accent-dark);
+}
+
+.mail-check.done {
+    background: #e8f6ee;
+    color: #1f7a4d;
+}
+
+.mail-check > span:not(.mail-check-spinner) {
+    flex: 1 1 240px;
+}
+
+.mail-check-spinner {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(59, 111, 224, 0.3);
+    border-top-color: var(--accent);
+    animation: mail-check-spin 0.9s linear infinite;
+}
+
+@keyframes mail-check-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mail-check-spinner { animation: none; }
+}
+
+.mail-check-again {
+    flex: none;
+    padding: 3px 10px;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    background: #ffffff;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}

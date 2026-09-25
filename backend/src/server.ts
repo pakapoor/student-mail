@@ -14,7 +14,8 @@ import {
     sendFollowUp,
     sendReply,
 } from "./reply.js";
-import { fetchThread, fetchThreadSummaries } from "./thread.js";
+import { fetchThread, fetchThreadSummaries, findSingleSearchMatch } from "./thread.js";
+import { checkStudentMailbox } from "./checkStudentMail.js";
 import { htmlToPlainText, sanitizeReplyHtml } from "./sanitizeReplyHtml.js";
 import { ensureWatcher, triggerSync } from "./mailboxSync.js";
 import { addClient, broadcast, removeClient } from "./realtime.js";
@@ -290,6 +291,70 @@ app.get("/api/threads", requireAuth, requireCollege, async (req, res) => {
         search
     );
     res.json(page);
+});
+
+// Console search → automatic mailbox check (Step 16). Step one: does the
+// search narrow to exactly one student this operator can check? Only then
+// does the console show "Checking…" and call the route below.
+app.get("/api/check-mail/match", requireAuth, requireCollege, async (req, res) => {
+    const searchParam = req.query.search;
+    const search = typeof searchParam === "string" ? searchParam.trim() : "";
+
+    if (!search) {
+        res.json({ student: null });
+        return;
+    }
+
+    const student = await findSingleSearchMatch(search, res.locals.collegeId);
+
+    // Only students whose mail this operator manages - recovered messages
+    // are stored under the operator's central mailbox.
+    if (!student || student.central_email?.toLowerCase() !== res.locals.centralEmail.toLowerCase()) {
+        res.json({ student: null });
+        return;
+    }
+
+    res.json({ student: { id: student.id, name: student.name } });
+});
+
+app.post("/api/check-mail/:studentId", requireAuth, requireCollege, async (req, res) => {
+    const studentId = Number(req.params.studentId);
+
+    if (!Number.isInteger(studentId)) {
+        res.status(400).json({ error: "Invalid student id" });
+        return;
+    }
+
+    const centralEmail: string = res.locals.centralEmail;
+    const result = await db.query<{ email: string; smtp_password: string }>(
+        `
+        SELECT email, smtp_password
+        FROM students
+        WHERE id = $1
+          AND deleted_at IS NULL
+          AND college_id = $2
+          AND lower(central_email) = lower($3)
+        `,
+        [studentId, res.locals.collegeId, centralEmail]
+    );
+    const row = result.rows[0];
+
+    if (!row) {
+        res.status(404).json({ error: "Student not found" });
+        return;
+    }
+
+    const outcome = await checkStudentMailbox(
+        { id: studentId, email: row.email, password: row.smtp_password },
+        centralEmail,
+        req.body?.force === true
+    );
+
+    if (outcome.status === "ok" && outcome.added > 0) {
+        broadcast("update", { reason: "check-mail", added: outcome.added }, centralEmail);
+    }
+
+    res.json(outcome);
 });
 
 app.get("/api/messages/:id", requireAuth, requireCollege, async (req, res) => {

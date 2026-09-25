@@ -891,6 +891,79 @@ day):**
   ON messages (student_email);`, acceptable with the downtime already
   approved for this change.
 
+- [ ] **Step 16 — Automatic per-student mailbox check on search.**
+  (Checkbox left open until the user confirms the live UI test on AWS.)
+  Why: a 2026-09-25 diagnosis of shakil.shahriyar@myemailinfo.com showed
+  Migadu accepting inbound mail then holding it 45 min – 5 h 44 m before
+  storing it (e.g. an Edugate code from confirm@edu.gov.kg), and the
+  central sync can only attribute mail by the To header (BCC'd /
+  mailing-list mail is skipped). Staff typically fill a college form for a
+  student and wait for an emailed code; when it doesn't show up they need
+  a way to look in that student's own mailbox directly.
+
+  Design decisions, settled with the user before touching code (mockup
+  approved):
+  - No background sweep of student mailboxes - with ~2300 students that is
+    far too many Migadu logins. The check is on demand only.
+  - Trigger: the existing Step 15 search box. When the search narrows to
+    exactly one student (~1.5 s after typing stops), that student's INBOX
+    is checked automatically. Several matches → nothing happens.
+  - UI: one status line under the search box - "Checking <name>'s
+    mailbox…", then a green "Mailbox checked just now: N missing emails
+    added" / "nothing missing…" with a **Check again** button. No other UI
+    change. Staff only.
+  - Failures show NOTHING in the UI (the status line just disappears) -
+    operators are clerk-level and can't act on errors. They are logged
+    instead: `[check-mail] FAILED student=… id=… operator=… reason=auth|
+    timeout|network|error (detail)`. Successes log `[check-mail] OK …
+    checked=N added=N`, each recovered message logs `[check-mail]
+    RECOVERED …`. Find failures with
+    `sudo journalctl -u student-mail --since "7 days ago" | grep "check-mail] FAILED"`.
+    Passwords are never logged.
+  - INBOX only (Migadu spam filtering is off, Junk stays empty), read-only
+    (IMAP EXAMINE - nothing gets marked read), last 7 days by server
+    arrival date (so hours-late Migadu deliveries are included).
+  - 2-minute per-student cooldown for automatic checks (returns the last
+    result without logging in again); Check again bypasses it. Concurrent
+    checks of the same student share one IMAP session. 45 s timeout.
+
+  Backend:
+  - `sync.ts`: the INSERT moved into exported `insertMessageForStudent()`,
+    shared by both paths; central sync behavior unchanged. Both key on
+    `(message_id, student_email)` with `ON CONFLICT DO NOTHING`, so a
+    message arriving via central AND via the direct check is stored once.
+    No schema change / migration.
+  - New `checkStudentMail.ts`: fetches envelope Message-IDs first, compares
+    with the DB, downloads full source only for missing ones; the mailbox
+    owner is the student, so no To-header matching.
+  - `thread.ts`: `findSingleSearchMatch()` - same search predicate/index as
+    the console search, `LIMIT 2`.
+  - `server.ts`: `GET /api/check-mail/match?search=` and
+    `POST /api/check-mail/:studentId` (`{force}`), both behind
+    requireAuth + requireCollege, restricted to non-deleted students of the
+    session's college whose `central_email` is the operator's (recovered
+    rows are stored under that central mailbox). Broadcasts an SSE update
+    when something was added.
+  - Uses `IMAP_HOST` (Migadu in prod) and the student's `smtp_password`.
+
+  Frontend: `api.ts` (`fetchMailCheckMatch`, `checkStudentMail`),
+  `Console.tsx` (status line, stale-result guard per search), `App.css`
+  (`.mail-check*`).
+
+  Verified locally (dev Postgres on 5433, test student Shakil added to the
+  dev DB only, check run against the real Migadu inbox via a scratch
+  script): search "shakil" → one match, "pilot" → none (several); first
+  check 12 checked / 12 added (incl. the delayed Edugate mail and the
+  empty-subject mail); automatic repeat inside cooldown → cached, no login;
+  forced re-check 12 / 0 added, all 12 envelope Message-IDs matched stored
+  rows exactly (nothing re-downloaded); UNSEEN set in the mailbox identical
+  before/after; wrong password → `reason=auth` log line, UI result
+  "failed". Frontend + backend `tsc` clean, oxlint no new warnings.
+  Browser UI test not possible locally (local login is GoDaddy, students
+  are on Migadu, one `IMAP_HOST`), so per the user it is tested on AWS
+  after deploy (prod DB backed up first to
+  `~/backups/pre-step16-20260925T184313Z.dump`); rollback = `git revert`.
+
 ### Approved test roster (passwords intentionally omitted)
 
 Final import needs the Password column from Step 8, supplied privately.
@@ -1086,6 +1159,9 @@ needs real DB auth/secrets.
 - `centralMailboxes.ts` - registry of which mailboxes have logged in
 - `mailboxSync.ts` - per-mailbox IMAP IDLE watcher + periodic fallback sync
 - `sync.ts` - the actual IMAP fetch/parse/insert-into-`messages` logic
+  (`insertMessageForStudent()` is shared with `checkStudentMail.ts`)
+- `checkStudentMail.ts` - Step 16 on-demand direct check of one student's
+  own INBOX (read-only, 7 days), adds whatever the console is missing
 - `thread.ts` - groups messages into threads (union-find on
   message_id/in_reply_to/reference_ids), thread summaries, full thread fetch;
   thread list is always sorted newest-first, but within a thread the oldest

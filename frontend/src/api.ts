@@ -105,6 +105,52 @@ export async function fetchThreadSummaries(
     return res.json();
 }
 
+export interface MailCheckStudent {
+    id: number;
+    name: string;
+}
+
+export type MailCheckOutcome =
+    | { status: "ok"; checked: number; added: number; checkedAt: number }
+    | { status: "failed" };
+
+// Returns the one student the search narrows to, or null when it matches
+// nobody or several students (no automatic check in that case).
+export async function fetchMailCheckMatch(search: string): Promise<MailCheckStudent | null> {
+    const res = await fetch(
+        `${API_BASE}/api/check-mail/match?search=${encodeURIComponent(search.trim())}`,
+        { credentials: "include" }
+    );
+
+    if (!res.ok) {
+        return null;
+    }
+
+    const payload = await res.json();
+    return payload.student ?? null;
+}
+
+// Any failure (including a network/HTTP error) comes back as "failed" - the
+// console deliberately shows nothing for it; the reason is in the server log.
+export async function checkStudentMail(studentId: number, force: boolean): Promise<MailCheckOutcome> {
+    try {
+        const res = await fetch(`${API_BASE}/api/check-mail/${studentId}`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ force }),
+        });
+
+        if (!res.ok) {
+            return { status: "failed" };
+        }
+
+        return await res.json();
+    } catch {
+        return { status: "failed" };
+    }
+}
+
 export async function fetchThread(id: number): Promise<ThreadItem[]> {
     const res = await fetch(`${API_BASE}/api/messages/${id}/thread`, {
         credentials: "include",

@@ -260,6 +260,58 @@ async function findMatchingStudentEmails(
     return result.rows.map((r) => r.email);
 }
 
+export interface SearchMatchedStudent {
+    id: number;
+    email: string;
+    name: string;
+    central_email: string | null;
+}
+
+// Same match rules (and trigram index) as findMatchingStudentEmails, but
+// capped at 2 rows - the console's automatic mailbox check only needs to
+// know "exactly one student" vs "several", never the full list.
+export async function findSingleSearchMatch(
+    search: string,
+    collegeId: string
+): Promise<SearchMatchedStudent | null> {
+    const result = await db.query<{
+        id: string;
+        email: string;
+        first_name: string | null;
+        last_name: string | null;
+        name: string | null;
+        central_email: string | null;
+    }>(
+        `
+        SELECT id, email, first_name, last_name, name, central_email
+        FROM students
+        WHERE deleted_at IS NULL
+          AND college_id = $1
+          AND (coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
+               coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
+               coalesce(college,'') || ' ' || coalesce(year_enrolled::text,'') || ' ' ||
+               coalesce(admission_id,'')) ILIKE $2
+        LIMIT 2
+        `,
+        [collegeId, `%${escapeLikePattern(search)}%`]
+    );
+
+    const row = result.rows[0];
+
+    if (!row || result.rows.length !== 1) {
+        return null;
+    }
+
+    const combined = [row.first_name, row.last_name].filter(Boolean).join(" ");
+
+    return {
+        id: Number(row.id),
+        email: row.email.toLowerCase(),
+        name: combined || row.name || row.email,
+        central_email: row.central_email,
+    };
+}
+
 // Same shape as fetchMessagesForStudentEmails, but scoped to the operator's
 // central_email too - unlike that function (used by
 // countEffectivelyPendingByEmail for a deliberately cross-operator count),
