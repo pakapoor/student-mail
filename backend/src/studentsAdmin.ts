@@ -15,6 +15,10 @@ export interface AdminStudentRow {
     year_enrolled: number | null;
     created_at: string;
     deleted_at: string | null;
+    // Edugate registration status (migration 010, registrationStatus.ts).
+    registration_status: "REGISTRATION_PENDING" | "REGISTERED" | null;
+    code_sent_at: string | null;
+    registered_at: string | null;
 }
 
 export interface AdminStudentPage {
@@ -60,6 +64,8 @@ export async function searchAdminStudents(opts: {
     search?: string;
     cursor?: string | null;
     deleted?: boolean;
+    // "Code sent, not registered" - the students staff should chase.
+    registrationPendingOnly?: boolean;
     limit?: number;
 }): Promise<AdminStudentPage> {
     const limit = Math.min(Math.max(opts.limit ?? PAGE_SIZE, 1), 100);
@@ -72,6 +78,10 @@ export async function searchAdminStudents(opts: {
         "college_id = $2",
     ];
     const params: unknown[] = [opts.centralEmail, opts.collegeId];
+
+    if (opts.registrationPendingOnly) {
+        conditions.push("registration_status = 'REGISTRATION_PENDING'");
+    }
 
     if (search) {
         params.push(`%${search}%`);
@@ -97,7 +107,8 @@ export async function searchAdminStudents(opts: {
 
     const result = await db.query<AdminStudentRow>(
         `
-        SELECT id, first_name, last_name, name, email, admission_id, year_enrolled, created_at, deleted_at
+        SELECT id, first_name, last_name, name, email, admission_id, year_enrolled, created_at, deleted_at,
+               registration_status, code_sent_at, registered_at
         FROM students
         WHERE ${conditions.join(" AND ")}
         ORDER BY coalesce(first_name,''), coalesce(last_name,''), id

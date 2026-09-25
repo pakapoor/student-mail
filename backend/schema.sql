@@ -40,6 +40,14 @@ CREATE TABLE students (
     college_id BIGINT REFERENCES colleges(id),
     admission_id TEXT,
     is_test BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Edugate registration status (migration 010): NULL = no code/login
+    -- email yet, 'REGISTRATION_PENDING' = a code email arrived, 'REGISTERED'
+    -- = a registration email arrived (never goes back). Times are the
+    -- emails' sent times (messages.sent_at), latest of each kind.
+    registration_status TEXT
+        CHECK (registration_status IN ('REGISTRATION_PENDING', 'REGISTERED')),
+    code_sent_at TIMESTAMPTZ,
+    registered_at TIMESTAMPTZ,
     CONSTRAINT students_college_admission_unique UNIQUE (college_id, admission_id)
 );
 
@@ -87,6 +95,12 @@ CREATE TABLE messages (
     -- measured (rows from before migration 009, or unreadable headers).
     migadu_hold_seconds INTEGER,
     migadu_queue_id TEXT,
+    -- The sender's own send time (Date: header) - used for ordering, since
+    -- Migadu can hold mail for hours (migration 010). NULL = unknown.
+    sent_at TIMESTAMPTZ,
+    -- 'code' | 'login' | 'rejected' when the email matches a verified
+    -- Edugate template (shared/edugate.ts), else NULL.
+    edugate_kind TEXT CHECK (edugate_kind IN ('code', 'login', 'rejected')),
     CONSTRAINT messages_message_id_student_unique UNIQUE (message_id, student_email)
 );
 

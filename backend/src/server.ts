@@ -196,6 +196,7 @@ app.get("/api/admin/students", requireAuth, requireCollege, async (req, res) => 
     const search = typeof req.query.search === "string" ? req.query.search : "";
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : null;
     const deleted = req.query.deleted === "true";
+    const registrationPendingOnly = req.query.registration === "pending";
 
     const page = await searchAdminStudents({
         centralEmail: res.locals.centralEmail,
@@ -203,6 +204,7 @@ app.get("/api/admin/students", requireAuth, requireCollege, async (req, res) => 
         search,
         cursor,
         deleted,
+        registrationPendingOnly,
     });
     res.json(page);
 });

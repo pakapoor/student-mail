@@ -2,6 +2,8 @@ import { ImapFlow } from "imapflow";
 import { simpleParser, type ParsedMail } from "mailparser";
 import { db } from "./db.js";
 import { logMigaduDelay, measureMigaduHold, type MigaduHold } from "./migaduDelay.js";
+import { classifyEdugate, isEdugateSender } from "../../shared/edugate.js";
+import { applyRegistrationEvent } from "./registrationStatus.js";
 
 // Shared by the central-mailbox sync below and the per-student direct check
 // (checkStudentMail.ts). Both paths key on (message_id, student_email), so a
@@ -18,6 +20,11 @@ export async function insertMessageForStudent(
     centralEmail: string,
     migaduHold: MigaduHold | null = null
 ): Promise<boolean> {
+    // The sender's own send time (Date: header) - ordering uses this rather
+    // than arrival, which Migadu delays can scramble.
+    const sentAt = parsed.date && !Number.isNaN(parsed.date.getTime()) ? parsed.date : null;
+    const edugateKind = classifyEdugate(senderEmail, parsed.text, studentEmail)?.kind ?? null;
+
     const referenceIds = Array.isArray(parsed.references)
         ? parsed.references
         : parsed.references
@@ -38,9 +45,11 @@ export async function insertMessageForStudent(
             reference_ids,
             central_email,
             migadu_hold_seconds,
-            migadu_queue_id
+            migadu_queue_id,
+            sent_at,
+            edugate_kind
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (message_id, student_email)
         DO NOTHING
         RETURNING id
@@ -58,10 +67,36 @@ export async function insertMessageForStudent(
             centralEmail,
             migaduHold ? Math.round(migaduHold.holdMs / 1000) : null,
             migaduHold?.queueId ?? null,
+            sentAt,
+            edugateKind,
         ]
     );
 
-    return result.rowCount === 1;
+    const inserted = result.rowCount === 1;
+
+    if (inserted) {
+        // An Edugate email that matches none of the verified templates:
+        // Edugate may have changed its wording or added a new type (e.g. a
+        // password reset). Nothing breaks - no box, no status change - but
+        // it's logged so the template can be checked and added.
+        if (isEdugateSender(senderEmail) && !edugateKind) {
+            console.warn(
+                `[edugate] UNKNOWN LAYOUT from=${senderEmail} student=${studentEmail} ` +
+                    `subject="${parsed.subject || "(no subject)"}" message=${messageId}`
+            );
+        }
+
+        if (edugateKind === "code" || edugateKind === "login") {
+            try {
+                await applyRegistrationEvent(studentEmail, edugateKind, sentAt ?? receivedAt);
+            } catch (error) {
+                // The email is stored either way; only the status is stale.
+                console.error(`[edugate] status update failed student=${studentEmail}:`, error);
+            }
+        }
+    }
+
+    return inserted;
 }
 
 export interface SyncResult {

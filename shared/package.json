@@ -1,0 +1,5 @@
+{
+  "//": "Code shared by backend and frontend (e.g. edugate.ts). ES modules, like backend/.",
+  "type": "module",
+  "private": true
+}

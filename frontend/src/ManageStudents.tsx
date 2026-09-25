@@ -19,6 +19,42 @@ type RosterTab = "students" | "deleted" | "add";
 
 const MAX_DELETE_BATCH = 5;
 
+function shortTime(iso: string): string {
+    return new Date(iso).toLocaleString([], {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
+// Edugate registration status (backend registrationStatus.ts).
+function RegistrationStatus({ s }: { s: AdminStudentRow }) {
+    if (s.registration_status === "REGISTERED" && s.registered_at) {
+        const newCode =
+            s.code_sent_at && new Date(s.code_sent_at) > new Date(s.registered_at);
+
+        return (
+            <span className="admin-cell admin-status">
+                <span className="reg-status registered">Registered · {shortTime(s.registered_at)}</span>
+                {newCode && (
+                    <span className="reg-status-note">new code sent {shortTime(s.code_sent_at!)}</span>
+                )}
+            </span>
+        );
+    }
+
+    if (s.registration_status === "REGISTRATION_PENDING" && s.code_sent_at) {
+        return (
+            <span className="admin-cell admin-status">
+                <span className="reg-status pending">Code sent · {shortTime(s.code_sent_at)}</span>
+            </span>
+        );
+    }
+
+    return <span className="admin-cell admin-status muted">—</span>;
+}
+
 function displayName(s: AdminStudentRow): string {
     const combined = [s.first_name, s.last_name].filter(Boolean).join(" ");
     return combined || s.name || "(no name)";
@@ -36,6 +72,8 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
     // Admin roster, scoped to this operator's mailbox and selected college.
     const [rosterTab, setRosterTab] = useState<RosterTab>("students");
     const [search, setSearch] = useState("");
+    // "Code sent, not registered" - the students staff should chase.
+    const [pendingOnly, setPendingOnly] = useState(false);
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [rows, setRows] = useState<AdminStudentRow[]>([]);
     const [cursor, setCursor] = useState<string | null>(null);
@@ -63,13 +101,13 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
     }, [search]);
 
     const loadRoster = useCallback(
-        (tab: RosterTab, searchText: string) => {
+        (tab: RosterTab, searchText: string, onlyPending: boolean) => {
             setRosterLoading(true);
             setRosterError(null);
             setSelected(new Set());
             setConfirming(false);
 
-            fetchAdminStudents(searchText, null, tab === "deleted")
+            fetchAdminStudents(searchText, null, tab === "deleted", tab === "students" && onlyPending)
                 .then((page) => {
                     setRows(page.students);
                     setCursor(page.nextCursor);
@@ -89,8 +127,8 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
             return;
         }
 
-        loadRoster(rosterTab, debouncedSearch);
-    }, [rosterTab, debouncedSearch, loadRoster]);
+        loadRoster(rosterTab, debouncedSearch, pendingOnly);
+    }, [rosterTab, debouncedSearch, pendingOnly, loadRoster]);
 
     const loadMore = useCallback(() => {
         if (!cursor || loadingMore) {
@@ -99,7 +137,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
 
         setLoadingMore(true);
 
-        fetchAdminStudents(debouncedSearch, cursor, rosterTab === "deleted")
+        fetchAdminStudents(debouncedSearch, cursor, rosterTab === "deleted", rosterTab === "students" && pendingOnly)
             .then((page) => {
                 setRows((prev) => [...prev, ...page.students]);
                 setCursor(page.nextCursor);
@@ -108,7 +146,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                 setRosterError(err instanceof Error ? err.message : "Failed to load more")
             )
             .finally(() => setLoadingMore(false));
-    }, [cursor, loadingMore, debouncedSearch, rosterTab]);
+    }, [cursor, loadingMore, debouncedSearch, rosterTab, pendingOnly]);
 
     function handleScroll() {
         const el = listRef.current;
@@ -163,7 +201,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
         try {
             await deleteStudents(ids);
             setConfirming(false);
-            loadRoster(rosterTab, debouncedSearch);
+            loadRoster(rosterTab, debouncedSearch, pendingOnly);
             onImported();
         } catch (err) {
             setRosterError(err instanceof Error ? err.message : "Delete failed");
@@ -197,7 +235,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
             setResult(res);
             setCsv("");
             fetchStudents().then(setOwnStudents).catch(() => {});
-            loadRoster(rosterTab, debouncedSearch);
+            loadRoster(rosterTab, debouncedSearch, pendingOnly);
             onImported();
         } catch (err) {
             setImportError(err instanceof Error ? err.message : "Import failed");
@@ -323,6 +361,17 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         onChange={(e) => setSearch(e.target.value)}
                     />
 
+                    {rosterTab === "students" && (
+                        <label className="roster-filter">
+                            <input
+                                type="checkbox"
+                                checked={pendingOnly}
+                                onChange={(e) => setPendingOnly(e.target.checked)}
+                            />
+                            Show only: code sent, not registered
+                        </label>
+                    )}
+
                     {rosterError && <p className="error">{rosterError}</p>}
 
                     {rosterTab === "students" && selected.size > 0 && !confirming && (
@@ -374,6 +423,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         <span className="admin-cell admin-email">Email</span>
                         <span className="admin-cell admin-admission">Application No</span>
                         <span className="admin-cell admin-year">Year enrolled</span>
+                        <span className="admin-cell admin-status">Edugate status</span>
                         {rosterTab === "deleted" && <span className="admin-action-spacer" />}
                     </div>
 
@@ -411,6 +461,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                                         <span className="admin-cell admin-year">
                                             {s.year_enrolled ?? "—"}
                                         </span>
+                                        <RegistrationStatus s={s} />
                                         {rosterTab === "deleted" && (
                                             <button
                                                 className="secondary-button"

@@ -1420,6 +1420,80 @@ needs real DB auth/secrets.
 5. Log in with a real central mailbox's IMAP credentials (this creates its
    `central_mailboxes` row and starts its IMAP watcher automatically).
 
+## Step 18 — Edugate registration status (phase 1 of 2)
+
+Goal (user, 2026-09-25): know per student where they are in Edugate - no
+code yet / code sent / registered - and later (phase 2) stop registered
+students' code emails cluttering Pending. Split in two deploys on purpose:
+**phase 1 records and shows the status but changes nothing in Pending /
+Closed**, so any mistake shows up as a wrong label, never as emails
+silently moving; phase 2 changes the lists once statuses are confirmed.
+
+Phase 1 (this step):
+- **Shared templates** `shared/edugate.ts` (repo root, with its own
+  `package.json` `"type": "module"`): the verified Edugate rules moved out
+  of `frontend/src/keyInfo.ts` into one file used by both the frontend
+  (the box) and the backend (status), so they can't drift apart.
+  `frontend/vite.config.ts` allows the dev server to read `..`.
+- **Migration 010** (all nullable, no defaults, nothing existing changes):
+  `messages.sent_at` (sender's `Date:` header - ordering uses this, not
+  arrival, because Migadu can hold mail for hours), `messages.edugate_kind`
+  (`code` | `login` | `rejected` | NULL), `students.registration_status`
+  (NULL | `REGISTRATION_PENDING` | `REGISTERED`), `students.code_sent_at`,
+  `students.registered_at` (latest of each kind, by sent time).
+- **New emails** (`insertMessageForStudent`, so central sync, mailbox
+  check and a future sweep alike): store `sent_at` + `edugate_kind`, then
+  `registrationStatus.ts`'s `applyRegistrationEvent`. Rules: a code →
+  REGISTRATION_PENDING unless already REGISTERED; a login → REGISTERED;
+  **REGISTERED never goes back** (a code after registration - the student
+  asked for another one - only moves `code_sent_at` forward); times only
+  move forward (`GREATEST`), so an older email arriving late changes
+  nothing. A status-update failure is logged, never fails the insert.
+- **Unknown layouts**: any email from an Edugate sender that matches no
+  verified template logs `[edugate] UNKNOWN LAYOUT from=… student=…
+  subject=…` - e.g. a password-reset email (none seen yet). No box, no
+  status change; staff see it as a normal email.
+- **Manage students**: new "Edugate status" column - green "Registered ·
+  date" (plus an amber "new code sent …" line when the latest code is
+  newer than the registration), amber "Code sent · date", or "—"; and a
+  checkbox filter "Show only: code sent, not registered"
+  (`GET /api/admin/students?registration=pending`).
+- **Backfill** `backend/scripts/backfill-edugate-status.ts`: dry run by
+  default (read + report only; works even before migration 010), writes
+  only with `--apply`, in one transaction, only the new columns. Reads the
+  central mailbox's `Date:` headers read-only over IMAP (matched by
+  Message-ID), classifies every stored email, then recomputes every
+  student's status (`RECOMPUTE_ALL_SQL`, safe to re-run).
+
+Verified before deploy:
+- Dev DB: migration 010 applied; backfill dry run + apply (1 dev student
+  with a code email → REGISTRATION_PENDING, rest NULL). End-to-end through
+  the real insert path with synthetic emails: code → PENDING; login →
+  REGISTERED; an older code arriving late → no change; a new code after
+  registration → still REGISTERED, `code_sent_at` moved forward; unknown
+  Edugate layout → logged, no change; non-Edugate email with a code in it
+  → ignored. Test rows removed.
+- Production **dry run** (read-only, via an SSH tunnel, before migration
+  010): 703 messages, sent time found for 657 (668 Date headers in
+  central; the rest fall back to arrival time); edugate_kind: 292 code,
+  287 login, 38 rejected, 86 other; **0** Edugate emails matching no
+  template; resulting status **287 REGISTERED, 3 REGISTRATION_PENDING, 0
+  registered-with-a-newer-code**, everyone else NULL.
+- DB snapshots before any change: prod `~/backups/pre-010-20260925T213443Z.dump`,
+  dev `~/.local/share/student-mail-devpg-backups/dev-pre-010-….dump`.
+
+Deploy order: backup → `git pull` → apply `010_registration_status.sql`
+→ backfill dry run → `--apply` → restart backend → rebuild frontend.
+
+Phase 2 (not built, agreed design): green REGISTERED badge instead of
+"N pending" on the registration thread, which **stays in Pending** until
+staff close it (they copy the login from it); a code email whose student
+has a registration email **sent later** counts as Closed automatically
+(computed, no data overwritten; a code sent after the latest registration
+stays pending); amber warnings on an outdated registration box ("A newer
+login was sent on …" / "A newer Edugate email arrived on … Check it
+before using this password.").
+
 ## Migadu delay logging (done, part of Step 17)
 
 `backend/src/migaduDelay.ts`, called from `sync.ts` for every email the

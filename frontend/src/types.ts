@@ -68,6 +68,10 @@ export interface AdminStudentRow {
     year_enrolled: number | null;
     created_at: string;
     deleted_at: string | null;
+    // Edugate registration status - see backend registrationStatus.ts.
+    registration_status: "REGISTRATION_PENDING" | "REGISTERED" | null;
+    code_sent_at: string | null;
+    registered_at: string | null;
 }
 
 export interface AdminStudentPage {

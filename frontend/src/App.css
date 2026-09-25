@@ -1134,3 +1134,49 @@
 .key-info-text.strong {
     font-weight: 700;
 }
+
+/* Edugate registration status column in Manage students. */
+.admin-status {
+    flex: 1.2 1 170px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-status.muted {
+    color: var(--text-muted);
+}
+
+.reg-status {
+    width: fit-content;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.reg-status.registered {
+    background: #e8f6ee;
+    color: #1f7a4d;
+}
+
+.reg-status.pending {
+    background: #fff4d6;
+    color: #8a5a00;
+}
+
+.reg-status-note {
+    font-size: 11px;
+    color: #9a5b00;
+}
+
+.roster-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+}

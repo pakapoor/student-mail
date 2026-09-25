@@ -276,9 +276,14 @@ export async function importStudents(csv: string): Promise<ImportResult> {
 export async function fetchAdminStudents(
     search: string,
     cursor: string | null,
-    deleted: boolean
+    deleted: boolean,
+    registrationPendingOnly = false
 ): Promise<AdminStudentPage> {
     const params = new URLSearchParams();
+
+    if (registrationPendingOnly) {
+        params.set("registration", "pending");
+    }
 
     if (search) {
         params.set("search", search);
