@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { KeyInfo } from "./keyInfo";
-import { EDUGATE_LOGIN_URL } from "../../shared/edugate";
+import { EDUGATE_LOGIN_URL, EDUGATE_REGISTER_URL } from "../../shared/edugate";
 
 // The box at the top of an opened thread (see keyInfo.ts). Always English,
 // whatever language the email is in - only the values come from the email.
@@ -21,10 +21,10 @@ function ageText(minutes: number): string {
 
 // Opens the Edugate portal's login page in a new tab - staff copy the
 // login/password from the box, then paste them there.
-function OpenEdugate() {
+function OpenEdugate({ href = EDUGATE_LOGIN_URL, label = "Open Edugate ↗" }: { href?: string; label?: string }) {
     return (
-        <a className="key-info-open" href={EDUGATE_LOGIN_URL} target="_blank" rel="noopener noreferrer">
-            Open Edugate ↗
+        <a className="key-info-open" href={href} target="_blank" rel="noopener noreferrer">
+            {label}
         </a>
     );
 }
@@ -145,9 +145,16 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                         <CopyButton value={info.code} />
                     </div>
                     {expired ? (
-                        <p className="key-info-warning">
-                            ⚠ Received {ageText(ageMinutes)}. This code has probably expired. Ask for a new code.
-                        </p>
+                        <>
+                            <p className="key-info-warning">
+                                ⚠ Received {ageText(ageMinutes)}. This code has probably expired. Ask for a new code.
+                            </p>
+                            {/* A new code is requested on Edugate's registration page. */}
+                            <div className="key-info-footer">
+                                <span />
+                                <OpenEdugate href={EDUGATE_REGISTER_URL} label="Request a new code ↗" />
+                            </div>
+                        </>
                     ) : (
                         <p className="key-info-age">
                             Received {ageText(ageMinutes)} · Edugate codes are valid for {info.validMinutes} minutes
