@@ -1231,3 +1231,33 @@
     white-space: nowrap;
     margin-right: 8px;
 }
+
+/* Compact list row (Step 18): subject · sender and time on one line; the
+   sender is shortened with … before the time is. */
+.message-row-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.message-row-line .subject-sender {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.message-row-line .subject {
+    display: inline;
+    margin: 0;
+    font-size: 13px;
+}
+
+.message-row-line .received-at {
+    flex: none;
+    white-space: nowrap;
+}

@@ -1516,6 +1516,11 @@ students):
   bold) with the email underneath; falls back to the email alone if no
   name is stored (`student_name` on thread summaries, one query per
   page). List column widened 380 → 460 px.
+- Compact rows (user's idea, option a): subject · sender and a short
+  time ("25 Sep, 6:03 PM") share one line (sender shortened with … before
+  the time); the preview line is dropped for Edugate threads (always the
+  same boilerplate) but kept for other emails, where the first words of a
+  student's question help. 5 lines per row → 3 for Edugate.
 - Verified read-only against production (via SSH tunnel) before deploy:
   KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
   Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91

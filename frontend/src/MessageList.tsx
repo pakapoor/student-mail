@@ -32,6 +32,17 @@ function Badge({ thread }: { thread: ThreadSummary }) {
     }
 }
 
+const EDUGATE_BADGES = new Set<ThreadSummary["badge"]>(["registered", "rejected", "code", "used"]);
+
+function shortTime(iso: string): string {
+    return new Date(iso).toLocaleString([], {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+    });
+}
+
 interface Props {
     threads: ThreadSummary[];
     selectedId: number | null;
@@ -69,14 +80,20 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
                     {thread.student_name && (
                         <div className="student-email">{thread.student_email}</div>
                     )}
-                    <div className="subject">{thread.subject || "(no subject)"}</div>
-                    {thread.preview && <div className="message-preview">{thread.preview}</div>}
-                    <div className="message-row-bottom">
-                        <span className="sender">{thread.sender_email}</span>
-                        <span className="received-at">
-                            {new Date(thread.received_at).toLocaleString()}
+                    <div className="message-row-line">
+                        <span className="subject-sender">
+                            <span className="subject">{thread.subject || "(no subject)"}</span>
+                            {" · "}
+                            {thread.sender_email}
                         </span>
+                        <span className="received-at">{shortTime(thread.received_at)}</span>
                     </div>
+                    {/* Edugate emails always open with the same boilerplate,
+                        so their preview adds nothing; other emails (a
+                        student's question) keep one line of it. */}
+                    {thread.preview && !EDUGATE_BADGES.has(thread.badge) && (
+                        <div className="message-preview">{thread.preview}</div>
+                    )}
                     {thread.message_count > 1 && (
                         <div className="message-count">
                             {thread.message_count} messages in this thread
