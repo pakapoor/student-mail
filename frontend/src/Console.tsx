@@ -10,6 +10,7 @@ import {
     type MailCheckStudent,
 } from "./api";
 import MessageList from "./MessageList";
+import { saveSearchForReload, takeSearchSavedForReload, useNewVersionAvailable } from "./versionCheck";
 import ThreadView from "./ThreadView";
 import ManageStudents from "./ManageStudents";
 import { collegeLogo, ISM_EDUTECH_LOGO } from "./branding";
@@ -30,6 +31,11 @@ function checkedAgo(checkedAt: number): string {
     const minutes = Math.floor((Date.now() - checkedAt) / 60000);
     return minutes < 1 ? "just now" : `${minutes} min ago`;
 }
+
+// Read once at load (module scope, so React's dev double-render can't
+// consume it twice) - restores the search after an automatic reload to a
+// newer build (see versionCheck.ts).
+const searchAfterReload = takeSearchSavedForReload();
 
 interface Props {
     college: College;
@@ -53,8 +59,8 @@ function Console({ college, onLoggedOut }: Props) {
     // applied when switching Pending/Closed, so a user unsure which tab a
     // thread landed in doesn't have to retype anything (per the customer's
     // own framing of that workflow).
-    const [search, setSearch] = useState("");
-    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [search, setSearch] = useState(searchAfterReload);
+    const [debouncedSearch, setDebouncedSearch] = useState(searchAfterReload.trim());
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -269,6 +275,18 @@ function Console({ college, onLoggedOut }: Props) {
             loadThread(selectedId);
         }
     }
+
+    // A newer build was deployed: reload onto it, but never while an email
+    // is open - the operator may be typing a reply. Waits until they leave
+    // it. The search box is carried across the reload.
+    const newVersionAvailable = useNewVersionAvailable();
+
+    useEffect(() => {
+        if (newVersionAvailable && selectedId === null) {
+            saveSearchForReload(search);
+            window.location.reload();
+        }
+    }, [newVersionAvailable, selectedId, search]);
 
     async function handleLogout() {
         await logout();

@@ -978,6 +978,20 @@ day):**
   matching verified against the dev DB: "shakil" → 1, "gupta" → 3,
   "pilot" → tooMany (6), no match → none.
 
+  Follow-up - automatic reload onto new deploys (`frontend/src/
+  versionCheck.ts`): the second AWS test "didn't work" only because the
+  operator's tab still ran the 18:46 bundle against the 18:56 backend (old
+  JS read the new `/match` response as "no student"; nginx log showed the
+  match calls but no POSTs). Now every console checks once a minute and on
+  tab focus whether `index.html` references a different
+  `/assets/index-*.js` than the one it loaded (1 min agreed with the user:
+  ~320-byte static fetch, negligible; longer only widens the stale
+  window). If so it reloads itself - but never while an email is open
+  (might be typing a reply); it waits until the operator leaves it. The
+  search box text survives the reload (sessionStorage). No-op under
+  `npm run dev`. Tabs opened before this deploy still need one manual
+  reload; every deploy after that is picked up automatically.
+
 ### Approved test roster (passwords intentionally omitted)
 
 Final import needs the Password column from Step 8, supplied privately.
@@ -1200,6 +1214,8 @@ needs real DB auth/secrets.
   own auto-linking do NOT count and are de-linked to plain text - this was a
   real bug, see below)
 - `api.ts` / `types.ts` - fetch wrappers and shared types
+- `versionCheck.ts` - detects a newer deployed build (1 min + on focus);
+  `Console.tsx` reloads onto it when no email is open
 
 ## Known bugs fixed this session (context for why the code looks like this)
 
