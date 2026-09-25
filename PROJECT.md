@@ -1557,8 +1557,14 @@ students):
   Edugate email exists; "No Edugate login found for this student." if none.
   `edugate_login` on rejection thread items (`fetchThread`). The "1"
   reasons (4 emails, one reviewer, 23.09 12:07-12:08) carry no meaning in
-  either language - nothing more to show. Portal address unknown, so no
-  "Open Edugate" link yet.
+  either language - nothing more to show.
+- **"Open Edugate ↗"** button in the login box and the red rejection box,
+  opening `https://edugate.ilim.gov.kg/edugate/login` in a new tab
+  (`EDUGATE_LOGIN_URL` in `shared/edugate.ts` - change it there if
+  Edugate moves). The emails carry no link; the user confirmed the portal
+  ("Цифровые ворота" = Digital Gate, on the ministry's ilim.gov.kg domain)
+  by logging in with a student's credentials. Staff flow: Copy login →
+  Open Edugate → paste → Copy password → paste → re-upload.
 - Verified read-only against production (via SSH tunnel) before deploy:
   KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
   Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91

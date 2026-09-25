@@ -27,6 +27,12 @@ export type EdugateInfo =
 
 export const EDUGATE_SENDERS = ["confirm@edu.gov.kg", "notify@edu.gov.kg"];
 
+// Where staff log in to re-upload documents etc. The emails themselves carry
+// no link; the portal ("Цифровые ворота" = Digital Gate, on the education
+// ministry's ilim.gov.kg domain) was confirmed by the user logging in with a
+// student's credentials on 2026-09-26. Change it here if Edugate moves.
+export const EDUGATE_LOGIN_URL = "https://edugate.ilim.gov.kg/edugate/login";
+
 const CODE =
     /(?:^|\n)(?:Your verification code:|Ваш код подтверждения:)\n\n(\d{6})\n\n(?:Enter this code\. The code is valid for (\d{1,3}) minutes\.|Введите этот код\. Код действителен в течение (\d{1,3}) минут\.)(?:\n|$)/g;
 const LOGIN =

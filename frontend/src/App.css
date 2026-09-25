@@ -1401,3 +1401,27 @@
 .key-info-row.login {
     grid-template-columns: 104px minmax(0, 1fr) auto;
 }
+
+/* "Open Edugate ↗" in the login and rejection boxes. */
+.key-info-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.key-info-open {
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.key-info-open:hover {
+    background: var(--accent-dark);
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { KeyInfo } from "./keyInfo";
+import { EDUGATE_LOGIN_URL } from "../../shared/edugate";
 
 // The box at the top of an opened thread (see keyInfo.ts). Always English,
 // whatever language the email is in - only the values come from the email.
@@ -16,6 +17,16 @@ function ageText(minutes: number): string {
     const hours = Math.floor(minutes / 60);
     const rest = minutes % 60;
     return rest === 0 ? `${hours} h ago` : `${hours} h ${rest} min ago`;
+}
+
+// Opens the Edugate portal's login page in a new tab - staff copy the
+// login/password from the box, then paste them there.
+function OpenEdugate() {
+    return (
+        <a className="key-info-open" href={EDUGATE_LOGIN_URL} target="_blank" rel="noopener noreferrer">
+            Open Edugate ↗
+        </a>
+    );
 }
 
 function CopyButton({ value }: { value: string }) {
@@ -103,9 +114,12 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                             <span className="key-info-value">{login.password}</span>
                             <CopyButton value={login.password} />
                         </div>
-                        <p className="key-info-source">
-                            from the registration email of {dateTime(login.sent_at)}
-                        </p>
+                        <div className="key-info-footer">
+                            <span className="key-info-source">
+                                from the registration email of {dateTime(login.sent_at)}
+                            </span>
+                            <OpenEdugate />
+                        </div>
                         {login.newer_edugate_at && (
                             <p className="key-info-warning">
                                 ⚠ A newer Edugate email arrived on {dateTime(login.newer_edugate_at)}. Check it before using this password.
@@ -151,6 +165,10 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                         <span className="key-info-label">Password</span>
                         <span className="key-info-value">{info.password}</span>
                         <CopyButton value={info.password} />
+                    </div>
+                    <div className="key-info-footer">
+                        <span />
+                        <OpenEdugate />
                     </div>
                     {newerLogin && (
                         <p className="key-info-warning">
