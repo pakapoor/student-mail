@@ -30,11 +30,16 @@ export interface CheckStudent {
     password: string;
 }
 
+export type FailureReason = "auth" | "timeout" | "network" | "error";
+
 export type CheckOutcome =
     | { status: "ok"; checked: number; added: number; checkedAt: number }
-    | { status: "failed" };
+    | { status: "failed"; reason?: FailureReason };
 
-type FailureReason = "auth" | "timeout" | "network" | "error";
+// Who asked for the check - only changes the log prefix and how chatty it
+// is. The console search logs every check; the rolling daily sweep (sweep.ts)
+// checks ~2300 mailboxes a day, so it only logs finds and failures.
+export type CheckSource = "check-mail" | "sweep";
 
 const lastResults = new Map<string, { checked: number; added: number; checkedAt: number }>();
 // Two operators (or a double click) checking the same student at once share
@@ -44,7 +49,8 @@ const inFlight = new Map<string, Promise<CheckOutcome>>();
 export function checkStudentMailbox(
     student: CheckStudent,
     centralEmail: string,
-    force: boolean
+    force: boolean,
+    source: CheckSource = "check-mail"
 ): Promise<CheckOutcome> {
     const key = student.email.toLowerCase();
 
@@ -58,12 +64,12 @@ export function checkStudentMailbox(
         return Promise.resolve({ status: "ok", ...last });
     }
 
-    const promise = runCheck(student, centralEmail).finally(() => inFlight.delete(key));
+    const promise = runCheck(student, centralEmail, source).finally(() => inFlight.delete(key));
     inFlight.set(key, promise);
     return promise;
 }
 
-async function runCheck(student: CheckStudent, centralEmail: string): Promise<CheckOutcome> {
+async function runCheck(student: CheckStudent, centralEmail: string, source: CheckSource): Promise<CheckOutcome> {
     const start = Date.now();
     const client = new ImapFlow({
         host: process.env.IMAP_HOST!,
@@ -83,14 +89,14 @@ async function runCheck(student: CheckStudent, centralEmail: string): Promise<Ch
 
     try {
         const { checked, added } = await Promise.race([
-            fetchMissing(client, student, centralEmail),
+            fetchMissing(client, student, centralEmail, source),
             timeout,
         ]);
         const checkedAt = Date.now();
         lastResults.set(student.email.toLowerCase(), { checked, added, checkedAt });
 
-        console.log(
-            `[check-mail] OK student=${student.email} id=${student.id} operator=${centralEmail} ` +
+        if (source === "check-mail" || added > 0) console.log(
+            `[${source}] OK student=${student.email} id=${student.id} operator=${centralEmail} ` +
                 `checked=${checked} added=${added} (${LOOKBACK_DAYS} days) took=${checkedAt - start}ms`
         );
 
@@ -104,11 +110,11 @@ async function runCheck(student: CheckStudent, centralEmail: string): Promise<Ch
                 : "";
 
         console.error(
-            `[check-mail] FAILED student=${student.email} id=${student.id} operator=${centralEmail} ` +
+            `[${source}] FAILED student=${student.email} id=${student.id} operator=${centralEmail} ` +
                 `reason=${reason} (${detail}${serverResponse}) took=${Date.now() - start}ms`
         );
 
-        return { status: "failed" };
+        return { status: "failed", reason };
     } finally {
         clearTimeout(timer);
         // A polite LOGOUT when the connection is healthy, but never let a
@@ -126,7 +132,8 @@ async function runCheck(student: CheckStudent, centralEmail: string): Promise<Ch
 async function fetchMissing(
     client: ImapFlow,
     student: CheckStudent,
-    centralEmail: string
+    centralEmail: string,
+    source: CheckSource
 ): Promise<{ checked: number; added: number }> {
     await client.connect();
     // Read-only (IMAP EXAMINE): nothing in the student's mailbox gets marked
@@ -167,7 +174,7 @@ async function fetchMissing(
             { uid: true }
         )) {
             if (!msg.source) {
-                console.warn(`[check-mail] student=${student.email} UID ${msg.uid}: no message source returned, skipping`);
+                console.warn(`[${source}] student=${student.email} UID ${msg.uid}: no message source returned, skipping`);
                 continue;
             }
 
@@ -176,7 +183,7 @@ async function fetchMissing(
 
             if (!messageId) {
                 console.warn(
-                    `[check-mail] student=${student.email} UID ${msg.uid}: no Message-ID header, skipping (subject: "${parsed.subject || "(no subject)"}")`
+                    `[${source}] student=${student.email} UID ${msg.uid}: no Message-ID header, skipping (subject: "${parsed.subject || "(no subject)"}")`
                 );
                 continue;
             }
@@ -184,7 +191,7 @@ async function fetchMissing(
             const senderEmail = parsed.from?.value[0]?.address?.toLowerCase();
 
             if (!senderEmail) {
-                console.warn(`[check-mail] student=${student.email} UID ${msg.uid} "${messageId}": no parseable From address, skipping`);
+                console.warn(`[${source}] student=${student.email} UID ${msg.uid} "${messageId}": no parseable From address, skipping`);
                 continue;
             }
 
@@ -206,7 +213,7 @@ async function fetchMissing(
             if (wasInserted) {
                 added++;
                 console.log(
-                    `[check-mail] RECOVERED student=${student.email} "${messageId}" from=${senderEmail} ` +
+                    `[${source}] RECOVERED student=${student.email} "${messageId}" from=${senderEmail} ` +
                         `arrived=${msg.internalDate ? new Date(msg.internalDate).toISOString() : "unknown"} ` +
                         `subject="${parsed.subject || "(no subject)"}"`
                 );

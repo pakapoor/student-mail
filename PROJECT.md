@@ -1684,6 +1684,30 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 17 A — Rolling daily sweep (done)
+
+`backend/src/sweep.ts`, started with the server. Every student's own
+INBOX is checked once per `SWEEP_ROUND_HOURS` (24), `SWEEP_BATCH_SIZE`
+(5) at a time, spread evenly through the day (user: "divided into chunks
+of 5 all through the day") - ~5 every 3 min for ~2300 students, ~2300
+logins/day. Uses the same mailbox check as the console search
+(`checkStudentMail.ts`: read-only, last 7 days, only missing emails
+added, 2-min cooldown shared with search). Order: `students.last_swept_at`
+oldest first, never-swept first (migration `008_sweep.sql`, + index), so
+it resumes after restarts; a failed check still counts as swept (a wrong
+stored password can't block the queue). Recovered emails broadcast
+`new-mail` with the student's college → list refresh + chime (user: yes).
+Quiet logging: `[sweep] RECOVERED …` / `[sweep] OK … added=N` only when
+something was found, `[sweep] FAILED … reason=…` on failures, one
+`[sweep] round summary (last 24 h): checked= added= failed=` per round.
+≥3 network/timeout failures in one batch → pause 15 min. Off switch:
+`SWEEP_ENABLED=false`. `checkStudentMailbox` gained a `source` parameter
+(log prefix + quiet mode) and returns the failure reason; console search
+behaviour unchanged. Tested on the dev DB with a 36-second round: never-
+swept first, auth failures logged and still marked swept, a real mailbox
+(Shakil) checked silently, round summary logged. This is also the
+tripwire for Step 17b below: `grep -c "sweep] RECOVERED"`.
+
 ## Proposal (not built): Step 17b — hot-list polling of student inboxes
 
 Status: **documented contingency, deliberately not built** (decided with

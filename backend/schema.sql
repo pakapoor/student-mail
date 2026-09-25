@@ -48,12 +48,16 @@ CREATE TABLE students (
         CHECK (registration_status IN ('REGISTRATION_PENDING', 'REGISTERED')),
     code_sent_at TIMESTAMPTZ,
     registered_at TIMESTAMPTZ,
+    -- When the rolling daily sweep last checked this student's own mailbox
+    -- (migration 008, sweep.ts); NULL = never.
+    last_swept_at TIMESTAMPTZ,
     CONSTRAINT students_college_admission_unique UNIQUE (college_id, admission_id)
 );
 
 CREATE INDEX idx_students_central_email ON students (central_email);
 CREATE INDEX idx_students_deleted_at ON students (deleted_at);
 CREATE INDEX idx_students_sort ON students (first_name, last_name, id);
+CREATE INDEX idx_students_last_swept ON students (last_swept_at NULLS FIRST) WHERE deleted_at IS NULL;
 
 -- Free-text search across name/email/owner/college/year/admission_id for
 -- the admin roster page (pg_trgm ILIKE '%term%' against this concatenated
