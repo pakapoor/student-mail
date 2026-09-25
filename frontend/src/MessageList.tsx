@@ -61,9 +61,14 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
                     onClick={() => onSelect(thread.threadId)}
                 >
                     <div className="message-row-top">
-                        <span className="student">{thread.student_email}</span>
+                        <span className="student">
+                            {thread.student_name ?? thread.student_email}
+                        </span>
                         <Badge thread={thread} />
                     </div>
+                    {thread.student_name && (
+                        <div className="student-email">{thread.student_email}</div>
+                    )}
                     <div className="subject">{thread.subject || "(no subject)"}</div>
                     {thread.preview && <div className="message-preview">{thread.preview}</div>}
                     <div className="message-row-bottom">

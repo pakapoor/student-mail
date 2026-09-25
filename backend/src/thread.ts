@@ -529,6 +529,8 @@ export interface ThreadSummary {
     //   replied    - any other email that has been answered / closed
     badge: "registered" | "rejected" | "code" | "used" | "new" | "replied";
     code_at: string | null;
+    // First + last name from the roster (as in Manage students), or null.
+    student_name: string | null;
 }
 
 function threadBadge(
@@ -600,7 +602,7 @@ export async function fetchThreadSummaries(
     const threadGroups = groupIntoThreads(messages);
     const allReplies = await fetchAllReplies();
 
-    const summaries: (ThreadSummary & { sortAt: number; latestAt: number })[] = threadGroups.map(
+    const summaries: (Omit<ThreadSummary, "student_name"> & { sortAt: number; latestAt: number })[] = threadGroups.map(
         (groupMessages) => {
             const latest = groupMessages.reduce((a, b) =>
                 new Date(b.received_at) > new Date(a.received_at) ? b : a
@@ -670,9 +672,31 @@ export async function fetchThreadSummaries(
     // email; the old tabs keep their sortAt meaning (see above).
     filtered.sort((a, b) => (status === "all" ? b.latestAt - a.latestAt : b.sortAt - a.sortAt));
 
-    const page = filtered
-        .slice(offset, offset + limit)
-        .map(({ sortAt, latestAt, ...summary }) => summary);
+    const pageRows = filtered.slice(offset, offset + limit);
+
+    // Student names for just this page (one query), shown in the list.
+    const names = new Map<string, string>();
+    const pageEmails = [...new Set(pageRows.map((t) => t.student_email.toLowerCase()))];
+
+    if (pageEmails.length > 0) {
+        const nameRows = await db.query<{ email: string; name: string | null }>(
+            `SELECT lower(email) AS email,
+                    nullif(trim(coalesce(first_name, '') || ' ' || coalesce(last_name, '')), '') AS name
+             FROM students WHERE lower(email) = ANY($1)`,
+            [pageEmails]
+        );
+
+        for (const row of nameRows.rows) {
+            if (row.name) {
+                names.set(row.email, row.name);
+            }
+        }
+    }
+
+    const page = pageRows.map(({ sortAt, latestAt, ...summary }) => ({
+        ...summary,
+        student_name: names.get(summary.student_email.toLowerCase()) ?? null,
+    }));
 
     return {
         threads: page,

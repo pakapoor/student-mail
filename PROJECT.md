@@ -1512,6 +1512,10 @@ students):
   using this password." (a later Edugate email we don't recognise, e.g. a
   password reset). From `newer_login_at` / `newer_edugate_at` on thread
   items.
+- List rows show the student's **name** (first + last from the roster,
+  bold) with the email underneath; falls back to the email alone if no
+  name is stored (`student_name` on thread summaries, one query per
+  page). List column widened 380 → 460 px.
 - Verified read-only against production (via SSH tunnel) before deploy:
   KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
   Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91

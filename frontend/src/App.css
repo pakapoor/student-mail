@@ -201,7 +201,7 @@
 
 .main-layout {
     display: grid;
-    grid-template-columns: 380px 1fr;
+    grid-template-columns: 460px 1fr;
     gap: 20px;
     align-items: start;
 }
@@ -1210,4 +1210,24 @@
 /* Superseded code emails (only shown when searching): dimmed. */
 .message-row.used {
     opacity: 0.55;
+}
+
+/* Student name on top of each list row, email underneath (Step 18). */
+.message-row .student-email {
+    margin-top: -2px;
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.message-row-top .student {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
 }

@@ -21,6 +21,7 @@ export interface ThreadSummary {
     // The one badge the list shows (backend thread.ts threadBadge).
     badge: "registered" | "rejected" | "code" | "used" | "new" | "replied";
     code_at: string | null;
+    student_name: string | null;
 }
 
 // "all" = the tab-less list (Step 18 phase 2); the others are kept for
