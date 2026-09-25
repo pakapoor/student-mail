@@ -142,7 +142,8 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                     <div className="key-info-row">
                         <span className="key-info-label">Code</span>
                         <span className="key-info-value">{info.code}</span>
-                        <CopyButton value={info.code} />
+                        {/* No Copy on an expired code - nobody should use it. */}
+                        {!expired && <CopyButton value={info.code} />}
                     </div>
                     {expired ? (
                         <>

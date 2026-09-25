@@ -1568,7 +1568,8 @@ students):
   An **expired** code box also gets **"Request a new code ↗"**, opening
   `https://edugate.ilim.gov.kg/edugate/register` (`EDUGATE_REGISTER_URL`,
   given by the user) in a new tab; a still-valid code has no button (staff
-  are already on that page to type it in).
+  are already on that page to type it in). An expired code has no Copy
+  button (user) - it stays visible, struck through.
 - Verified read-only against production (via SSH tunnel) before deploy:
   KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
   Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91
