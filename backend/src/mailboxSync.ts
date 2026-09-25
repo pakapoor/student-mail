@@ -71,7 +71,13 @@ export async function triggerSync(
     const start = Date.now();
 
     try {
-        const { inserted, insertedStudentEmails } = await withWatchdog(syncInbox(email, password), email);
+        const { inserted, insertedStudentEmails, retryPending } = await withWatchdog(syncInbox(email, password), email);
+
+        // An email came back without content - try again shortly rather
+        // than waiting for the next new mail / fallback poll.
+        if (retryPending) {
+            setTimeout(() => triggerSync(email, password), 5000);
+        }
         const durationMs = Date.now() - start;
 
         if (inserted > 0) {

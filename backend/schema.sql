@@ -134,5 +134,9 @@ CREATE TABLE replies (
 CREATE TABLE central_mailboxes (
     email VARCHAR(320) PRIMARY KEY,
     password TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    -- Incremental IMAP sync watermark (migration 004; was missing here):
+    -- the last processed UID and the UIDVALIDITY it belongs to.
+    last_uid BIGINT,
+    uid_validity BIGINT
 );

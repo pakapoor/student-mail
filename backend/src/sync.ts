@@ -99,8 +99,21 @@ export async function insertMessageForStudent(
     return inserted;
 }
 
+// Migadu sometimes returns a just-arrived email without its content (seen
+// ~40 times in 4 days). The sync used to skip it AND move last_uid past it,
+// so it was never tried again - e.g. mahek.khan's registration email
+// (24 Sep, UID 429) was missing from the console for 2 days. Now the
+// watermark stops just before such an email so the next pass retries it;
+// after MAX_SOURCE_ATTEMPTS failures in a row it's given up (logged) so one
+// broken email can never block everything after it.
+const MAX_SOURCE_ATTEMPTS = 5;
+const missingSourceAttempts = new Map<string, number>();
+
 export interface SyncResult {
     inserted: number;
+    // An email came back without content and will be retried - the caller
+    // schedules a quick follow-up pass instead of waiting for new mail.
+    retryPending?: boolean;
     // Which students got new mail this pass - lets the live update tell
     // each console whether the mail is for its college (new-mail chime).
     insertedStudentEmails: string[];
@@ -133,6 +146,7 @@ export async function syncInbox(
     const lock = await client.getMailboxLock("INBOX", { acquireTimeout: 30000 });
 
     let inserted = 0;
+    let retryPending = false;
     const insertedStudents = new Set<string>();
     let skipped = 0;
 
@@ -198,6 +212,8 @@ export async function syncInbox(
         }
 
         let maxUidSeen = storedLastUid ?? 0;
+        // Lowest UID that came back without content this pass (retry it).
+        let retryFromUid: number | null = null;
 
         for await (const message of client.fetch(
             fetchRange,
@@ -208,10 +224,30 @@ export async function syncInbox(
                 maxUidSeen = message.uid;
             }
 
+            const attemptKey = `${centralEmail}:${currentUidValidity}:${message.uid}`;
+
             if (!message.source) {
-                console.warn(`[sync] [${centralEmail}] UID ${message.uid}: no message source returned by IMAP fetch, skipping`);
+                const attempts = (missingSourceAttempts.get(attemptKey) ?? 0) + 1;
+
+                if (attempts < MAX_SOURCE_ATTEMPTS) {
+                    missingSourceAttempts.set(attemptKey, attempts);
+                    retryFromUid = retryFromUid === null ? message.uid : Math.min(retryFromUid, message.uid);
+                    console.warn(
+                        `[sync] [${centralEmail}] UID ${message.uid}: no message source returned by IMAP fetch ` +
+                            `(attempt ${attempts}/${MAX_SOURCE_ATTEMPTS}), will retry`
+                    );
+                } else {
+                    missingSourceAttempts.delete(attemptKey);
+                    console.error(
+                        `[sync] [${centralEmail}] GIVING UP uid=${message.uid} after ${MAX_SOURCE_ATTEMPTS} tries - ` +
+                            `no message source; searching the student in the console (mailbox check) can still recover it`
+                    );
+                }
+
                 continue;
             }
+
+            missingSourceAttempts.delete(attemptKey);
 
             const parsed = await simpleParser(message.source);
 
@@ -258,14 +294,9 @@ export async function syncInbox(
             }
 
             // How long Migadu held the email before it reached the mailbox:
-            // stored on the row, and logged if it's an incident.
+            // stored on the row, and logged (below) if it's an incident.
             const hold = measureMigaduHold(message.source);
-            logMigaduDelay(hold, {
-                mailbox: centralEmail,
-                messageId,
-                senderEmail,
-                students: matchingStudents,
-            });
+            let insertedThisMessage = false;
 
             for (const studentEmail of matchingStudents) {
                 const wasInserted = await insertMessageForStudent(
@@ -280,6 +311,7 @@ export async function syncInbox(
 
                 if (wasInserted) {
                     inserted++;
+                    insertedThisMessage = true;
                     insertedStudents.add(studentEmail);
                     const insertedAt = Date.now();
                     const arrivedDate = message.internalDate ? new Date(message.internalDate) : null;
@@ -300,11 +332,26 @@ export async function syncInbox(
                     skipped++;
                 }
             }
+
+            // Only for emails stored on this pass - a retry pass re-reads a
+            // few already-stored emails and mustn't log them twice.
+            if (insertedThisMessage) {
+                logMigaduDelay(hold, {
+                    mailbox: centralEmail,
+                    messageId,
+                    senderEmail,
+                    students: matchingStudents,
+                });
+            }
         }
+
+        // Never move the watermark past an email we still want to retry.
+        const newLastUid = retryFromUid !== null ? Math.min(maxUidSeen, retryFromUid - 1) : maxUidSeen;
+        retryPending = retryFromUid !== null;
 
         await db.query(
             `UPDATE central_mailboxes SET last_uid = $2, uid_validity = $3 WHERE email = $1`,
-            [centralEmail, maxUidSeen, currentUidValidity.toString()]
+            [centralEmail, newLastUid, currentUidValidity.toString()]
         );
     } finally {
         lock.release();
@@ -313,5 +360,5 @@ export async function syncInbox(
 
     console.log(`[TIMING] syncInbox [${centralEmail}] total duration: ${Date.now() - syncStart}ms (inserted=${inserted}, skipped=${skipped})`);
 
-    return { inserted, skipped, insertedStudentEmails: [...insertedStudents] };
+    return { inserted, skipped, insertedStudentEmails: [...insertedStudents], retryPending };
 }

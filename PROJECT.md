@@ -1552,6 +1552,40 @@ students):
   code thread `auto_closed` → USED, hidden without search and shown when
   searching. Frontend + backend type-check, build clean.
 
+## Step 19 — Fix: emails lost when Migadu returns them without content
+
+Found while checking why mahek.khan showed "code sent, not registered":
+her registration email (24 Sep 09:31:20) WAS in central's inbox (UID
+429), but the sync logged `UID 429: no message source returned by IMAP
+fetch, skipping` 3 s after it arrived - and still moved
+`central_mailboxes.last_uid` past it, so it was never tried again. The
+console missed it for 2 days (recovered with the mailbox check; she's now
+REGISTERED). The same skip appeared **~40 times in 4 days** of logs: Migadu
+briefly serves a just-arrived email without its content. Of 39 skipped
+UIDs: 17 no longer in central (old setup / tests), 20 had been recovered
+since by other paths (e.g. the search mailbox check), 2 were our own test
+emails deleted on request - so no real email was still missing, but any
+could have been.
+
+Fix (`sync.ts` `syncInbox`): an email that comes back without content is
+retried - the watermark stops just before the lowest such UID
+(`newLastUid = min(maxUidSeen, retryFromUid - 1)`), and `triggerSync`
+schedules a follow-up pass 5 s later (`retryPending`). Emails after it are
+still stored immediately (no blocking); re-reading them is a no-op (ON
+CONFLICT). After 5 failed attempts in a row (in-memory counter per
+mailbox/UIDVALIDITY/UID) it logs `[sync] … GIVING UP uid=… after 5 tries`
+and moves on, so one broken email can't block the rest. Retries log
+`… no message source … (attempt n/5), will retry`. The `[migadu-delay]`
+line is now logged only for emails actually stored on that pass (a retry
+pass re-reads a few stored ones).
+
+Verified with a simulated mail server (ImapFlow patched in a test, real
+`syncInbox` against the dev DB): empty once → stored on the next pass;
+never any content → 4 retries, give up on the 5th, later emails unaffected;
+normal case unchanged. Also fixed `schema.sql`, which lacked
+`central_mailboxes.last_uid` / `uid_validity` (migration 004) - the dev DB
+was missing them too and now has them.
+
 ## Migadu delay logging (done, part of Step 17)
 
 `backend/src/migaduDelay.ts`, called from `sync.ts` for every email the
