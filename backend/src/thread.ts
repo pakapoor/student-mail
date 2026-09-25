@@ -1,4 +1,5 @@
 import { db } from "./db.js";
+import { classifyEdugate } from "../../shared/edugate.js";
 
 interface MessageRow {
     id: number;
@@ -529,6 +530,10 @@ export interface ThreadSummary {
     //   replied    - any other email that has been answered / closed
     badge: "registered" | "rejected" | "code" | "used" | "new" | "replied";
     code_at: string | null;
+    // For a live code thread: the code and how long the email says it's
+    // valid - the list shows the number only while it's still valid.
+    code: string | null;
+    code_valid_minutes: number | null;
     // First + last name from the roster (as in Manage students), or null.
     student_name: string | null;
 }
@@ -536,15 +541,16 @@ export interface ThreadSummary {
 function threadBadge(
     groupMessages: MessageRow[],
     pendingCount: number
-): { badge: ThreadSummary["badge"]; code_at: string | null } {
+): Pick<ThreadSummary, "badge" | "code_at" | "code" | "code_valid_minutes"> {
+    const none = { code: null, code_valid_minutes: null };
     const newestFirst = [...groupMessages].sort((a, b) => sentTime(b) - sentTime(a));
 
     if (groupMessages.some((m) => m.edugate_kind === "login")) {
-        return { badge: "registered", code_at: null };
+        return { badge: "registered", code_at: null, ...none };
     }
 
     if (newestFirst[0]?.edugate_kind === "rejected") {
-        return { badge: "rejected", code_at: null };
+        return { badge: "rejected", code_at: null, ...none };
     }
 
     const codes = newestFirst.filter((m) => m.edugate_kind === "code");
@@ -552,12 +558,22 @@ function threadBadge(
     if (codes.length > 0) {
         const live = codes.find((m) => !autoClosed(m));
 
-        return live
-            ? { badge: "code", code_at: live.sent_at ?? live.received_at }
-            : { badge: "used", code_at: null };
+        if (!live) {
+            return { badge: "used", code_at: null, ...none };
+        }
+
+        // Same verified template the box uses (shared/edugate.ts).
+        const info = classifyEdugate(live.sender_email, live.body_text, live.student_email);
+
+        return {
+            badge: "code",
+            code_at: live.sent_at ?? live.received_at,
+            code: info?.kind === "code" ? info.code : null,
+            code_valid_minutes: info?.kind === "code" ? info.validMinutes : null,
+        };
     }
 
-    return { badge: pendingCount > 0 ? "new" : "replied", code_at: null };
+    return { badge: pendingCount > 0 ? "new" : "replied", code_at: null, ...none };
 }
 
 const PREVIEW_LENGTH = 140;

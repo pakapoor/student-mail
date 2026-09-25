@@ -1,12 +1,13 @@
+import { useEffect, useState } from "react";
 import type { ThreadSummary } from "./types";
 
-// Edugate codes are valid for 30 minutes (stated in every code email; the
-// box above an opened thread reads the exact value from the email itself).
+// Fallback only - the validity normally comes from the email itself
+// ("valid for 30 minutes"), same as the box above an opened thread.
 const CODE_VALID_MINUTES = 30;
 
 // Step 18 phase 2: the one badge each thread shows (no more Pending/Closed
 // tabs). Always English, short, one meaning per colour.
-function Badge({ thread }: { thread: ThreadSummary }) {
+function Badge({ thread, now }: { thread: ThreadSummary; now: number }) {
     switch (thread.badge) {
         case "registered":
             return <span className="badge registered">REGISTERED</span>;
@@ -16,12 +17,27 @@ function Badge({ thread }: { thread: ThreadSummary }) {
             return <span className="badge used">USED</span>;
         case "code": {
             const minutes = thread.code_at
-                ? Math.max(0, Math.floor((Date.now() - new Date(thread.code_at).getTime()) / 60000))
+                ? Math.max(0, Math.floor((now - new Date(thread.code_at).getTime()) / 60000))
                 : 0;
-            const expired = minutes >= CODE_VALID_MINUTES;
+            const expired = minutes >= (thread.code_valid_minutes ?? CODE_VALID_MINUTES);
+            const age = minutes < 1 ? "now" : `${minutes} min`;
+
+            if (expired) {
+                return <span className="badge code expired">CODE · expired</span>;
+            }
+
+            // Still valid: show the code itself so staff don't have to open
+            // the thread. It disappears once expired, so nobody copies a
+            // stale code from the list.
             return (
-                <span className={expired ? "badge code expired" : "badge code"}>
-                    {expired ? "CODE · expired" : `CODE · ${minutes < 1 ? "now" : `${minutes} min`}`}
+                <span className="badge code">
+                    {thread.code ? (
+                        <>
+                            CODE <span className="badge-code-value">{thread.code}</span> · {age}
+                        </>
+                    ) : (
+                        `CODE · ${age}`
+                    )}
                 </span>
             );
         }
@@ -50,6 +66,15 @@ interface Props {
 }
 
 export default function MessageList({ threads, selectedId, onSelect }: Props) {
+    // Ticks every 30 s so code ages - and the code disappearing once it
+    // expires - stay current without reloading the list.
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 30000);
+        return () => clearInterval(timer);
+    }, []);
+
     if (threads.length === 0) {
         return <p className="empty-state">No messages.</p>;
     }
@@ -80,7 +105,7 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
                                 <span className="student-email">{thread.student_email}</span>
                             )}
                         </span>
-                        <Badge thread={thread} />
+                        <Badge thread={thread} now={now} />
                     </div>
                     <div className="message-row-line">
                         <span className="subject-sender">

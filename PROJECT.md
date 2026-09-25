@@ -1524,6 +1524,13 @@ students):
   Edugate rows are 2 lines - "NAME email … BADGE" / "subject · sender …
   time"; the email is the part that gets shortened, never the name,
   badge or time.
+- **Live code in the list** (user): a CODE badge shows the code itself
+  while it's valid - "CODE 118134 · 12 min" - and just "CODE · expired"
+  (no number) once older than the validity the email states (30 min), so
+  nobody copies a stale code from the list; USED threads never show one.
+  `code` / `code_valid_minutes` on thread summaries (shared templates);
+  the list re-renders every 30 s so the number disappears on time. No
+  Copy button in the row (opening the thread gives the box with Copy).
 - Verified read-only against production (via SSH tunnel) before deploy:
   KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
   Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91

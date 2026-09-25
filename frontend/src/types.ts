@@ -21,6 +21,9 @@ export interface ThreadSummary {
     // The one badge the list shows (backend thread.ts threadBadge).
     badge: "registered" | "rejected" | "code" | "used" | "new" | "replied";
     code_at: string | null;
+    // Live code threads only: the code and its stated validity.
+    code: string | null;
+    code_valid_minutes: number | null;
     student_name: string | null;
 }
 

@@ -1290,3 +1290,12 @@
 .message-row-top .badge {
     flex: none;
 }
+
+/* The code itself inside a live CODE badge (list rows). */
+.badge-code-value {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #1d3f8f;
+}
