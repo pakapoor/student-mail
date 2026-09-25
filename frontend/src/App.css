@@ -1028,3 +1028,77 @@
     font-weight: 600;
     cursor: pointer;
 }
+
+/* Code / login box at the top of an opened thread (KeyInfoBox.tsx). */
+.key-info {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border: 1px solid #b9cdf7;
+    border-radius: 10px;
+    background: #eef4ff;
+}
+
+.key-info p {
+    margin: 0;
+}
+
+.key-info-source,
+.key-info-age {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.key-info-row {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.key-info-label {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.key-info-value {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.key-info-value.small {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.key-info-copy {
+    padding: 3px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: #ffffff;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.key-info.expired .key-info-value {
+    color: #8b8f99;
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
+.key-info-warning {
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: #fff4d6;
+    color: #9a5b00;
+    font-size: 12px;
+    font-weight: 600;
+}

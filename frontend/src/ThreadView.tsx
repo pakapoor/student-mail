@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingThreadItem, ThreadItem } from "./types";
 import { markHandled, sendFollowUp, sendReply } from "./api";
 import { linkifyPlainText, sanitizeHtml } from "./linkify";
+import { findKeyInfo } from "./keyInfo";
+import KeyInfoBox from "./KeyInfoBox";
 
 interface Props {
     items: ThreadItem[];
@@ -74,6 +76,10 @@ export default function ThreadView({ items, onReplySent }: Props) {
     }, [items]);
 
     const composeTarget = replyTarget ?? mostRecentIncoming;
+
+    // Code / login credentials from a known sender's email (keyInfo.ts),
+    // shown above the thread. null for everything else - no box.
+    const keyInfo = useMemo(() => findKeyInfo(items), [items]);
 
     function removeFile(name: string) {
         setFiles((prev) => prev.filter((file) => file.name !== name));
@@ -161,6 +167,8 @@ export default function ThreadView({ items, onReplySent }: Props) {
     return (
         <div className="thread-view">
             <h2>{subject}</h2>
+
+            {keyInfo && <KeyInfoBox info={keyInfo} />}
 
             <div className="thread-items">
                 {items.map((item) => (

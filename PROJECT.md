@@ -992,6 +992,37 @@ day):**
   `npm run dev`. Tabs opened before this deploy still need one manual
   reload; every deploy after that is picked up automatically.
 
+  Follow-up - code / login box on opened threads (`frontend/src/
+  keyInfo.ts`, `KeyInfoBox.tsx`, `ThreadView.tsx`): staff open these
+  threads for a verification code or login credentials, so when the
+  thread's newest matching email is from a sender whose exact template is
+  known, a box above the thread shows the value(s) with Copy buttons.
+  Decisions agreed with the user (mockup approved):
+  - Only fully verified templates, never guessing - "each college can
+    have its own style, so only do it when we are fully sure". So far:
+    Edugate (`confirm@edu.gov.kg`), English + Russian, code email ("Your
+    verification code:" / "Ваш код подтверждения:" → exactly 6 digits →
+    exact "valid for N minutes" sentence) and login email ("Login
+    (Email):" / "Логин (Email):" → email → "Password:" / "Пароль:" →
+    password). Login must equal the thread's student. Any deviation →
+    no box, thread looks as before. New senders are added one template at
+    a time after checking real emails.
+  - Box is always English (staff only read English); only the values come
+    from the email. No "email is in Russian" note (user: not needed).
+  - Only the newest matching email in the thread; older codes are
+    expired anyway.
+  - Code shows "received X min ago"; once older than the validity the
+    email itself states (30 min today), the code is struck through with an
+    amber "probably expired - ask for a new code" warning (Migadu delays
+    can make the newest code in the console an expired one).
+  - Verified before building against every Edugate email in production
+    (read-only; codes/passwords masked in all output, local copies
+    shredded): 579/579 matched - 292 code (all 6 digits, all 30 min), 287
+    login (all login == thread student), 0 ambiguous. The built
+    `keyInfo.ts` itself was then run against all production messages:
+    292 code + 287 login boxes, 93/93 other-sender emails no box, a
+    two-code thread picks the newest, a 5-digit code is rejected.
+
 ### Approved test roster (passwords intentionally omitted)
 
 Final import needs the Password column from Step 8, supplied privately.
@@ -1214,6 +1245,9 @@ needs real DB auth/secrets.
   own auto-linking do NOT count and are de-linked to plain text - this was a
   real bug, see below)
 - `api.ts` / `types.ts` - fetch wrappers and shared types
+- `keyInfo.ts` / `KeyInfoBox.tsx` - exact per-sender templates (Edugate)
+  that pull a code or login credentials out of an opened thread, and the
+  box that shows them above it
 - `versionCheck.ts` - detects a newer deployed build (1 min + on focus);
   `Console.tsx` reloads onto it when no email is open
 
