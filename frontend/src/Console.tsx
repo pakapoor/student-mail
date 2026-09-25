@@ -17,11 +17,11 @@ import ManageStudents from "./ManageStudents";
 import { collegeLogo, ISM_EDUTECH_LOGO } from "./branding";
 import type { College, StatusFilter, ThreadItem, ThreadSummary } from "./types";
 
-const TABS: StatusFilter[] = ["pending", "replied"];
-// "replied" is kept as the internal status value (matches the DB column and
-// API param) - only the user-facing label changed from "Replied" to
-// "Closed" per the customer's request.
-const TAB_LABELS: Record<StatusFilter, string> = { pending: "Pending", replied: "Closed" };
+// Step 18 phase 2: no Pending/Closed tabs any more - 88% of the mail is
+// automated Edugate email nobody replies to, and staff don't use Close. One
+// list, newest first, each thread with one badge (MessageList.tsx);
+// superseded codes are hidden unless searching (backend threadBadge).
+const STATUS: StatusFilter = "all";
 
 type MailCheckState =
     | { phase: "checking"; students: MailCheckStudent[] }
@@ -44,7 +44,7 @@ interface Props {
 }
 
 function Console({ college, onLoggedOut }: Props) {
-    const [status, setStatus] = useState<StatusFilter>("pending");
+    const status = STATUS;
     const [threads, setThreads] = useState<ThreadSummary[]>([]);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -53,8 +53,6 @@ function Console({ college, onLoggedOut }: Props) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showManageStudents, setShowManageStudents] = useState(false);
-    const [pendingCount, setPendingCount] = useState(0);
-    const [closedCount, setClosedCount] = useState<number | null>(null);
 
     // Single search box shared across both tabs - the same term stays
     // applied when switching Pending/Closed, so a user unsure which tab a
@@ -92,32 +90,6 @@ function Console({ college, onLoggedOut }: Props) {
         }
     }, []);
 
-    // Kept in sync independently of whichever tab is active, so the Pending
-    // tab can always show a live count - the main workflow this console
-    // supports, per the customer's own framing of typical usage. While
-    // searching, the Closed count is also fetched so both tabs show how many
-    // matches exist there, since the user may not know which tab a thread is in.
-    const loadPendingCount = useCallback(async (searchText: string) => {
-        try {
-            const page = await fetchThreadSummaries("pending", 0, 1, searchText);
-            setPendingCount(page.total);
-        } catch {
-            // Non-critical - the tab just keeps showing its last known count.
-        }
-
-        if (!searchText) {
-            setClosedCount(null);
-            return;
-        }
-
-        try {
-            const page = await fetchThreadSummaries("replied", 0, 1, searchText);
-            setClosedCount(page.total);
-        } catch {
-            // Non-critical - the tab just keeps showing its last known count.
-        }
-    }, []);
-
     const loadMore = useCallback(async () => {
         setLoadingMore(true);
         setError(null);
@@ -143,10 +115,9 @@ function Console({ college, onLoggedOut }: Props) {
 
     useEffect(() => {
         loadMessages(status, debouncedSearch);
-        loadPendingCount(debouncedSearch);
         setSelectedId(null);
         setThreadItems(null);
-    }, [status, debouncedSearch, loadMessages, loadPendingCount]);
+    }, [status, debouncedSearch, loadMessages]);
 
     // Checks every matched student's mailbox in parallel and reports the
     // total. A student whose check fails is just left out of the total -
@@ -180,10 +151,9 @@ function Console({ college, onLoggedOut }: Props) {
                 // so this operator sees the added emails even if their live
                 // connection has dropped.
                 loadMessages(statusRef.current, searchRef.current);
-                loadPendingCount(searchRef.current);
             }
         },
-        [loadMessages, loadPendingCount]
+        [loadMessages]
     );
 
     // Waits a little longer than the search debounce (~1.5s after typing
@@ -267,17 +237,15 @@ function Console({ college, onLoggedOut }: Props) {
             // (list + open thread + pending count) stays consistent with
             // the server.
             loadMessages(statusRef.current, searchRef.current);
-            loadPendingCount(searchRef.current);
 
             if (selectedIdRef.current !== null) {
                 loadThread(selectedIdRef.current);
             }
         });
-    }, [loadMessages, loadPendingCount, loadThread, college.id]);
+    }, [loadMessages, loadThread, college.id]);
 
     function handleReplySent() {
         loadMessages(status, debouncedSearch);
-        loadPendingCount(debouncedSearch);
 
         if (selectedId !== null) {
             loadThread(selectedId);
@@ -333,7 +301,6 @@ function Console({ college, onLoggedOut }: Props) {
                     onClose={() => setShowManageStudents(false)}
                     onImported={() => {
                         loadMessages(status, debouncedSearch);
-                        loadPendingCount(debouncedSearch);
                     }}
                 />
             )}
@@ -391,31 +358,6 @@ function Console({ college, onLoggedOut }: Props) {
                     </button>
                 </div>
             )}
-
-            <nav className="tabs">
-                {TABS.map((tab) => {
-                    // No search: only Pending shows a live count (today's
-                    // behavior). While searching, both tabs show their match
-                    // count, since the user may not know which tab a thread
-                    // landed in (see loadPendingCount).
-                    const count =
-                        tab === "pending"
-                            ? pendingCount
-                            : debouncedSearch && closedCount !== null
-                              ? closedCount
-                              : null;
-
-                    return (
-                        <button
-                            key={tab}
-                            className={tab === status ? "tab active" : "tab"}
-                            onClick={() => setStatus(tab)}
-                        >
-                            {count !== null ? `${TAB_LABELS[tab]} (${count})` : TAB_LABELS[tab]}
-                        </button>
-                    );
-                })}
-            </nav>
 
             {error && <p className="error">{error}</p>}
 

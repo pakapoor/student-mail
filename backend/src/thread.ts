@@ -14,6 +14,11 @@ interface MessageRow {
     in_reply_to: string | null;
     reference_ids: string[];
     handled_without_reply: boolean;
+    // Step 18: Edugate template kind + sender's own send time (migration
+    // 010), and the student's latest registration time (students table).
+    edugate_kind: "code" | "login" | "rejected" | null;
+    sent_at: string | null;
+    student_registered_at: string | null;
 }
 
 interface ReplyRow {
@@ -41,6 +46,14 @@ export interface IncomingThreadItem {
     body_text: string | null;
     body_html: string | null;
     handled_without_reply: boolean;
+    // Step 18 phase 2 (see autoClosed / fetchThread).
+    auto_closed: boolean;
+    // Only on Edugate registration (login) emails: set when a newer
+    // registration email, or a newer Edugate email we don't recognise (e.g.
+    // a password reset), exists for this student - the password in this
+    // email may be outdated.
+    newer_login_at: string | null;
+    newer_edugate_at: string | null;
 }
 
 export interface OutgoingThreadItem {
@@ -115,8 +128,32 @@ function latestResolvedAt(
     return latest;
 }
 
+// Step 18 phase 2: extra columns every message query selects.
+const EDUGATE_COLUMNS = `edugate_kind, sent_at,
+               (SELECT s.registered_at FROM students s
+                WHERE lower(s.email) = lower(messages.student_email)
+                LIMIT 1) AS student_registered_at`;
+
+function sentTime(message: MessageRow): number {
+    return new Date(message.sent_at ?? message.received_at).getTime();
+}
+
+// An Edugate verification-code email is no longer needed once the student
+// has a registration email SENT AFTER it - it counts as Closed on its own,
+// without anyone pressing Close and without changing the message's own
+// replied/handled data (computed here, nothing overwritten). Compares sent
+// times, since Migadu can deliver out of order. A code sent after the
+// latest registration (e.g. the student asked for a new one) stays pending.
+function autoClosed(message: MessageRow): boolean {
+    return (
+        message.edugate_kind === "code" &&
+        message.student_registered_at !== null &&
+        sentTime(message) < new Date(message.student_registered_at).getTime()
+    );
+}
+
 function stillPending(message: MessageRow, resolvedAt: number): boolean {
-    return new Date(message.received_at).getTime() > resolvedAt;
+    return !autoClosed(message) && new Date(message.received_at).getTime() > resolvedAt;
 }
 
 async function fetchAllMessages(
@@ -131,7 +168,7 @@ async function fetchAllMessages(
         `
         SELECT id, message_id, student_email, sender_email, subject, received_at,
                replied, replied_at, body_text, body_html, in_reply_to, reference_ids,
-               handled_without_reply
+               handled_without_reply, ${EDUGATE_COLUMNS}
         FROM messages
         WHERE central_email = $1
           AND EXISTS (
@@ -210,7 +247,7 @@ async function fetchMessagesForStudentEmails(
         `
         SELECT id, message_id, student_email, sender_email, subject, received_at,
                replied, replied_at, body_text, body_html, in_reply_to, reference_ids,
-               handled_without_reply
+               handled_without_reply, ${EDUGATE_COLUMNS}
         FROM messages
         WHERE student_email = ANY($1)
         `,
@@ -334,7 +371,7 @@ async function fetchMessagesForStudentEmailsScoped(
         `
         SELECT id, message_id, student_email, sender_email, subject, received_at,
                replied, replied_at, body_text, body_html, in_reply_to, reference_ids,
-               handled_without_reply
+               handled_without_reply, ${EDUGATE_COLUMNS}
         FROM messages
         WHERE student_email = ANY($1) AND central_email = $2
         `,
@@ -409,6 +446,24 @@ export async function fetchThread(
         (r) => threadMessageIds.has(r.incoming_message_id) && r.student_email === target.student_email
     );
 
+    // For the outdated-password warning on registration emails: the latest
+    // Edugate email for this student that matches no known template.
+    const hasLogin = threadMessages.some((m) => m.edugate_kind === "login");
+    const unknownEdugate = hasLogin
+        ? await db.query<{ at: string | null }>(
+              `SELECT max(coalesce(sent_at, received_at)) AS at FROM messages
+               WHERE lower(student_email) = lower($1)
+                 AND sender_email IN ('confirm@edu.gov.kg', 'notify@edu.gov.kg')
+                 AND edugate_kind IS NULL`,
+              [target.student_email]
+          )
+        : null;
+    const latestUnknownEdugate = unknownEdugate?.rows[0]?.at ?? null;
+
+    function newerThan(m: MessageRow, other: string | null): string | null {
+        return other !== null && new Date(other).getTime() > sentTime(m) ? other : null;
+    }
+
     const items: ThreadItem[] = [
         ...threadMessages.map(
             (m): IncomingThreadItem => ({
@@ -424,6 +479,11 @@ export async function fetchThread(
                 body_text: m.body_text,
                 body_html: m.body_html,
                 handled_without_reply: m.handled_without_reply,
+                auto_closed: autoClosed(m),
+                newer_login_at:
+                    m.edugate_kind === "login" ? newerThan(m, m.student_registered_at) : null,
+                newer_edugate_at:
+                    m.edugate_kind === "login" ? newerThan(m, latestUnknownEdugate) : null,
             })
         ),
         ...threadReplies.map(
@@ -456,6 +516,46 @@ export interface ThreadSummary {
     message_count: number;
     pending_count: number;
     preview: string;
+    // The thread contains an Edugate registration email.
+    registered: boolean;
+    // Step 18 phase 2 - the one badge the (tab-less) list shows:
+    //   registered - an Edugate registration email (copy login + password)
+    //   rejected   - an Edugate document rejection
+    //   code       - a verification code still in play (code_at = its sent
+    //                time, so the list can show age / "expired")
+    //   used       - only codes superseded by a later registration: hidden
+    //                from the main list, shown dimmed when searching
+    //   new        - any other email nobody has answered yet
+    //   replied    - any other email that has been answered / closed
+    badge: "registered" | "rejected" | "code" | "used" | "new" | "replied";
+    code_at: string | null;
+}
+
+function threadBadge(
+    groupMessages: MessageRow[],
+    pendingCount: number
+): { badge: ThreadSummary["badge"]; code_at: string | null } {
+    const newestFirst = [...groupMessages].sort((a, b) => sentTime(b) - sentTime(a));
+
+    if (groupMessages.some((m) => m.edugate_kind === "login")) {
+        return { badge: "registered", code_at: null };
+    }
+
+    if (newestFirst[0]?.edugate_kind === "rejected") {
+        return { badge: "rejected", code_at: null };
+    }
+
+    const codes = newestFirst.filter((m) => m.edugate_kind === "code");
+
+    if (codes.length > 0) {
+        const live = codes.find((m) => !autoClosed(m));
+
+        return live
+            ? { badge: "code", code_at: live.sent_at ?? live.received_at }
+            : { badge: "used", code_at: null };
+    }
+
+    return { badge: pendingCount > 0 ? "new" : "replied", code_at: null };
 }
 
 const PREVIEW_LENGTH = 140;
@@ -478,7 +578,10 @@ export interface ThreadSummaryPage {
 }
 
 export async function fetchThreadSummaries(
-    status: "pending" | "replied",
+    // "all" = the tab-less list (Step 18 phase 2): every thread, newest
+    // first, except superseded codes ("used"), which only show up when
+    // searching for a student. "pending"/"replied" kept for compatibility.
+    status: "pending" | "replied" | "all",
     centralEmail: string,
     collegeId: string,
     limit = 25,
@@ -497,7 +600,7 @@ export async function fetchThreadSummaries(
     const threadGroups = groupIntoThreads(messages);
     const allReplies = await fetchAllReplies();
 
-    const summaries: (ThreadSummary & { sortAt: number })[] = threadGroups.map(
+    const summaries: (ThreadSummary & { sortAt: number; latestAt: number })[] = threadGroups.map(
         (groupMessages) => {
             const latest = groupMessages.reduce((a, b) =>
                 new Date(b.received_at) > new Date(a.received_at) ? b : a
@@ -525,10 +628,18 @@ export async function fetchThreadSummaries(
             // last reply/follow-up sent or Close button press - so a thread
             // closed just now surfaces above one closed earlier, regardless of
             // when its last email actually arrived.
+            // A thread closed only by the Edugate rule (autoClosed) has no
+            // reply/Close time - it sorts by when the student registered.
+            const autoClosedAt = Math.max(
+                -Infinity,
+                ...groupMessages
+                    .filter(autoClosed)
+                    .map((m) => new Date(m.student_registered_at!).getTime())
+            );
             const sortAt =
                 pendingCount > 0
                     ? new Date(latest.received_at).getTime()
-                    : resolvedAt;
+                    : Math.max(resolvedAt, autoClosedAt);
 
             return {
                 threadId: representative.id,
@@ -539,22 +650,29 @@ export async function fetchThreadSummaries(
                 message_count: groupMessages.length,
                 pending_count: pendingCount,
                 preview: makePreview(representative.body_text, representative.body_html),
+                registered: groupMessages.some((m) => m.edugate_kind === "login"),
+                ...threadBadge(groupMessages, pendingCount),
+                latestAt: new Date(latest.received_at).getTime(),
                 sortAt,
             };
         }
     );
 
     const filtered = summaries.filter((s) =>
-        status === "pending" ? s.pending_count > 0 : s.pending_count === 0
+        status === "all"
+            ? Boolean(trimmedSearch) || s.badge !== "used"
+            : status === "pending"
+              ? s.pending_count > 0
+              : s.pending_count === 0
     );
 
-    // Thread list is always newest-first, regardless of status filter - see
-    // sortAt above for what "newest" means per tab.
-    filtered.sort((a, b) => b.sortAt - a.sortAt);
+    // Newest first. The tab-less list simply uses each thread's newest
+    // email; the old tabs keep their sortAt meaning (see above).
+    filtered.sort((a, b) => (status === "all" ? b.latestAt - a.latestAt : b.sortAt - a.sortAt));
 
     const page = filtered
         .slice(offset, offset + limit)
-        .map(({ sortAt, ...summary }) => summary);
+        .map(({ sortAt, latestAt, ...summary }) => summary);
 
     return {
         threads: page,

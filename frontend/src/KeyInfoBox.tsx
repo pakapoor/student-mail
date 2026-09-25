@@ -53,6 +53,13 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
     const ageMinutes = Math.max(0, Math.floor((now - receivedAt.getTime()) / 60000));
     const receivedTime = receivedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     const expired = info.kind === "code" && ageMinutes >= info.validMinutes;
+    // Registration email that may be outdated (Step 18 phase 2): a newer
+    // registration exists, or a newer Edugate email we don't recognise yet
+    // (e.g. a password reset).
+    const newerLogin = info.kind === "login" ? info.item.newer_login_at : null;
+    const newerEdugate = info.kind === "login" && !newerLogin ? info.item.newer_edugate_at : null;
+    const dateTime = (iso: string) =>
+        new Date(iso).toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
     // Rejected document: red, as a warning - someone has to act on it.
     if (info.kind === "rejected") {
@@ -83,7 +90,7 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
     }
 
     return (
-        <div className={expired ? "key-info expired" : "key-info"}>
+        <div className={expired || newerLogin ? "key-info expired" : "key-info"}>
             <p className="key-info-source">From the Edugate email received {receivedTime}</p>
 
             {info.kind === "code" ? (
@@ -115,6 +122,16 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                         <span className="key-info-value">{info.password}</span>
                         <CopyButton value={info.password} />
                     </div>
+                    {newerLogin && (
+                        <p className="key-info-warning">
+                            ⚠ A newer login was sent on {dateTime(newerLogin)}. Use that one.
+                        </p>
+                    )}
+                    {newerEdugate && (
+                        <p className="key-info-warning">
+                            ⚠ A newer Edugate email arrived on {dateTime(newerEdugate)}. Check it before using this password.
+                        </p>
+                    )}
                 </>
             )}
         </div>

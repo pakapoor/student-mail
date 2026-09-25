@@ -1420,7 +1420,7 @@ needs real DB auth/secrets.
 5. Log in with a real central mailbox's IMAP credentials (this creates its
    `central_mailboxes` row and starts its IMAP watcher automatically).
 
-## Step 18 — Edugate registration status (phase 1 of 2)
+## Step 18 — Edugate registration status (phases 1 and 2)
 
 Goal (user, 2026-09-25): know per student where they are in Edugate - no
 code yet / code sent / registered - and later (phase 2) stop registered
@@ -1485,14 +1485,39 @@ Verified before deploy:
 Deploy order: backup → `git pull` → apply `010_registration_status.sql`
 → backfill dry run → `--apply` → restart backend → rebuild frontend.
 
-Phase 2 (not built, agreed design): green REGISTERED badge instead of
-"N pending" on the registration thread, which **stays in Pending** until
-staff close it (they copy the login from it); a code email whose student
-has a registration email **sent later** counts as Closed automatically
-(computed, no data overwritten; a code sent after the latest registration
-stays pending); amber warnings on an outdated registration box ("A newer
-login was sent on …" / "A newer Edugate email arrived on … Check it
-before using this password.").
+Phase 2 (built after the user confirmed phase 1's statuses in Manage
+students):
+- **No more Pending/Closed tabs** (user chose option B). Production data
+  showed why: 703 emails, 617 (88%) automated Edugate mail nobody replies
+  to; in a week staff sent 24 replies and pressed Close 49 times. The
+  console is now **one list, newest first**, each thread with one badge:
+  green **REGISTERED** (registration email - copy login + password), red
+  **REJECTED**, blue **CODE · N min** (amber **CODE · expired** after 30
+  min), and for other mail **NEW** (unanswered) / **Replied**. The
+  "Pending (N)" count is gone. `GET /api/threads?status=all`
+  (`thread.ts` `threadBadge`); `pending`/`replied` still work.
+- **Superseded codes** (`autoClosed` in `thread.ts`): a verification code
+  whose student has a registration email **sent after it** (sent times,
+  not arrival - Migadu delays) no longer counts as needing attention.
+  Computed at read time - no message's replied/handled data is changed. A
+  code sent after the latest registration stays live. Such threads get a
+  grey **USED** badge and are **hidden from the main list but shown
+  dimmed when searching** that student (user agreed: an email that can
+  never be found looks like a bug; ~290 dead codes would swamp the list).
+- **Close button removed** from the thread view (Reply stays for the rare
+  non-Edugate email). The reply panel ignores superseded codes.
+- **Outdated registration box** (amber): "⚠ A newer login was sent on …
+  Use that one." (a later registration email exists, values struck
+  through), or "⚠ A newer Edugate email arrived on … Check it before
+  using this password." (a later Edugate email we don't recognise, e.g. a
+  password reset). From `newer_login_at` / `newer_edugate_at` on thread
+  items.
+- Verified read-only against production (via SSH tunnel) before deploy:
+  KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
+  Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91
+  hidden; IHSM ELITE 11 / 5. umme.mandal: registration thread REGISTERED,
+  code thread `auto_closed` → USED, hidden without search and shown when
+  searching. Frontend + backend type-check, build clean.
 
 ## Migadu delay logging (done, part of Step 17)
 

@@ -17,9 +17,15 @@ export interface ThreadSummary {
     message_count: number;
     pending_count: number;
     preview: string;
+    registered: boolean;
+    // The one badge the list shows (backend thread.ts threadBadge).
+    badge: "registered" | "rejected" | "code" | "used" | "new" | "replied";
+    code_at: string | null;
 }
 
-export type StatusFilter = "pending" | "replied";
+// "all" = the tab-less list (Step 18 phase 2); the others are kept for
+// compatibility.
+export type StatusFilter = "pending" | "replied" | "all";
 
 export interface IncomingThreadItem {
     type: "incoming";
@@ -34,6 +40,13 @@ export interface IncomingThreadItem {
     body_text: string | null;
     body_html: string | null;
     handled_without_reply: boolean;
+    // Step 18 phase 2 (backend thread.ts): a verification code superseded by
+    // a later registration; and, on registration emails only, the time of a
+    // newer registration / newer unrecognised Edugate email (the password
+    // here may be outdated).
+    auto_closed: boolean;
+    newer_login_at: string | null;
+    newer_edugate_at: string | null;
 }
 
 export interface OutgoingThreadItem {

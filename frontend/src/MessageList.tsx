@@ -1,5 +1,37 @@
 import type { ThreadSummary } from "./types";
 
+// Edugate codes are valid for 30 minutes (stated in every code email; the
+// box above an opened thread reads the exact value from the email itself).
+const CODE_VALID_MINUTES = 30;
+
+// Step 18 phase 2: the one badge each thread shows (no more Pending/Closed
+// tabs). Always English, short, one meaning per colour.
+function Badge({ thread }: { thread: ThreadSummary }) {
+    switch (thread.badge) {
+        case "registered":
+            return <span className="badge registered">REGISTERED</span>;
+        case "rejected":
+            return <span className="badge rejected">REJECTED</span>;
+        case "used":
+            return <span className="badge used">USED</span>;
+        case "code": {
+            const minutes = thread.code_at
+                ? Math.max(0, Math.floor((Date.now() - new Date(thread.code_at).getTime()) / 60000))
+                : 0;
+            const expired = minutes >= CODE_VALID_MINUTES;
+            return (
+                <span className={expired ? "badge code expired" : "badge code"}>
+                    {expired ? "CODE · expired" : `CODE · ${minutes < 1 ? "now" : `${minutes} min`}`}
+                </span>
+            );
+        }
+        case "new":
+            return <span className="badge pending">NEW</span>;
+        default:
+            return <span className="badge replied">Replied</span>;
+    }
+}
+
 interface Props {
     threads: ThreadSummary[];
     selectedId: number | null;
@@ -8,7 +40,7 @@ interface Props {
 
 export default function MessageList({ threads, selectedId, onSelect }: Props) {
     if (threads.length === 0) {
-        return <p className="empty-state">No messages in this view.</p>;
+        return <p className="empty-state">No messages.</p>;
     }
 
     return (
@@ -17,23 +49,20 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
                 <li
                     key={thread.threadId}
                     className={
-                        thread.threadId === selectedId
-                            ? "message-row selected"
-                            : "message-row"
+                        [
+                            "message-row",
+                            thread.threadId === selectedId ? "selected" : "",
+                            // Superseded codes only appear when searching.
+                            thread.badge === "used" ? "used" : "",
+                        ]
+                            .filter(Boolean)
+                            .join(" ")
                     }
                     onClick={() => onSelect(thread.threadId)}
                 >
                     <div className="message-row-top">
                         <span className="student">{thread.student_email}</span>
-                        <span
-                            className={
-                                thread.pending_count > 0 ? "badge pending" : "badge replied"
-                            }
-                        >
-                            {thread.pending_count > 0
-                                ? `${thread.pending_count} pending`
-                                : "Closed"}
-                        </span>
+                        <Badge thread={thread} />
                     </div>
                     <div className="subject">{thread.subject || "(no subject)"}</div>
                     {thread.preview && <div className="message-preview">{thread.preview}</div>}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingThreadItem, ThreadItem } from "./types";
-import { markHandled, sendFollowUp, sendReply } from "./api";
+import { sendFollowUp, sendReply } from "./api";
 import { linkifyPlainText, sanitizeHtml } from "./linkify";
 import { findKeyInfo } from "./keyInfo";
 import KeyInfoBox from "./KeyInfoBox";
@@ -15,7 +15,6 @@ export default function ThreadView({ items, onReplySent }: Props) {
     const [hasContent, setHasContent] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
     const [sending, setSending] = useState(false);
-    const [closing, setClosing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [justSent, setJustSent] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,9 +41,13 @@ export default function ThreadView({ items, onReplySent }: Props) {
             }
         }
 
+        // A verification code superseded by a later registration
+        // (auto_closed) never needs a reply - same rule as the backend.
         const pending = items.filter(
             (item): item is IncomingThreadItem =>
-                item.type === "incoming" && new Date(item.at).getTime() > resolvedAt
+                item.type === "incoming" &&
+                !item.auto_closed &&
+                new Date(item.at).getTime() > resolvedAt
         );
 
         if (pending.length === 0) {
@@ -142,25 +145,6 @@ export default function ThreadView({ items, onReplySent }: Props) {
             setError(err instanceof Error ? err.message : "Failed to send message");
         } finally {
             setSending(false);
-        }
-    }
-
-    async function handleClose() {
-        if (!replyTarget) {
-            return;
-        }
-
-        setError(null);
-        setClosing(true);
-
-        try {
-            await markHandled(replyTarget.id);
-            setJustSent(true);
-            onReplySent();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to close");
-        } finally {
-            setClosing(false);
         }
     }
 
@@ -319,22 +303,11 @@ export default function ThreadView({ items, onReplySent }: Props) {
                         <button
                             className="send-button"
                             onClick={handleSend}
-                            disabled={sending || closing || !hasContent}
+                            disabled={sending || !hasContent}
                         >
                             {sending && <span className="spinner" />}
                             {sending ? "Sending" : replyTarget ? "Send reply" : "Send message"}
                         </button>
-
-                        {replyTarget && (
-                            <button
-                                className="secondary-button"
-                                onClick={handleClose}
-                                disabled={sending || closing}
-                            >
-                                {closing && <span className="spinner spinner-dark" />}
-                                {closing ? "Closing..." : "Close"}
-                            </button>
-                        )}
                     </div>
                 </div>
             ) : (

@@ -1180,3 +1180,34 @@
     color: var(--text);
     cursor: pointer;
 }
+
+/* Step 18 phase 2: thread badges (MessageList.tsx) - one meaning per colour. */
+.badge.registered {
+    background: #16793a;
+    color: #ffffff;
+}
+
+.badge.rejected {
+    background: #d64545;
+    color: #ffffff;
+}
+
+.badge.code {
+    background: #e3ecfd;
+    color: #2c56b8;
+}
+
+.badge.code.expired {
+    background: #fff4d6;
+    color: #92650a;
+}
+
+.badge.used {
+    background: #eceef2;
+    color: #6b7280;
+}
+
+/* Superseded code emails (only shown when searching): dimmed. */
+.message-row.used {
+    opacity: 0.55;
+}
