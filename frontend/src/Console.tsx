@@ -289,10 +289,11 @@ function Console({ college, onLoggedOut }: Props) {
                     {collegeLogo(college.name) && (
                         <img className="header-logo header-college-logo" src={collegeLogo(college.name)} alt="" />
                     )}
-                    <div>
-                        <h1>Student Mail Console</h1>
-                        <p className="console-college">{college.name}</p>
-                    </div>
+                </div>
+                {/* Centred across the whole window, whatever the logo widths. */}
+                <div className="header-title">
+                    <h1>Student Mail Console</h1>
+                    <p className="console-college">{college.name}</p>
                 </div>
                 <div className="session-bar">
                     <button

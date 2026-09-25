@@ -1432,3 +1432,53 @@
 .key-info-open:hover {
     background: var(--accent-dark);
 }
+
+/* Console header (Step 18, user): bigger logos on the left, title centred
+   across the full width, buttons on the right. Three equal outer columns
+   keep the title truly centred regardless of logo widths. */
+.app .app-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.app .app-header .header-brand {
+    justify-self: start;
+    gap: 20px;
+}
+
+.app .app-header .header-logo {
+    height: 64px;
+}
+
+.app .app-header .header-title {
+    text-align: center;
+}
+
+.app .app-header .header-title h1 {
+    font-size: 26px;
+}
+
+.app .app-header .console-college {
+    margin-top: 4px;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+}
+
+.app .app-header .session-bar {
+    justify-self: end;
+}
+
+/* Narrow windows: title under the logos instead of squeezing between. */
+@media (max-width: 1000px) {
+    .app .app-header {
+        grid-template-columns: 1fr auto;
+    }
+
+    .app .app-header .header-title {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+}
