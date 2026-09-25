@@ -1022,6 +1022,26 @@ day):**
     `keyInfo.ts` itself was then run against all production messages:
     292 code + 287 login boxes, 93/93 other-sender emails no box, a
     two-code thread picks the newest, a 5-digit code is rejected.
+  - Added later: **Edugate document rejections** (`notify@edu.gov.kg`,
+    subject "Абитуриент Колледж"). A read-only scan of production found
+    38 such emails (22–25 Sep), all "❌ Document rejected", identical
+    layout (Russian half, dashed separator, English half), every
+    reviewer note present in English. The box uses only the English half
+    and is **red** (a warning - someone has to act): "❌ Document
+    rejected", received time, Document (wrapped lines joined), the
+    reviewer's note in bold, Reviewed date. The note is kept whole and
+    labelled **"Action needed"** if it contains a "Please …" / "Upload …"
+    sentence, otherwise **"Reason"** (user chose this over splitting
+    sentences - no guessing). Notes with no letters (4 reviewers typed
+    just "1") → the note line is left out, no placeholder text (user:
+    don't write "no reason given"). Edugate's WhatsApp sentence (always
+    +996 755 979 827, only in 25 Sep emails) is removed from the note
+    wherever it appears - the user chose to leave it out of the box; it
+    stays in the email. Verified with the real `keyInfo.ts` on every
+    production email: 38/38 rejection boxes (28 "Action needed", 6 "Reason",
+    4 with the note hidden), no WhatsApp or Cyrillic in
+    any box, code 292 / login 287 unchanged, 86 other-sender emails no
+    box.
 
   Follow-up - new-mail chime (`frontend/src/chime.ts`): a soft two-note
   Web Audio chime when new incoming mail arrives for the college the

@@ -54,6 +54,34 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
     const receivedTime = receivedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     const expired = info.kind === "code" && ageMinutes >= info.validMinutes;
 
+    // Rejected document: red, as a warning - someone has to act on it.
+    if (info.kind === "rejected") {
+        return (
+            <div className="key-info rejected">
+                <div className="key-info-heading">
+                    <span>❌ Document rejected</span>
+                    <span className="key-info-source">received {receivedTime}</span>
+                </div>
+                <div className="key-info-row wide">
+                    <span className="key-info-label">Document</span>
+                    <span className="key-info-text">{info.document}</span>
+                </div>
+                {info.note && (
+                    <div className="key-info-row wide">
+                        <span className="key-info-label">
+                            {info.noteKind === "action" ? "Action needed" : "Reason"}
+                        </span>
+                        <span className="key-info-text strong">{info.note}</span>
+                    </div>
+                )}
+                <div className="key-info-row wide">
+                    <span className="key-info-label">Reviewed</span>
+                    <span className="key-info-text">{info.reviewedAt}</span>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={expired ? "key-info expired" : "key-info"}>
             <p className="key-info-source">From the Edugate email received {receivedTime}</p>

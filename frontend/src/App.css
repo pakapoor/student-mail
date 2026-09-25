@@ -1103,3 +1103,34 @@
     font-size: 12px;
     font-weight: 600;
 }
+
+/* Rejected-document variant: red, as a warning (KeyInfoBox.tsx). */
+.key-info.rejected {
+    border: 2px solid #d64545;
+    background: #fdeeee;
+}
+
+.key-info-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-weight: 700;
+    color: #b42318;
+}
+
+.key-info-row.wide {
+    grid-template-columns: 104px minmax(0, 1fr);
+    align-items: start;
+}
+
+.key-info-text {
+    font-size: 14px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.key-info-text.strong {
+    font-weight: 700;
+}
