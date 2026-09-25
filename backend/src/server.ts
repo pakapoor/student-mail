@@ -17,6 +17,7 @@ import {
 import { THREAD_FILTERS, fetchThread, fetchThreadSummaries, findSearchMatches } from "./thread.js";
 import { checkStudentMailbox } from "./checkStudentMail.js";
 import { startSweep } from "./sweep.js";
+import { startHotList } from "./hotList.js";
 import { htmlToPlainText, sanitizeReplyHtml } from "./sanitizeReplyHtml.js";
 import { ensureWatcher, triggerSync } from "./mailboxSync.js";
 import { addClient, broadcast, removeClient } from "./realtime.js";
@@ -595,6 +596,9 @@ const fallbackSyncIntervalMs = Number(
 app.listen(port, "0.0.0.0", async () => {
     // Rolling daily sweep of every student's own mailbox (sweep.ts).
     startSweep();
+    // Hot list: watch a student's mailbox while staff wait for the
+    // registration email after a code (hotList.ts).
+    startHotList();
     console.log(`API listening on http://127.0.0.1:${port}`);
 
     const mailboxes = await listCentralMailboxes();

@@ -1684,6 +1684,38 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 20 — Hot list: watch the mailbox while staff wait for registration (done)
+
+User: "whenever code mail comes … check for that email on priority directly
+… till either registered mail comes or code expires … because we know
+Migadu is not reliable." The person waiting is the staff member who just
+typed the code into Edugate and waits for the registration email (login +
+password), which normally lands 20-60 s after the code.
+
+`backend/src/hotList.ts`, started with the server. No table: "hot" comes
+from the Step 18 columns - `code_sent_at` within `HOT_WINDOW_MIN` (35 =
+30 min validity + 5 grace) AND no registration email sent after that code
+(`registered_at` NULL or older). So a registration email or expiry drops
+the student and a new code (even after registration) makes them hot again.
+A 10-s loop checks each hot student's own mailbox (same read-only check as
+search/sweep, `source "hot"`, force) every **30 s for the first 5 min**,
+then **every 2 min** (user agreed), max 5 in parallel; recovered emails
+broadcast `new-mail` → chime, status flips to REGISTERED. Quiet logs
+(`[hot] RECOVERED` / `FAILED`, hourly summary). Config: `HOT_ENABLED`,
+`HOT_FAST_INTERVAL_S`, `HOT_FAST_MINUTES`, `HOT_INTERVAL_S`,
+`HOT_WINDOW_MIN`. UI: "⏳ Waiting for registration email…" under a live code
+row in the list and "⏳ Watching the mailbox for the registration email…"
+in the code box, while the code is valid. Load: ~70 codes/day, most
+register within a minute → a few hundred logins/day.
+
+Tested on the dev DB: fresh code → hot; registration after it → not hot;
+new code after registration → hot; 40-min-old code → not hot; an email
+removed from the console was recovered from Shakil's real Migadu mailbox
+on the first check (~10 s).
+
+This is the simpler, built form of the Step 17b proposal below (no
+state machine or table, driven by the status columns).
+
 ## Step 17 A — Rolling daily sweep (done)
 
 `backend/src/sweep.ts`, started with the server. Every student's own

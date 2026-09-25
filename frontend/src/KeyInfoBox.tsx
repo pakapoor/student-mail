@@ -157,9 +157,16 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                             </div>
                         </>
                     ) : (
-                        <p className="key-info-age">
-                            Received {ageText(ageMinutes)} · Edugate codes are valid for {info.validMinutes} minutes
-                        </p>
+                        <>
+                            <p className="key-info-age">
+                                Received {ageText(ageMinutes)} · Edugate codes are valid for {info.validMinutes} minutes
+                            </p>
+                            {/* Backend hot list checks the mailbox every 30 s,
+                                then every 2 min, until the registration arrives. */}
+                            <p className="waiting-registration">
+                                ⏳ Watching the mailbox for the registration email…
+                            </p>
+                        </>
                     )}
                 </>
             ) : (

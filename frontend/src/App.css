@@ -1782,3 +1782,11 @@ select,
     color: var(--text-muted);
     font-size: 13px;
 }
+
+/* Hot list note (Step 20): the console is watching this student's mailbox
+   for the registration email. */
+.waiting-registration {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: var(--accent);
+}

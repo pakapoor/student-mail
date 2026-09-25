@@ -39,7 +39,7 @@ export type CheckOutcome =
 // Who asked for the check - only changes the log prefix and how chatty it
 // is. The console search logs every check; the rolling daily sweep (sweep.ts)
 // checks ~2300 mailboxes a day, so it only logs finds and failures.
-export type CheckSource = "check-mail" | "sweep";
+export type CheckSource = "check-mail" | "sweep" | "hot";
 
 const lastResults = new Map<string, { checked: number; added: number; checkedAt: number }>();
 // Two operators (or a double click) checking the same student at once share

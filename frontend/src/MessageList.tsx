@@ -112,6 +112,16 @@ export default function MessageList({ threads, selectedId, onSelect, emptyText }
                     {/* Edugate emails always open with the same boilerplate,
                         so their preview adds nothing; other emails (a
                         student's question) keep one line of it. */}
+                    {/* The hot list (backend hotList.ts) is watching this
+                        student's mailbox while staff wait for the
+                        registration email. Shown while the code is valid (the
+                        backend keeps checking 5 min longer, quietly). */}
+                    {thread.badge === "code" &&
+                        thread.code_at &&
+                        now - new Date(thread.code_at).getTime() <
+                            (thread.code_valid_minutes ?? CODE_VALID_MINUTES) * 60000 && (
+                            <div className="waiting-registration">⏳ Waiting for registration email…</div>
+                        )}
                     {thread.preview && !EDUGATE_BADGES.has(thread.badge) && (
                         <div className="message-preview">{thread.preview}</div>
                     )}
