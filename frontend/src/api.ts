@@ -167,11 +167,26 @@ export async function fetchThread(id: number): Promise<ThreadItem[]> {
     return res.json();
 }
 
-export function subscribeToUpdates(onUpdate: () => void): () => void {
+// What the server says changed. reason "new-mail" carries the colleges the
+// new mail is for (used for the chime); other reasons are staff actions.
+export interface UpdateEvent {
+    reason?: string;
+    collegeIds?: string[];
+}
+
+export function subscribeToUpdates(onUpdate: (event: UpdateEvent) => void): () => void {
     const source = new EventSource(`${API_BASE}/api/events`, {
         withCredentials: true,
     });
-    source.addEventListener("update", () => onUpdate());
+    source.addEventListener("update", (e) => {
+        let data: UpdateEvent = {};
+        try {
+            data = JSON.parse((e as MessageEvent).data);
+        } catch {
+            // Refresh anyway, just without the extra detail.
+        }
+        onUpdate(data);
+    });
     return () => source.close();
 }
 

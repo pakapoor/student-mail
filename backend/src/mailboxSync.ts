@@ -1,6 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { syncInbox } from "./sync.js";
 import { broadcast } from "./realtime.js";
+import { db } from "./db.js";
 
 const runningSync = new Set<string>();
 // Set when a trigger arrives while a sync is already in flight for that
@@ -37,6 +38,25 @@ function withWatchdog<T>(promise: Promise<T>, email: string): Promise<T> {
     });
 }
 
+// Colleges the newly synced mail belongs to - each console only chimes for
+// its own college. A lookup failure just means no chime, never a failed sync.
+async function collegeIdsForStudents(emails: string[]): Promise<string[]> {
+    if (emails.length === 0) {
+        return [];
+    }
+
+    try {
+        const result = await db.query<{ college_id: string }>(
+            "SELECT DISTINCT college_id FROM students WHERE email = ANY($1) AND college_id IS NOT NULL",
+            [emails]
+        );
+        return result.rows.map((row) => String(row.college_id));
+    } catch (error) {
+        console.error("collegeIdsForStudents failed:", error);
+        return [];
+    }
+}
+
 export async function triggerSync(
     email: string,
     password: string
@@ -51,13 +71,14 @@ export async function triggerSync(
     const start = Date.now();
 
     try {
-        const { inserted } = await withWatchdog(syncInbox(email, password), email);
+        const { inserted, insertedStudentEmails } = await withWatchdog(syncInbox(email, password), email);
         const durationMs = Date.now() - start;
 
         if (inserted > 0) {
             console.log(`Sync [${email}]: ${inserted} new message(s) inserted (took ${durationMs}ms)`);
+            const collegeIds = await collegeIdsForStudents(insertedStudentEmails);
             const broadcastAt = Date.now();
-            broadcast("update", { reason: "new-mail", inserted }, email);
+            broadcast("update", { reason: "new-mail", inserted, collegeIds }, email);
             console.log(`[TIMING] broadcast sent [${email}] at ${new Date(broadcastAt).toISOString()}`);
         } else {
             console.log(`[TIMING] Sync [${email}]: no new messages (took ${durationMs}ms)`);

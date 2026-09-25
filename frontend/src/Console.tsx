@@ -10,6 +10,7 @@ import {
     type MailCheckStudent,
 } from "./api";
 import MessageList from "./MessageList";
+import { playChime } from "./chime";
 import { saveSearchForReload, takeSearchSavedForReload, useNewVersionAvailable } from "./versionCheck";
 import ThreadView from "./ThreadView";
 import ManageStudents from "./ManageStudents";
@@ -253,7 +254,14 @@ function Console({ college, onLoggedOut }: Props) {
     }, [debouncedSearch]);
 
     useEffect(() => {
-        return subscribeToUpdates(() => {
+        return subscribeToUpdates((event) => {
+            // New incoming mail for this console's college → chime. Staff
+            // actions (replies, closes) and mailbox-check recoveries stay
+            // silent.
+            if (event.reason === "new-mail" && event.collegeIds?.includes(String(college.id))) {
+                playChime();
+            }
+
             // A new-mail sync or any operator's reply/close action changes
             // the pending set - reload from the top so everyone's view
             // (list + open thread + pending count) stays consistent with
@@ -265,7 +273,7 @@ function Console({ college, onLoggedOut }: Props) {
                 loadThread(selectedIdRef.current);
             }
         });
-    }, [loadMessages, loadPendingCount, loadThread]);
+    }, [loadMessages, loadPendingCount, loadThread, college.id]);
 
     function handleReplySent() {
         loadMessages(status, debouncedSearch);

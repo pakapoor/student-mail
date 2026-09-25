@@ -60,6 +60,9 @@ export async function insertMessageForStudent(
 
 export interface SyncResult {
     inserted: number;
+    // Which students got new mail this pass - lets the live update tell
+    // each console whether the mail is for its college (new-mail chime).
+    insertedStudentEmails: string[];
     skipped: number;
 }
 
@@ -89,6 +92,7 @@ export async function syncInbox(
     const lock = await client.getMailboxLock("INBOX", { acquireTimeout: 30000 });
 
     let inserted = 0;
+    const insertedStudents = new Set<string>();
     let skipped = 0;
 
     try {
@@ -104,7 +108,7 @@ export async function syncInbox(
         const mailbox = client.mailbox;
 
         if (!mailbox || typeof mailbox !== "object") {
-            return { inserted, skipped };
+            return { inserted, skipped, insertedStudentEmails: [...insertedStudents] };
         }
 
         const currentUidValidity = mailbox.uidValidity;
@@ -115,7 +119,7 @@ export async function syncInbox(
                 `UPDATE central_mailboxes SET last_uid = 0, uid_validity = $2 WHERE email = $1`,
                 [centralEmail, currentUidValidity.toString()]
             );
-            return { inserted, skipped };
+            return { inserted, skipped, insertedStudentEmails: [...insertedStudents] };
         }
 
         const stateResult = await db.query<MailboxState>(
@@ -224,6 +228,7 @@ export async function syncInbox(
 
                 if (wasInserted) {
                     inserted++;
+                    insertedStudents.add(studentEmail);
                     const insertedAt = Date.now();
                     const arrivedDate = message.internalDate ? new Date(message.internalDate) : null;
                     const arrivalToInsertMs = arrivedDate ? insertedAt - arrivedDate.getTime() : null;
@@ -256,5 +261,5 @@ export async function syncInbox(
 
     console.log(`[TIMING] syncInbox [${centralEmail}] total duration: ${Date.now() - syncStart}ms (inserted=${inserted}, skipped=${skipped})`);
 
-    return { inserted, skipped };
+    return { inserted, skipped, insertedStudentEmails: [...insertedStudents] };
 }

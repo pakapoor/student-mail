@@ -1023,6 +1023,21 @@ day):**
     292 code + 287 login boxes, 93/93 other-sender emails no box, a
     two-code thread picks the newest, a 5-digit code is rejected.
 
+  Follow-up - new-mail chime (`frontend/src/chime.ts`): a soft two-note
+  Web Audio chime when new incoming mail arrives for the college the
+  console is showing. The user chose chime only (no desktop
+  notifications - those need a browser permission click, and staff "are
+  not using" even the Close button) and no on/off setting. Backend:
+  `syncInbox` now returns `insertedStudentEmails`; `mailboxSync.ts` looks
+  up their `college_id`s and adds `collegeIds` to the `new-mail` SSE
+  event (lookup failure → no chime, never a failed sync). Frontend:
+  `subscribeToUpdates` passes the event data; `Console.tsx` chimes only
+  for `reason === "new-mail"` including its college - replies, closes and
+  mailbox-check recoveries stay silent. One chime per burst, at most every
+  10 s. Browser rule: sound only after the first click/keypress on the
+  page since it loaded (so silent right after an automatic reload until
+  the operator clicks anything).
+
 ### Approved test roster (passwords intentionally omitted)
 
 Final import needs the Password column from Step 8, supplied privately.
@@ -1248,6 +1263,7 @@ needs real DB auth/secrets.
 - `keyInfo.ts` / `KeyInfoBox.tsx` - exact per-sender templates (Edugate)
   that pull a code or login credentials out of an opened thread, and the
   box that shows them above it
+- `chime.ts` - new-mail chime (Web Audio, one per burst, own college only)
 - `versionCheck.ts` - detects a newer deployed build (1 min + on focus);
   `Console.tsx` reloads onto it when no email is open
 
