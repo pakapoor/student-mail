@@ -1519,7 +1519,8 @@ students):
   window (user): `--list-width: clamp(380px, 38vw, 720px)`, shared by the
   search box.
 - Console header (user): ISM Edutech and college logos 32 → 64 px on the
-  left with more spacing, "Student Mail Console" + college name centred
+  left, 48 px apart with a thin divider line centred between them (user:
+  "still too close"), "Student Mail Console" + college name centred
   across the full width (3-column grid `1fr auto 1fr`), buttons on the
   right; under 1000 px the title drops below the logos.
 - Compact rows (user's idea, option a): subject · sender and a short
