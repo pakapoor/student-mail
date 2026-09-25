@@ -1986,3 +1986,20 @@ select,
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
 }
+
+/* Login + college picker (Step 18, user): ISM logo bigger and centred at
+   the top of the card, title and subtitle centred under it; same typeface
+   as the rest of the site. */
+.login-page {
+    font-family: var(--font);
+}
+
+.login-card .brand-logo {
+    height: 88px;
+    margin: 4px auto 20px;
+}
+
+.login-card h1,
+.login-card .login-subtitle {
+    text-align: center;
+}

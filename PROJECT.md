@@ -1523,6 +1523,9 @@ students):
   "still too close"), "Student Mail Console" + college name centred
   across the full width (3-column grid `1fr auto 1fr`), buttons on the
   right; under 1000 px the title drops below the logos.
+- Login and college picker (user): ISM logo 40 → 88 px, centred at the top
+  of the card, with the title and subtitle centred under it; login page
+  uses the site typeface.
 - **Visual refresh, part 1** (mockup approved, user: "all good go
   ahead"): English everywhere - recognised Edugate threads are titled
   "Verification code" / "Registration: login details" / "Document
