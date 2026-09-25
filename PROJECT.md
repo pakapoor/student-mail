@@ -905,13 +905,21 @@ day):**
   approved):
   - No background sweep of student mailboxes - with ~2300 students that is
     far too many Migadu logins. The check is on demand only.
-  - Trigger: the existing Step 15 search box. When the search narrows to
-    exactly one student (~1.5 s after typing stops), that student's INBOX
-    is checked automatically. Several matches → nothing happens.
+  - Trigger: the existing Step 15 search box. When the search matches at
+    most 3 students (~1.5 s after typing stops), each of their INBOXes is
+    checked automatically, in parallel. 4+ matches → no check, just a grey
+    hint "To check a student's mailbox, type their email." (Originally
+    "exactly one student"; changed after the first AWS test - "shakil"
+    also matched AREEBA SHAKIL SHAIKH, who has no messages, so the list
+    looked like one student but nothing ran. Staff are told to search by
+    email: full names repeat in the roster, e.g. two AFNAN SHAKILAHMED
+    KHATUDA with different emails.)
   - UI: one status line under the search box - "Checking <name>'s
-    mailbox…", then a green "Mailbox checked just now: N missing emails
-    added" / "nothing missing…" with a **Check again** button. No other UI
-    change. Staff only.
+    mailbox…" (or "Checking N mailboxes…"), then a green "Mailbox(es)
+    checked just now: N missing emails added" / "nothing missing…" with a
+    **Check again** button that re-checks all of them. No other UI change.
+    Staff only. If some of the students' checks fail they're left out of
+    the total; if all fail the line disappears.
   - Failures show NOTHING in the UI (the status line just disappears) -
     operators are clerk-level and can't act on errors. They are logged
     instead: `[check-mail] FAILED student=… id=… operator=… reason=auth|
@@ -936,9 +944,11 @@ day):**
   - New `checkStudentMail.ts`: fetches envelope Message-IDs first, compares
     with the DB, downloads full source only for missing ones; the mailbox
     owner is the student, so no To-header matching.
-  - `thread.ts`: `findSingleSearchMatch()` - same search predicate/index as
-    the console search, `LIMIT 2`.
-  - `server.ts`: `GET /api/check-mail/match?search=` and
+  - `thread.ts`: `findSearchMatches(search, collegeId, max)` - same search
+    predicate/index as the console search, `LIMIT max+1`, returns
+    `{students, tooMany}`.
+  - `server.ts`: `GET /api/check-mail/match?search=` (→ `{students,
+    tooMany}`, max 3, only the operator's own students) and
     `POST /api/check-mail/:studentId` (`{force}`), both behind
     requireAuth + requireCollege, restricted to non-deleted students of the
     session's college whose `central_email` is the operator's (recovered
@@ -946,7 +956,7 @@ day):**
     when something was added.
   - Uses `IMAP_HOST` (Migadu in prod) and the student's `smtp_password`.
 
-  Frontend: `api.ts` (`fetchMailCheckMatch`, `checkStudentMail`),
+  Frontend: `api.ts` (`fetchMailCheckMatches`, `checkStudentMail`),
   `Console.tsx` (status line, stale-result guard per search), `App.css`
   (`.mail-check*`).
 
@@ -963,6 +973,10 @@ day):**
   are on Migadu, one `IMAP_HOST`), so per the user it is tested on AWS
   after deploy (prod DB backed up first to
   `~/backups/pre-step16-20260925T184313Z.dump`); rollback = `git revert`.
+  First AWS test: searching `shakil.shahriyar` worked end to end; plain
+  `shakil` did nothing (2 matches, see Trigger) → up-to-3 change. Up-to-3
+  matching verified against the dev DB: "shakil" → 1, "gupta" → 3,
+  "pilot" → tooMany (6), no match → none.
 
 ### Approved test roster (passwords intentionally omitted)
 

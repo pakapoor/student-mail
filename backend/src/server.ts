@@ -14,7 +14,7 @@ import {
     sendFollowUp,
     sendReply,
 } from "./reply.js";
-import { fetchThread, fetchThreadSummaries, findSingleSearchMatch } from "./thread.js";
+import { fetchThread, fetchThreadSummaries, findSearchMatches } from "./thread.js";
 import { checkStudentMailbox } from "./checkStudentMail.js";
 import { htmlToPlainText, sanitizeReplyHtml } from "./sanitizeReplyHtml.js";
 import { ensureWatcher, triggerSync } from "./mailboxSync.js";
@@ -294,27 +294,35 @@ app.get("/api/threads", requireAuth, requireCollege, async (req, res) => {
 });
 
 // Console search → automatic mailbox check (Step 16). Step one: does the
-// search narrow to exactly one student this operator can check? Only then
-// does the console show "Checking…" and call the route below.
+// search narrow to at most MAIL_CHECK_MAX_MATCHES students? Only then does
+// the console show "Checking…" and call the route below once per student.
+// More matches → tooMany, and the console just hints to type the email.
+const MAIL_CHECK_MAX_MATCHES = 3;
+
 app.get("/api/check-mail/match", requireAuth, requireCollege, async (req, res) => {
     const searchParam = req.query.search;
     const search = typeof searchParam === "string" ? searchParam.trim() : "";
 
     if (!search) {
-        res.json({ student: null });
+        res.json({ students: [], tooMany: false });
         return;
     }
 
-    const student = await findSingleSearchMatch(search, res.locals.collegeId);
+    const { students, tooMany } = await findSearchMatches(
+        search,
+        res.locals.collegeId,
+        MAIL_CHECK_MAX_MATCHES
+    );
+    const centralEmail = res.locals.centralEmail.toLowerCase();
 
-    // Only students whose mail this operator manages - recovered messages
-    // are stored under the operator's central mailbox.
-    if (!student || student.central_email?.toLowerCase() !== res.locals.centralEmail.toLowerCase()) {
-        res.json({ student: null });
-        return;
-    }
-
-    res.json({ student: { id: student.id, name: student.name } });
+    res.json({
+        tooMany,
+        // Only students whose mail this operator manages - recovered
+        // messages are stored under the operator's central mailbox.
+        students: students
+            .filter((s) => s.central_email?.toLowerCase() === centralEmail)
+            .map((s) => ({ id: s.id, name: s.name })),
+    });
 });
 
 app.post("/api/check-mail/:studentId", requireAuth, requireCollege, async (req, res) => {

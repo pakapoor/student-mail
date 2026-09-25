@@ -985,6 +985,11 @@
     color: var(--accent-dark);
 }
 
+.mail-check.hint {
+    background: #f0f2f5;
+    color: var(--text-muted);
+}
+
 .mail-check.done {
     background: #e8f6ee;
     color: #1f7a4d;

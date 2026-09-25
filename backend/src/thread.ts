@@ -268,12 +268,14 @@ export interface SearchMatchedStudent {
 }
 
 // Same match rules (and trigram index) as findMatchingStudentEmails, but
-// capped at 2 rows - the console's automatic mailbox check only needs to
-// know "exactly one student" vs "several", never the full list.
-export async function findSingleSearchMatch(
+// capped at max+1 rows - the console's automatic mailbox check only runs
+// when a search matches at most `max` students, so it only needs to know
+// "these few" vs "too many", never the full list.
+export async function findSearchMatches(
     search: string,
-    collegeId: string
-): Promise<SearchMatchedStudent | null> {
+    collegeId: string,
+    max: number
+): Promise<{ students: SearchMatchedStudent[]; tooMany: boolean }> {
     const result = await db.query<{
         id: string;
         email: string;
@@ -291,25 +293,28 @@ export async function findSingleSearchMatch(
                coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
                coalesce(college,'') || ' ' || coalesce(year_enrolled::text,'') || ' ' ||
                coalesce(admission_id,'')) ILIKE $2
-        LIMIT 2
+        ORDER BY id
+        LIMIT $3
         `,
-        [collegeId, `%${escapeLikePattern(search)}%`]
+        [collegeId, `%${escapeLikePattern(search)}%`, max + 1]
     );
 
-    const row = result.rows[0];
-
-    if (!row || result.rows.length !== 1) {
-        return null;
+    if (result.rows.length > max) {
+        return { students: [], tooMany: true };
     }
 
-    const combined = [row.first_name, row.last_name].filter(Boolean).join(" ");
+    const students = result.rows.map((row) => {
+        const combined = [row.first_name, row.last_name].filter(Boolean).join(" ");
 
-    return {
-        id: Number(row.id),
-        email: row.email.toLowerCase(),
-        name: combined || row.name || row.email,
-        central_email: row.central_email,
-    };
+        return {
+            id: Number(row.id),
+            email: row.email.toLowerCase(),
+            name: combined || row.name || row.email,
+            central_email: row.central_email,
+        };
+    });
+
+    return { students, tooMany: false };
 }
 
 // Same shape as fetchMessagesForStudentEmails, but scoped to the operator's

@@ -114,20 +114,24 @@ export type MailCheckOutcome =
     | { status: "ok"; checked: number; added: number; checkedAt: number }
     | { status: "failed" };
 
-// Returns the one student the search narrows to, or null when it matches
-// nobody or several students (no automatic check in that case).
-export async function fetchMailCheckMatch(search: string): Promise<MailCheckStudent | null> {
+export interface MailCheckMatches {
+    students: MailCheckStudent[];
+    tooMany: boolean;
+}
+
+// The (at most 3) students the search narrows to - each gets its mailbox
+// checked. tooMany means more matched than that; no automatic check then.
+export async function fetchMailCheckMatches(search: string): Promise<MailCheckMatches> {
     const res = await fetch(
         `${API_BASE}/api/check-mail/match?search=${encodeURIComponent(search.trim())}`,
         { credentials: "include" }
     );
 
     if (!res.ok) {
-        return null;
+        return { students: [], tooMany: false };
     }
 
-    const payload = await res.json();
-    return payload.student ?? null;
+    return res.json();
 }
 
 // Any failure (including a network/HTTP error) comes back as "failed" - the

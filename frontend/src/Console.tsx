@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
     checkStudentMail,
-    fetchMailCheckMatch,
+    fetchMailCheckMatches,
     fetchStudents,
     fetchThread,
     fetchThreadSummaries,
@@ -22,8 +22,9 @@ const TABS: StatusFilter[] = ["pending", "replied"];
 const TAB_LABELS: Record<StatusFilter, string> = { pending: "Pending", replied: "Closed" };
 
 type MailCheckState =
-    | { phase: "checking"; student: MailCheckStudent }
-    | { phase: "done"; student: MailCheckStudent; added: number; checkedAt: number };
+    | { phase: "checking"; students: MailCheckStudent[] }
+    | { phase: "done"; students: MailCheckStudent[]; added: number; checkedAt: number }
+    | { phase: "tooMany" };
 
 function checkedAgo(checkedAt: number): string {
     const minutes = Math.floor((Date.now() - checkedAt) / 60000);
@@ -140,25 +141,34 @@ function Console({ college, onLoggedOut }: Props) {
         setThreadItems(null);
     }, [status, debouncedSearch, loadMessages, loadPendingCount]);
 
+    // Checks every matched student's mailbox in parallel and reports the
+    // total. A student whose check fails is just left out of the total -
+    // failures are only logged server-side; if all fail the line disappears.
     const runMailCheck = useCallback(
-        async (student: MailCheckStudent, force: boolean) => {
+        async (students: MailCheckStudent[], force: boolean) => {
             const seq = mailCheckSeq.current;
-            setMailCheck({ phase: "checking", student });
+            setMailCheck({ phase: "checking", students });
 
-            const outcome = await checkStudentMail(student.id, force);
+            const outcomes = await Promise.all(
+                students.map((student) => checkStudentMail(student.id, force))
+            );
 
             if (seq !== mailCheckSeq.current) {
                 return;
             }
 
-            if (outcome.status !== "ok") {
+            const ok = outcomes.filter((o) => o.status === "ok");
+
+            if (ok.length === 0) {
                 setMailCheck(null);
                 return;
             }
 
-            setMailCheck({ phase: "done", student, added: outcome.added, checkedAt: outcome.checkedAt });
+            const added = ok.reduce((sum, o) => sum + o.added, 0);
+            const checkedAt = Math.min(...ok.map((o) => o.checkedAt));
+            setMailCheck({ phase: "done", students, added, checkedAt });
 
-            if (outcome.added > 0) {
+            if (added > 0) {
                 // The server also broadcasts an update, but refresh directly
                 // so this operator sees the added emails even if their live
                 // connection has dropped.
@@ -170,8 +180,10 @@ function Console({ college, onLoggedOut }: Props) {
     );
 
     // Waits a little longer than the search debounce (~1.5s after typing
-    // stops in total) so a check doesn't fire while someone is mid-word and
-    // the search briefly narrows to one student.
+    // stops in total) so a check doesn't fire while someone is mid-word.
+    // Up to 3 matching students are checked; more than that only shows a
+    // hint to type the email (the one search that always matches exactly
+    // one student - even full names repeat in the roster).
     useEffect(() => {
         mailCheckSeq.current++;
         setMailCheck(null);
@@ -182,10 +194,16 @@ function Console({ college, onLoggedOut }: Props) {
 
         const seq = mailCheckSeq.current;
         const timer = setTimeout(async () => {
-            const student = await fetchMailCheckMatch(debouncedSearch);
+            const { students, tooMany } = await fetchMailCheckMatches(debouncedSearch);
 
-            if (student && seq === mailCheckSeq.current) {
-                runMailCheck(student, false);
+            if (seq !== mailCheckSeq.current) {
+                return;
+            }
+
+            if (tooMany) {
+                setMailCheck({ phase: "tooMany" });
+            } else if (students.length > 0) {
+                runMailCheck(students, false);
             }
         }, 1200);
 
@@ -313,29 +331,38 @@ function Console({ college, onLoggedOut }: Props) {
                 )}
             </div>
 
-            {mailCheck && (
-                <div className={mailCheck.phase === "checking" ? "mail-check checking" : "mail-check done"}>
-                    {mailCheck.phase === "checking" ? (
-                        <>
-                            <span className="mail-check-spinner" aria-hidden="true" />
-                            <span>Checking {mailCheck.student.name}'s mailbox…</span>
-                        </>
-                    ) : (
-                        <>
-                            <span>
-                                ✓ Mailbox checked {checkedAgo(mailCheck.checkedAt)}:{" "}
-                                {mailCheck.added === 0
-                                    ? "nothing missing. If an email is still expected, it hasn't reached the mailbox yet."
-                                    : `${mailCheck.added} missing email${mailCheck.added === 1 ? "" : "s"} added`}
-                            </span>
-                            <button
-                                className="mail-check-again"
-                                onClick={() => runMailCheck(mailCheck.student, true)}
-                            >
-                                Check again
-                            </button>
-                        </>
-                    )}
+            {mailCheck?.phase === "tooMany" && (
+                <div className="mail-check hint">
+                    <span>To check a student's mailbox, type their email.</span>
+                </div>
+            )}
+
+            {mailCheck?.phase === "checking" && (
+                <div className="mail-check checking">
+                    <span className="mail-check-spinner" aria-hidden="true" />
+                    <span>
+                        {mailCheck.students.length === 1
+                            ? `Checking ${mailCheck.students[0]!.name}'s mailbox…`
+                            : `Checking ${mailCheck.students.length} mailboxes…`}
+                    </span>
+                </div>
+            )}
+
+            {mailCheck?.phase === "done" && (
+                <div className="mail-check done">
+                    <span>
+                        ✓ {mailCheck.students.length === 1 ? "Mailbox" : "Mailboxes"} checked{" "}
+                        {checkedAgo(mailCheck.checkedAt)}:{" "}
+                        {mailCheck.added === 0
+                            ? "nothing missing. If an email is still expected, it hasn't reached the mailbox yet."
+                            : `${mailCheck.added} missing email${mailCheck.added === 1 ? "" : "s"} added`}
+                    </span>
+                    <button
+                        className="mail-check-again"
+                        onClick={() => runMailCheck(mailCheck.students, true)}
+                    >
+                        Check again
+                    </button>
                 </div>
             )}
 
