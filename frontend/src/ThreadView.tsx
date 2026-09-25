@@ -359,12 +359,16 @@ function CollapsedOriginal({ item }: { item: IncomingThreadItem }) {
                     {item.sender_email} · {shortDateTime(item.at)}
                 </span>
             </button>
-            {open && <ThreadBubble item={item} />}
+            {/* Opened on purpose - show the whole email, no second
+                "Show full message" click. */}
+            {open && <ThreadBubble item={item} full />}
         </div>
     );
 }
 
-function ThreadBubble({ item }: { item: ThreadItem }) {
+// full: never shorten the body (used when the staff member explicitly opened
+// a collapsed original email).
+function ThreadBubble({ item, full = false }: { item: ThreadItem; full?: boolean }) {
     const renderedBody = useMemo(() => {
         if (item.type === "incoming" && item.body_html) {
             return sanitizeHtml(item.body_html);
@@ -399,7 +403,7 @@ function ThreadBubble({ item }: { item: ThreadItem }) {
     }, [renderedBody]);
 
     const bodyClassName =
-        "bubble-body" + (isOverflowing && !expanded ? " bubble-body-clamped" : "");
+        "bubble-body" + (!full && isOverflowing && !expanded ? " bubble-body-clamped" : "");
 
     const body = (
         <>
@@ -408,7 +412,7 @@ function ThreadBubble({ item }: { item: ThreadItem }) {
                 className={bodyClassName}
                 dangerouslySetInnerHTML={{ __html: renderedBody }}
             />
-            {isOverflowing && (
+            {!full && isOverflowing && (
                 <button
                     type="button"
                     className="bubble-expand-toggle"

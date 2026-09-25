@@ -1530,7 +1530,8 @@ students):
   (`edugateTitle` in `shared/edugate.ts`, `title` on thread summaries);
   other emails keep their subject. A student line (name · email) under the
   heading. The original Edugate email is collapsed under "▸ Show original
-  email" (the box already shows everything). One date format everywhere
+  email" (the box already shows everything). Opening it shows the whole
+  email at once - no second "Show full message" click (user). One date format everywhere
   ("25 Sep, 7:39 AM", `frontend/src/format.ts`); Edugate's "25.09.2026
   08:09" review time shown as "25 Sep 2026, 08:09" without timezone
   conversion. Verified on production data: 288 registration, 38 rejection
