@@ -199,9 +199,16 @@
     color: #ffffff;
 }
 
+:root {
+    /* Thread list width: a share of the window (Step 18, user), kept
+       readable on small screens and not too wide on very large ones. The
+       search box above it uses the same width. */
+    --list-width: clamp(380px, 38vw, 720px);
+}
+
 .main-layout {
     display: grid;
-    grid-template-columns: 540px 1fr;
+    grid-template-columns: var(--list-width) 1fr;
     gap: 20px;
     align-items: start;
 }
@@ -855,7 +862,7 @@
     align-items: center;
     gap: 8px;
     /* Same width as the thread list below it. */
-    max-width: 540px;
+    max-width: var(--list-width);
 }
 
 .console-search .admin-search {

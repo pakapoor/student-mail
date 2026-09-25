@@ -1515,7 +1515,9 @@ students):
 - List rows show the student's **name** (first + last from the roster,
   bold) with the email underneath; falls back to the email alone if no
   name is stored (`student_name` on thread summaries, one query per
-  page). List column widened 380 → 460 → 540 px (user).
+  page). List column widened 380 → 460 → 540 px, then made proportional to the
+  window (user): `--list-width: clamp(380px, 38vw, 720px)`, shared by the
+  search box.
 - Compact rows (user's idea, option a): subject · sender and a short
   time ("25 Sep, 6:03 PM") share one line (sender shortened with … before
   the time); the preview line is dropped for Edugate threads (always the
