@@ -8,9 +8,12 @@ import {
     logout,
     subscribeToUpdates,
     type MailCheckStudent,
+    type ThreadFilter,
+    type ThreadSummaryPage,
 } from "./api";
 import MessageList from "./MessageList";
 import { playChime } from "./chime";
+import FilterButtons from "./FilterButtons";
 import { saveSearchForReload, takeSearchSavedForReload, useNewVersionAvailable } from "./versionCheck";
 import ThreadView from "./ThreadView";
 import ManageStudents from "./ManageStudents";
@@ -45,6 +48,9 @@ interface Props {
 
 function Console({ college, onLoggedOut }: Props) {
     const status = STATUS;
+    // Filter buttons (Step 18): null = "All".
+    const [filter, setFilter] = useState<ThreadFilter | null>(null);
+    const [counts, setCounts] = useState<ThreadSummaryPage["counts"] | null>(null);
     const [threads, setThreads] = useState<ThreadSummary[]>([]);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -75,12 +81,13 @@ function Console({ college, onLoggedOut }: Props) {
     // can never overwrite the status line of the current one.
     const mailCheckSeq = useRef(0);
 
-    const loadMessages = useCallback(async (statusFilter: StatusFilter, searchText: string) => {
+    const loadMessages = useCallback(async (statusFilter: StatusFilter, searchText: string, filterValue: ThreadFilter | null) => {
         setLoading(true);
         setError(null);
 
         try {
-            const page = await fetchThreadSummaries(statusFilter, 0, undefined, searchText);
+            const page = await fetchThreadSummaries(statusFilter, 0, undefined, searchText, filterValue);
+            setCounts(page.counts ?? null);
             setThreads(page.threads);
             setHasMore(page.hasMore);
         } catch (err) {
@@ -95,7 +102,7 @@ function Console({ college, onLoggedOut }: Props) {
         setError(null);
 
         try {
-            const page = await fetchThreadSummaries(status, threads.length, undefined, debouncedSearch);
+            const page = await fetchThreadSummaries(status, threads.length, undefined, debouncedSearch, filter);
             setThreads((prev) => [...prev, ...page.threads]);
             setHasMore(page.hasMore);
         } catch (err) {
@@ -103,7 +110,7 @@ function Console({ college, onLoggedOut }: Props) {
         } finally {
             setLoadingMore(false);
         }
-    }, [status, threads.length, debouncedSearch]);
+    }, [status, threads.length, debouncedSearch, filter]);
 
     const loadThread = useCallback((id: number) => {
         fetchThread(id)
@@ -114,10 +121,10 @@ function Console({ college, onLoggedOut }: Props) {
     }, []);
 
     useEffect(() => {
-        loadMessages(status, debouncedSearch);
+        loadMessages(status, debouncedSearch, filter);
         setSelectedId(null);
         setThreadItems(null);
-    }, [status, debouncedSearch, loadMessages]);
+    }, [status, debouncedSearch, filter, loadMessages]);
 
     // Checks every matched student's mailbox in parallel and reports the
     // total. A student whose check fails is just left out of the total -
@@ -150,7 +157,7 @@ function Console({ college, onLoggedOut }: Props) {
                 // The server also broadcasts an update, but refresh directly
                 // so this operator sees the added emails even if their live
                 // connection has dropped.
-                loadMessages(statusRef.current, searchRef.current);
+                loadMessages(statusRef.current, searchRef.current, filterRef.current);
             }
         },
         [loadMessages]
@@ -210,6 +217,11 @@ function Console({ college, onLoggedOut }: Props) {
     const statusRef = useRef(status);
     const selectedIdRef = useRef(selectedId);
     const searchRef = useRef(debouncedSearch);
+    const filterRef = useRef(filter);
+
+    useEffect(() => {
+        filterRef.current = filter;
+    }, [filter]);
 
     useEffect(() => {
         statusRef.current = status;
@@ -236,7 +248,7 @@ function Console({ college, onLoggedOut }: Props) {
             // the pending set - reload from the top so everyone's view
             // (list + open thread + pending count) stays consistent with
             // the server.
-            loadMessages(statusRef.current, searchRef.current);
+            loadMessages(statusRef.current, searchRef.current, filterRef.current);
 
             if (selectedIdRef.current !== null) {
                 loadThread(selectedIdRef.current);
@@ -245,7 +257,7 @@ function Console({ college, onLoggedOut }: Props) {
     }, [loadMessages, loadThread, college.id]);
 
     function handleReplySent() {
-        loadMessages(status, debouncedSearch);
+        loadMessages(status, debouncedSearch, filter);
 
         if (selectedId !== null) {
             loadThread(selectedId);
@@ -300,7 +312,7 @@ function Console({ college, onLoggedOut }: Props) {
                     collegeName={college.name}
                     onClose={() => setShowManageStudents(false)}
                     onImported={() => {
-                        loadMessages(status, debouncedSearch);
+                        loadMessages(status, debouncedSearch, filter);
                     }}
                 />
             )}
@@ -358,6 +370,8 @@ function Console({ college, onLoggedOut }: Props) {
                     </button>
                 </div>
             )}
+
+            <FilterButtons filter={filter} counts={counts} onChange={setFilter} />
 
             {error && <p className="error">{error}</p>}
 

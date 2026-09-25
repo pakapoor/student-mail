@@ -76,7 +76,7 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
     }, []);
 
     if (threads.length === 0) {
-        return <p className="empty-state">No messages.</p>;
+        return <p className="empty-state">No messages match.</p>;
     }
 
     return (

@@ -854,7 +854,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    max-width: 360px;
+    /* Same width as the thread list below it. */
+    max-width: 540px;
 }
 
 .console-search .admin-search {
@@ -1298,4 +1299,94 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     color: #1d3f8f;
+}
+
+/* Filter buttons under the search box (FilterButtons.tsx, Step 18). */
+.filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 14px;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card-bg);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.filter-chip:hover {
+    border-color: var(--accent);
+}
+
+.filter-chip.dim {
+    opacity: 0.5;
+}
+
+.filter-chip.dim:hover {
+    opacity: 1;
+}
+
+.filter-count {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.filter-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.filter-dot.live { background: #2c56b8; }
+.filter-dot.expired { background: #e0a100; }
+.filter-dot.registered { background: #16793a; }
+.filter-dot.rejected { background: #d64545; }
+.filter-dot.other { background: #8b8f99; }
+
+.filter-chip.active {
+    border-color: transparent;
+    color: #ffffff;
+}
+
+.filter-chip.active .filter-count {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.filter-chip.active.live { background: #2c56b8; }
+.filter-chip.active.expired { background: #c98a00; }
+.filter-chip.active.registered { background: #16793a; }
+.filter-chip.active.rejected { background: #d64545; }
+.filter-chip.active.other { background: #6b7280; }
+
+/* "All": solid blue when selected; outlined in blue whenever a filter is
+   on, so the way back is obvious. */
+.filter-chip.all.active {
+    background: var(--accent);
+}
+
+.filter-chip.all:not(.active) {
+    border: 2px solid var(--accent);
+    color: var(--accent-dark);
+}
+
+.filter-x {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 2px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    font-size: 11px;
 }

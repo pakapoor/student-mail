@@ -589,10 +589,42 @@ function makePreview(bodyText: string | null, bodyHtml: string | null): string {
     return `${collapsed.slice(0, PREVIEW_LENGTH).trimEnd()}...`;
 }
 
+// Filter buttons on the console (Step 18). "code_live" = a code still
+// within its stated validity; "code_expired" = older, student still not
+// registered; "other" = any non-Edugate thread (NEW or Replied). Superseded
+// codes (USED) belong to no filter.
+export type ThreadFilter = "code_live" | "code_expired" | "registered" | "rejected" | "other";
+export const THREAD_FILTERS: ThreadFilter[] = ["code_live", "code_expired", "registered", "rejected", "other"];
+
+// Default validity when a code email's own "valid for N minutes" can't be
+// read - every Edugate code email so far says 30.
+const DEFAULT_CODE_VALID_MINUTES = 30;
+
+function threadCategory(s: Pick<ThreadSummary, "badge" | "code_at" | "code_valid_minutes">, now: number): ThreadFilter | null {
+    switch (s.badge) {
+        case "registered":
+            return "registered";
+        case "rejected":
+            return "rejected";
+        case "code": {
+            const ageMinutes = s.code_at ? (now - new Date(s.code_at).getTime()) / 60000 : Infinity;
+            return ageMinutes < (s.code_valid_minutes ?? DEFAULT_CODE_VALID_MINUTES) ? "code_live" : "code_expired";
+        }
+        case "new":
+        case "replied":
+            return "other";
+        default:
+            return null;
+    }
+}
+
 export interface ThreadSummaryPage {
     threads: ThreadSummary[];
     total: number;
     hasMore: boolean;
+    // How many threads each filter button would show (for the current
+    // search) - only for the tab-less list (status "all").
+    counts?: Record<ThreadFilter | "all", number>;
 }
 
 export async function fetchThreadSummaries(
@@ -604,7 +636,8 @@ export async function fetchThreadSummaries(
     collegeId: string,
     limit = 25,
     offset = 0,
-    search?: string
+    search?: string,
+    filter?: ThreadFilter
 ): Promise<ThreadSummaryPage> {
     const trimmedSearch = search?.trim();
 
@@ -676,13 +709,31 @@ export async function fetchThreadSummaries(
         }
     );
 
-    const filtered = summaries.filter((s) =>
+    const base = summaries.filter((s) =>
         status === "all"
             ? Boolean(trimmedSearch) || s.badge !== "used"
             : status === "pending"
               ? s.pending_count > 0
               : s.pending_count === 0
     );
+
+    const now = Date.now();
+    let counts: ThreadSummaryPage["counts"];
+
+    if (status === "all") {
+        counts = { all: base.length, code_live: 0, code_expired: 0, registered: 0, rejected: 0, other: 0 };
+
+        for (const s of base) {
+            const category = threadCategory(s, now);
+
+            if (category) {
+                counts[category]++;
+            }
+        }
+    }
+
+    const filtered =
+        status === "all" && filter ? base.filter((s) => threadCategory(s, now) === filter) : base;
 
     // Newest first. The tab-less list simply uses each thread's newest
     // email; the old tabs keep their sortAt meaning (see above).
@@ -718,5 +769,6 @@ export async function fetchThreadSummaries(
         threads: page,
         total: filtered.length,
         hasMore: offset + limit < filtered.length,
+        ...(counts ? { counts } : {}),
     };
 }

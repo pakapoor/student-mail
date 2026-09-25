@@ -1531,6 +1531,20 @@ students):
   `code` / `code_valid_minutes` on thread summaries (shared templates);
   the list re-renders every 30 s so the number disappears on time. No
   Copy button in the row (opening the thread gives the box with Copy).
+- **Filter buttons** under the search box (`FilterButtons.tsx`, mockup
+  approved): All · Code received · Code expired · Registered · Rejected ·
+  Other emails, each with a live count for the current search. One filter
+  at a time; three ways back (user asked for a clear one): the "← All"
+  button (outlined in blue whenever a filter is on), the ✕ on the pressed
+  button, or pressing it again. Filters combine with search. Backend:
+  `GET /api/threads?status=all&filter=code_live|code_expired|registered|
+  rejected|other`, and `counts` on every list response (`thread.ts`
+  `threadCategory`; code live vs expired by the validity the email states).
+  USED codes belong to no filter (they only appear, dimmed, under All
+  while searching). Verified on production data: per college the buttons
+  add up to All (KSMA 238 = 0 + 2 + 192 + 29 + 15), each filter returns
+  exactly its count, filter + search works. Search box widened to 540 px
+  to match the list.
 - Verified read-only against production (via SSH tunnel) before deploy:
   KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
   Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91

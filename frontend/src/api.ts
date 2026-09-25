@@ -16,10 +16,15 @@ import type {
 // so VITE_API_BASE is set to "" at build time (see frontend/.env.production).
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001";
 
+// Filter buttons on the console (backend thread.ts ThreadFilter).
+export type ThreadFilter = "code_live" | "code_expired" | "registered" | "rejected" | "other";
+
 export interface ThreadSummaryPage {
     threads: ThreadSummary[];
     total: number;
     hasMore: boolean;
+    // How many threads each filter button would show (for the search).
+    counts?: Record<ThreadFilter | "all", number>;
 }
 
 const PAGE_SIZE = 25;
@@ -90,11 +95,13 @@ export async function fetchThreadSummaries(
     status: StatusFilter,
     offset = 0,
     limit = PAGE_SIZE,
-    search?: string
+    search?: string,
+    filter?: ThreadFilter | null
 ): Promise<ThreadSummaryPage> {
     const searchParam = search?.trim() ? `&search=${encodeURIComponent(search.trim())}` : "";
+    const filterParam = filter ? `&filter=${filter}` : "";
     const res = await fetch(
-        `${API_BASE}/api/threads?status=${status}&limit=${limit}&offset=${offset}${searchParam}`,
+        `${API_BASE}/api/threads?status=${status}&limit=${limit}&offset=${offset}${searchParam}${filterParam}`,
         { credentials: "include" }
     );
 

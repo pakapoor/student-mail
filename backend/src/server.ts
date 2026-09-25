@@ -14,7 +14,7 @@ import {
     sendFollowUp,
     sendReply,
 } from "./reply.js";
-import { fetchThread, fetchThreadSummaries, findSearchMatches } from "./thread.js";
+import { THREAD_FILTERS, fetchThread, fetchThreadSummaries, findSearchMatches } from "./thread.js";
 import { checkStudentMailbox } from "./checkStudentMail.js";
 import { htmlToPlainText, sanitizeReplyHtml } from "./sanitizeReplyHtml.js";
 import { ensureWatcher, triggerSync } from "./mailboxSync.js";
@@ -284,13 +284,17 @@ app.get("/api/threads", requireAuth, requireCollege, async (req, res) => {
     const search =
         typeof searchParam === "string" && searchParam.trim() ? searchParam.trim() : undefined;
 
+    const filterParam = req.query.filter;
+    const filter = THREAD_FILTERS.find((f) => f === filterParam);
+
     const page = await fetchThreadSummaries(
         normalized,
         res.locals.centralEmail,
         res.locals.collegeId,
         limit,
         offset,
-        search
+        search,
+        filter
     );
     res.json(page);
 });
