@@ -55,6 +55,18 @@ export interface IncomingThreadItem {
     // email may be outdated.
     newer_login_at: string | null;
     newer_edugate_at: string | null;
+    // Only on Edugate rejection emails: the student's Edugate login from
+    // their latest registration email, so staff can log in and re-upload
+    // the document from the red box (staff do the re-uploading, not
+    // students). null if no registration email is found.
+    edugate_login: {
+        login: string;
+        password: string;
+        sent_at: string;
+        // A newer Edugate email we don't recognise exists (e.g. a password
+        // reset) - the password may be outdated.
+        newer_edugate_at: string | null;
+    } | null;
 }
 
 export interface OutgoingThreadItem {
@@ -450,7 +462,8 @@ export async function fetchThread(
     // For the outdated-password warning on registration emails: the latest
     // Edugate email for this student that matches no known template.
     const hasLogin = threadMessages.some((m) => m.edugate_kind === "login");
-    const unknownEdugate = hasLogin
+    const hasRejected = threadMessages.some((m) => m.edugate_kind === "rejected");
+    const unknownEdugate = hasLogin || hasRejected
         ? await db.query<{ at: string | null }>(
               `SELECT max(coalesce(sent_at, received_at)) AS at FROM messages
                WHERE lower(student_email) = lower($1)
@@ -460,6 +473,41 @@ export async function fetchThread(
           )
         : null;
     const latestUnknownEdugate = unknownEdugate?.rows[0]?.at ?? null;
+
+    // For rejection emails: the student's latest registration email (same
+    // operator), read with the same verified template as the login box.
+    let edugateLogin: IncomingThreadItem["edugate_login"] = null;
+
+    if (hasRejected) {
+        const latestLogin = await db.query<{
+            sender_email: string;
+            body_text: string | null;
+            student_email: string;
+            at: string;
+        }>(
+            `SELECT sender_email, body_text, student_email, coalesce(sent_at, received_at) AS at
+             FROM messages
+             WHERE lower(student_email) = lower($1) AND central_email = $2 AND edugate_kind = 'login'
+             ORDER BY coalesce(sent_at, received_at) DESC
+             LIMIT 1`,
+            [target.student_email, centralEmail]
+        );
+        const row = latestLogin.rows[0];
+        const info = row ? classifyEdugate(row.sender_email, row.body_text, row.student_email) : null;
+
+        if (row && info?.kind === "login") {
+            edugateLogin = {
+                login: info.login,
+                password: info.password,
+                sent_at: row.at,
+                newer_edugate_at:
+                    latestUnknownEdugate !== null &&
+                    new Date(latestUnknownEdugate).getTime() > new Date(row.at).getTime()
+                        ? latestUnknownEdugate
+                        : null,
+            };
+        }
+    }
 
     function newerThan(m: MessageRow, other: string | null): string | null {
         return other !== null && new Date(other).getTime() > sentTime(m) ? other : null;
@@ -485,6 +533,7 @@ export async function fetchThread(
                     m.edugate_kind === "login" ? newerThan(m, m.student_registered_at) : null,
                 newer_edugate_at:
                     m.edugate_kind === "login" ? newerThan(m, latestUnknownEdugate) : null,
+                edugate_login: m.edugate_kind === "rejected" ? edugateLogin : null,
             })
         ),
         ...threadReplies.map(

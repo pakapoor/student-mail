@@ -1390,3 +1390,14 @@
     background: rgba(255, 255, 255, 0.25);
     font-size: 11px;
 }
+
+/* Student's Edugate login inside the red rejection box. */
+.key-info-divider {
+    height: 1px;
+    margin: 2px 0;
+    background: #efc2c2;
+}
+
+.key-info-row.login {
+    grid-template-columns: 104px minmax(0, 1fr) auto;
+}

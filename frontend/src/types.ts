@@ -51,6 +51,14 @@ export interface IncomingThreadItem {
     auto_closed: boolean;
     newer_login_at: string | null;
     newer_edugate_at: string | null;
+    // On Edugate rejection emails only: the student's Edugate login from
+    // their latest registration email (staff log in and re-upload).
+    edugate_login: {
+        login: string;
+        password: string;
+        sent_at: string;
+        newer_edugate_at: string | null;
+    } | null;
 }
 
 export interface OutgoingThreadItem {

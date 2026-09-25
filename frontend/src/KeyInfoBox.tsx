@@ -63,6 +63,8 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
 
     // Rejected document: red, as a warning - someone has to act on it.
     if (info.kind === "rejected") {
+        const login = info.item.edugate_login;
+
         return (
             <div className="key-info rejected">
                 <div className="key-info-heading">
@@ -85,6 +87,34 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                     <span className="key-info-label">Reviewed</span>
                     <span className="key-info-text">{info.reviewedAt}</span>
                 </div>
+
+                {/* Staff re-upload the document on Edugate, so the student's
+                    login is right here (from their registration email). */}
+                <div className="key-info-divider" />
+                {login ? (
+                    <>
+                        <div className="key-info-row login">
+                            <span className="key-info-label">Edugate login</span>
+                            <span className="key-info-value small">{login.login}</span>
+                            <CopyButton value={login.login} />
+                        </div>
+                        <div className="key-info-row login">
+                            <span className="key-info-label">Password</span>
+                            <span className="key-info-value">{login.password}</span>
+                            <CopyButton value={login.password} />
+                        </div>
+                        <p className="key-info-source">
+                            from the registration email of {dateTime(login.sent_at)}
+                        </p>
+                        {login.newer_edugate_at && (
+                            <p className="key-info-warning">
+                                ⚠ A newer Edugate email arrived on {dateTime(login.newer_edugate_at)}. Check it before using this password.
+                            </p>
+                        )}
+                    </>
+                ) : (
+                    <p className="key-info-source">No Edugate login found for this student.</p>
+                )}
             </div>
         );
     }

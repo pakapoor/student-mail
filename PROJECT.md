@@ -1545,6 +1545,20 @@ students):
   add up to All (KSMA 238 = 0 + 2 + 192 + 29 + 15), each filter returns
   exactly its count, filter + search works. Search box widened to 540 px
   to match the list.
+- **Edugate login inside the red rejection box** (user: "staff does it,
+  students don't handle anything"): all 38 rejections in production came
+  after the student registered (avg 7.4 h later, 23 students) - Edugate's
+  order is code → registration → upload documents → review → rejection →
+  re-upload. Staff re-upload on the Edugate portal with the student's
+  login, so the red box now also shows **Edugate login + Password** (Copy
+  buttons) from the student's **latest** registration email (same
+  operator, same verified template), "from the registration email of …",
+  and the amber "newer Edugate email" warning if an unrecognised later
+  Edugate email exists; "No Edugate login found for this student." if none.
+  `edugate_login` on rejection thread items (`fetchThread`). The "1"
+  reasons (4 emails, one reviewer, 23.09 12:07-12:08) carry no meaning in
+  either language - nothing more to show. Portal address unknown, so no
+  "Open Edugate" link yet.
 - Verified read-only against production (via SSH tunnel) before deploy:
   KSMA CENTRAL list 272 threads (192 REGISTERED, 29 REJECTED, 2 CODE, 49
   Replied), 193 superseded codes hidden; IHSM CENTRAL 107 shown / 91
