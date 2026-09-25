@@ -2,6 +2,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { db } from "./db.js";
 import { insertMessageForStudent } from "./sync.js";
+import { noteEvent } from "./systemStatus.js";
 import { measureMigaduHold } from "./migaduDelay.js";
 
 // On-demand fallback for "the email hasn't shown up in the console": reads
@@ -113,6 +114,11 @@ async function runCheck(student: CheckStudent, centralEmail: string, source: Che
             `[${source}] FAILED student=${student.email} id=${student.id} operator=${centralEmail} ` +
                 `reason=${reason} (${detail}${serverResponse}) took=${Date.now() - start}ms`
         );
+        noteEvent(
+            "mailbox-failed",
+            `${student.email}: ${reason === "auth" ? "login rejected (stored password wrong?)" : `${reason} (${detail})`}`,
+            source
+        );
 
         return { status: "failed", reason };
     } finally {
@@ -217,6 +223,7 @@ async function fetchMissing(
                         `arrived=${msg.internalDate ? new Date(msg.internalDate).toISOString() : "unknown"} ` +
                         `subject="${parsed.subject || "(no subject)"}"`
                 );
+                noteEvent("recovered", `${student.email}: ${parsed.subject || "(no subject)"} from ${senderEmail}`, source);
             }
         }
     }

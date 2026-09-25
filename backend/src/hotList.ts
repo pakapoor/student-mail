@@ -1,6 +1,7 @@
 import { db } from "./db.js";
 import { broadcast } from "./realtime.js";
 import { checkStudentMailbox, type CheckOutcome } from "./checkStudentMail.js";
+import { registerStatusProvider } from "./systemStatus.js";
 
 // Hot list (Step 20, user): after an Edugate verification code arrives, a
 // staff member has typed it into Edugate and is sitting waiting for the
@@ -47,6 +48,13 @@ const stats = { students: new Set<string>(), checks: 0, recovered: 0, failed: 0,
 let running = false;
 
 export function startHotList(): void {
+    registerStatusProvider("hot", async () => ({
+        enabled: ENABLED,
+        watchingNow: ENABLED ? (await findHotStudents()).length : 0,
+        checksThisHour: stats.checks,
+        recoveredThisHour: stats.recovered,
+    }));
+
     if (!ENABLED) {
         console.log("[hot] disabled (HOT_ENABLED=false)");
         return;

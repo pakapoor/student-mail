@@ -374,3 +374,35 @@ export async function markHandled(id: number): Promise<void> {
         throw new Error(payload.error || `Failed to mark as handled (${res.status})`);
     }
 }
+
+// System status page (/status). Shape of backend systemStatus.ts.
+export interface SystemStatus {
+    generatedAt: string;
+    overall: "ok" | "warning" | "problem";
+    problems: string[];
+    warnings: string[];
+    sync: { mailboxes: { email: string; connected: boolean; lastSuccessAt: string | null }[]; emailsToday: number };
+    retries: { retriedToday: number; gaveUpToday: number };
+    recoveredToday: { search: number; sweep: number; hot: number };
+    mailboxFailures24h: number;
+    delays: { heldOver5MinToday?: number; longestTodaySeconds?: number | null; longest7DaysSeconds?: number | null };
+    database: { reachable: boolean; emails?: number };
+    server: {
+        disk: { totalBytes: number; usedBytes: number } | null;
+        memory: { totalBytes: number; usedBytes: number };
+        appStartedAt: string;
+    };
+    hot?: { enabled: boolean; watchingNow: number; checksThisHour: number; recoveredThisHour: number };
+    sweep?: { enabled: boolean; roundHours: number; mailboxes: number; sweptThisRound: number };
+    recent: { at: string; what: string; details: string }[];
+}
+
+export async function fetchSystemStatus(): Promise<SystemStatus> {
+    const res = await fetch(`${API_BASE}/api/status`, { credentials: "include" });
+
+    if (!res.ok) {
+        throw new Error(`Could not load status (${res.status})`);
+    }
+
+    return res.json();
+}

@@ -1790,3 +1790,199 @@ select,
     font-size: 12px;
     color: var(--accent);
 }
+
+/* ---------- System status page (/status, StatusPage.tsx) ---------- */
+.status-page {
+    min-height: 100vh;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: var(--font);
+}
+
+.status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px 24px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.status-bar h1 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 600;
+}
+
+.status-bar small {
+    color: var(--text-muted);
+    font-size: 12.5px;
+}
+
+.status-content {
+    display: grid;
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px 24px 32px;
+}
+
+.status-overall {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 18px;
+    border-radius: 10px;
+}
+
+.status-overall.ok { background: var(--ok-soft); border: 1px solid #bfe3cb; }
+.status-overall.warning { background: var(--warn-soft); border: 1px solid #f1d7a0; }
+.status-overall.problem { background: var(--bad-soft); border: 1px solid #f1c4c1; }
+
+.status-overall-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.status-overall.ok .status-overall-icon { background: var(--ok); }
+.status-overall.warning .status-overall-icon { background: #d99a00; }
+.status-overall.problem .status-overall-icon { background: var(--bad); }
+
+.status-overall b {
+    display: block;
+    font-size: 16px;
+}
+
+.status-overall span,
+.status-overall ul {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.status-overall ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+}
+
+.status-overall li.bad {
+    color: var(--bad);
+    font-weight: 600;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px;
+}
+
+.status-card {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card-bg);
+}
+
+.status-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-card-head b {
+    font-size: 14.5px;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px 2px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status-pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.status-pill.ok { background: var(--ok-soft); color: var(--ok); }
+.status-pill.warn { background: var(--warn-soft); color: var(--warn); }
+.status-pill.bad { background: var(--bad-soft); color: var(--bad); }
+
+.status-kv {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    font-size: 13px;
+}
+
+.status-kv span { color: var(--text-muted); }
+.status-kv b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+.status-hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.status-meter {
+    height: 7px;
+    border-radius: 999px;
+    background: var(--border-soft);
+    overflow: hidden;
+}
+
+.status-meter i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+}
+
+.status-table-wrap {
+    overflow-x: auto;
+}
+
+.status-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+
+.status-table th {
+    text-align: left;
+    padding: 6px 8px;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+}
+
+.status-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--border-soft);
+    vertical-align: top;
+}
+
+.status-table td.t {
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}

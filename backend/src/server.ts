@@ -18,6 +18,7 @@ import { THREAD_FILTERS, fetchThread, fetchThreadSummaries, findSearchMatches } 
 import { checkStudentMailbox } from "./checkStudentMail.js";
 import { startSweep } from "./sweep.js";
 import { startHotList } from "./hotList.js";
+import { getSystemStatus } from "./systemStatus.js";
 import { htmlToPlainText, sanitizeReplyHtml } from "./sanitizeReplyHtml.js";
 import { ensureWatcher, triggerSync } from "./mailboxSync.js";
 import { addClient, broadcast, removeClient } from "./realtime.js";
@@ -299,6 +300,13 @@ app.get("/api/threads", requireAuth, requireCollege, async (req, res) => {
         filter
     );
     res.json(page);
+});
+
+// System status page (/status, Step 21): health of the sync, hot list,
+// sweep, Migadu delays and the server. Logged-in users only; not linked
+// from the staff screens.
+app.get("/api/status", requireAuth, async (_req, res) => {
+    res.json(await getSystemStatus());
 });
 
 // Console search → automatic mailbox check (Step 16). Step one: does the

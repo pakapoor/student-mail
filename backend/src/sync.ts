@@ -4,6 +4,7 @@ import { db } from "./db.js";
 import { logMigaduDelay, measureMigaduHold, type MigaduHold } from "./migaduDelay.js";
 import { classifyEdugate, isEdugateSender } from "../../shared/edugate.js";
 import { applyRegistrationEvent } from "./registrationStatus.js";
+import { noteEvent } from "./systemStatus.js";
 
 // Shared by the central-mailbox sync below and the per-student direct check
 // (checkStudentMail.ts). Both paths key on (message_id, student_email), so a
@@ -236,12 +237,14 @@ export async function syncInbox(
                         `[sync] [${centralEmail}] UID ${message.uid}: no message source returned by IMAP fetch ` +
                             `(attempt ${attempts}/${MAX_SOURCE_ATTEMPTS}), will retry`
                     );
+                    noteEvent("retry", `${centralEmail} UID ${message.uid} (attempt ${attempts})`);
                 } else {
                     missingSourceAttempts.delete(attemptKey);
                     console.error(
                         `[sync] [${centralEmail}] GIVING UP uid=${message.uid} after ${MAX_SOURCE_ATTEMPTS} tries - ` +
                             `no message source; searching the student in the console (mailbox check) can still recover it`
                     );
+                    noteEvent("gave-up", `${centralEmail} UID ${message.uid}: no content after ${MAX_SOURCE_ATTEMPTS} tries`);
                 }
 
                 continue;

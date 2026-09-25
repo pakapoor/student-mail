@@ -1684,6 +1684,32 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 21 — System status page (done)
+
+`https://app.myemailinfo.com/status` - behind the normal console login,
+**not linked from the staff screens**, no college needed. User chose the
+page only: **no alert emails** and no external uptime service (an earlier
+idea: alerts to pakapoor@gmail.com - declined). Refreshes every 30 s.
+Shows: overall banner (ok / warning / problem with reasons); central
+mailbox sync (live connection, last successful sync, emails today -
+**problem** if no sync succeeds for 10 min); hot list (watching now, checks
+this hour, recovered today); daily sweep (progress this round, recovered,
+mailboxes that failed to open); emails fetched without content (retried /
+given up today); Migadu delays (held > 5 min today, longest today / 7
+days, from `messages.migadu_hold_seconds`); server (disk - **problem** over
+90%, memory, app start, database reachable + email count); recent problems
+for 24 h (Migadu delays with queue IDs, mailboxes that won't open, give-ups,
+failed syncs).
+
+Backend `systemStatus.ts` (`GET /api/status`, requireAuth): the jobs report
+into it - `mailboxSync.ts` (sync success/failure, watcher up/down),
+`sync.ts` (retry, give-up), `checkStudentMail.ts` (mailbox failed,
+recovered, per source search / sweep / hot), hot list and sweep register
+providers for their figures. Events are kept in memory for 24 h (cleared
+by a restart); delays come from the database. "Today" is the server's
+UTC day. Frontend `StatusPage.tsx`, shown by `App.tsx` when the path is
+`/status` (nginx already serves the app for any path).
+
 ## Step 20 — Hot list: watch the mailbox while staff wait for registration (done)
 
 User: "whenever code mail comes … check for that email on priority directly

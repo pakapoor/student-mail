@@ -4,6 +4,7 @@ import { fetchCurrentSession } from "./api";
 import Login from "./Login";
 import Console from "./Console";
 import CollegePicker from "./CollegePicker";
+import StatusPage from "./StatusPage";
 import type { Session } from "./types";
 
 function App() {
@@ -31,6 +32,12 @@ function App() {
 
     if (!session) {
         return <Login onLoggedIn={setSession} />;
+    }
+
+    // System status page (Step 21): /status, after login, no college
+    // needed. Not linked from the staff screens.
+    if (window.location.pathname === "/status") {
+        return <StatusPage />;
     }
 
     if (!session.college) {

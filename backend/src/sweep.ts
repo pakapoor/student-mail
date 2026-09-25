@@ -1,6 +1,7 @@
 import { db } from "./db.js";
 import { broadcast } from "./realtime.js";
 import { checkStudentMailbox, type CheckOutcome } from "./checkStudentMail.js";
+import { registerStatusProvider } from "./systemStatus.js";
 
 // Rolling daily sweep (Step 17 A): every student's own INBOX is checked
 // once per SWEEP_ROUND_HOURS (default 24), a few mailboxes at a time, spread
@@ -42,6 +43,22 @@ const totals = { checked: 0, added: 0, failed: 0, since: Date.now() };
 let timer: NodeJS.Timeout | null = null;
 
 export function startSweep(): void {
+    registerStatusProvider("sweep", async () => {
+        const r = await db.query<{ total: string; swept: string }>(
+            `SELECT count(*) AS total,
+                    count(*) FILTER (WHERE last_swept_at > now() - make_interval(secs => $1)) AS swept
+             FROM students
+             WHERE deleted_at IS NULL AND central_email IS NOT NULL AND smtp_password <> ''`,
+            [ROUND_HOURS * 3600]
+        );
+        return {
+            enabled: ENABLED,
+            roundHours: ROUND_HOURS,
+            mailboxes: Number(r.rows[0]?.total ?? 0),
+            sweptThisRound: Number(r.rows[0]?.swept ?? 0),
+        };
+    });
+
     if (!ENABLED) {
         console.log("[sweep] disabled (SWEEP_ENABLED=false)");
         return;

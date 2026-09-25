@@ -2,6 +2,7 @@ import { ImapFlow } from "imapflow";
 import { syncInbox } from "./sync.js";
 import { broadcast } from "./realtime.js";
 import { db } from "./db.js";
+import { noteEvent, noteSyncSuccess, noteWatcher } from "./systemStatus.js";
 
 const runningSync = new Set<string>();
 // Set when a trigger arrives while a sync is already in flight for that
@@ -72,6 +73,7 @@ export async function triggerSync(
 
     try {
         const { inserted, insertedStudentEmails, retryPending } = await withWatchdog(syncInbox(email, password), email);
+        noteSyncSuccess(email);
 
         // An email came back without content - try again shortly rather
         // than waiting for the next new mail / fallback poll.
@@ -91,6 +93,7 @@ export async function triggerSync(
         }
     } catch (error) {
         console.error(`Sync failed [${email}]:`, error);
+        noteEvent("sync-failed", `${email}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
         runningSync.delete(email);
 
@@ -127,6 +130,8 @@ async function startIdleWatcher(
             );
         }
 
+        noteWatcher(email, false);
+
         await new Promise((resolve) => setTimeout(resolve, 5000));
     }
 }
@@ -159,6 +164,7 @@ async function watchOnce(email: string, password: string): Promise<void> {
     });
 
     console.log(`IMAP idle watcher connected [${email}]`);
+    noteWatcher(email, true);
 
     await new Promise<void>((resolve, reject) => {
         client.on("close", () => resolve());
