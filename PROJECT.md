@@ -1549,6 +1549,14 @@ students):
   ("No rejected documents. Nothing to re-upload." …). Under 900 px the
   panes stack and the page scrolls normally. Not screenshot-tested here
   (no browser in this environment) - checked by the user after deploy.
+- **No reply box on automated emails** (user): threads whose email comes
+  from an automated sender show a grey note ("Automated email from …:
+  replies aren't read, so there's no reply box.") instead of the reply
+  panel. Automated = both Edugate senders (confirm@ / notify@edu.gov.kg,
+  ~9 in 10 emails; the emails say "do not reply") or a local part like
+  noreply / no-reply / donotreply / notify / notification(s) /
+  mailer-daemon / postmaster / bounce(s) on any domain
+  (`frontend/src/automatedSender.ts`). Real people keep the reply box.
 - Compact rows (user's idea, option a): subject · sender and a short
   time ("25 Sep, 6:03 PM") share one line (sender shortened with … before
   the time); the preview line is dropped for Edugate threads (always the

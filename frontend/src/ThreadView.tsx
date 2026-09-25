@@ -5,6 +5,7 @@ import { linkifyPlainText, sanitizeHtml } from "./linkify";
 import { findKeyInfo } from "./keyInfo";
 import { classifyEdugate, edugateTitle } from "../../shared/edugate";
 import { shortDateTime } from "./format";
+import { isAutomatedSender } from "./automatedSender";
 import KeyInfoBox from "./KeyInfoBox";
 
 interface Props {
@@ -187,7 +188,13 @@ export default function ThreadView({ items, onReplySent, studentName }: Props) {
                 </div>
             )}
 
-            {composeTarget ? (
+            {composeTarget && isAutomatedSender(composeTarget.sender_email) ? (
+                // Nobody reads replies to automated senders (Edugate etc.).
+                <p className="no-reply-note">
+                    Automated email from {composeTarget.sender_email}: replies aren't read, so there's
+                    no reply box.
+                </p>
+            ) : composeTarget ? (
                 <div className="reply-panel">
                     <h3>{replyTarget ? "Reply" : "Send another message"}</h3>
                     <p className="replying-as">

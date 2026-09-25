@@ -1772,3 +1772,13 @@ select,
         max-height: 60vh;
     }
 }
+
+/* Instead of the reply box on automated emails (Edugate etc.). */
+.no-reply-note {
+    margin: 16px 0 0;
+    padding: 10px 14px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
