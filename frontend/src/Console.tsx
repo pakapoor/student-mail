@@ -26,6 +26,16 @@ import type { College, StatusFilter, ThreadItem, ThreadSummary } from "./types";
 // superseded codes are hidden unless searching (backend threadBadge).
 const STATUS: StatusFilter = "all";
 
+// Friendly empty-list messages per filter button (Step 18 refresh).
+const EMPTY_TEXT: Record<ThreadFilter | "all", string> = {
+    all: "No emails match.",
+    code_live: "No fresh codes right now.",
+    code_expired: "No expired codes. Nobody is waiting on a new one.",
+    registered: "No registrations match.",
+    rejected: "No rejected documents. Nothing to re-upload.",
+    other: "No other emails.",
+};
+
 type MailCheckState =
     | { phase: "checking"; students: MailCheckStudent[] }
     | { phase: "done"; students: MailCheckStudent[]; added: number; checkedAt: number }
@@ -283,6 +293,9 @@ function Console({ college, onLoggedOut }: Props) {
 
     return (
         <div className="app">
+            {/* Header, search and filters stay put; only the list and the
+                email scroll (Step 18 refresh). */}
+            <div className="console-top">
             <header className="app-header">
                 <div className="header-brand">
                     <img className="header-logo" src={ISM_EDUTECH_LOGO} alt="ISM Edutech" />
@@ -373,16 +386,25 @@ function Console({ college, onLoggedOut }: Props) {
             )}
 
             <FilterButtons filter={filter} counts={counts} onChange={setFilter} />
+            </div>
 
             {error && <p className="error">{error}</p>}
 
             <div className="main-layout">
                 <div className="list-pane">
                     {loading ? (
-                        <p className="empty-state">Loading...</p>
+                        <div className="list-skeleton" aria-label="Loading">
+                            {[0, 1, 2, 3, 4, 5].map((i) => (
+                                <div className="skeleton-row" key={i}>
+                                    <span className="skeleton-bar" style={{ width: `${55 + ((i * 17) % 35)}%` }} />
+                                    <span className="skeleton-bar short" />
+                                </div>
+                            ))}
+                        </div>
                     ) : (
                         <>
                             <MessageList
+                                emptyText={EMPTY_TEXT[filter ?? "all"]}
                                 threads={threads}
                                 selectedId={selectedId}
                                 onSelect={setSelectedId}

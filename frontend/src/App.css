@@ -1528,3 +1528,247 @@
     font-weight: 400;
     font-size: 12px;
 }
+
+/* =====================================================================
+   Visual refresh, part 2 (Step 18, mockup approved): one typeface, one
+   palette, calmer badges, fixed top area with full-height panes. Kept as
+   one layer at the end so it overrides the older values above.
+   ===================================================================== */
+
+:root {
+    --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    --accent: #1f4fb8;
+    --accent-dark: #173d8f;
+    --accent-soft: #e9effc;
+    --page-bg: #f5f7fb;
+    --card-bg: #ffffff;
+    --border: #e3e7ef;
+    --border-soft: #eef1f6;
+    --text: #16213a;
+    --text-muted: #6b7488;
+    --ok: #15803d;
+    --ok-soft: #e7f5ec;
+    --bad: #c2352f;
+    --bad-soft: #fdeeed;
+    --warn: #a15c00;
+    --warn-soft: #fff4dc;
+    color-scheme: light;
+}
+
+/* The page behind the app is always the console's light background (the
+   Vite starter styles switched it dark with the OS theme - the dark bands
+   at the window edges). */
+html,
+body {
+    background: var(--page-bg);
+}
+
+/* One typeface for the whole site: console, login, college picker and the
+   Manage students window. */
+body,
+button,
+input,
+textarea,
+select,
+.app {
+    font-family: var(--font);
+}
+
+/* ---------- App layout: fixed top, panes fill the rest ---------- */
+.app {
+    height: 100vh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.console-top {
+    flex: none;
+    padding: 16px 24px 4px;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(22, 33, 58, 0.04);
+}
+
+.app .app-header {
+    margin-bottom: 16px;
+}
+
+.app .main-layout {
+    flex: 1;
+    min-height: 0;
+    padding: 16px 24px 20px;
+    align-items: stretch;
+}
+
+.app .list-pane,
+.app .detail-pane {
+    max-height: none;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    border-radius: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #c9d0dc transparent;
+}
+
+.app .error {
+    margin: 8px 24px 0;
+}
+
+/* ---------- Buttons and inputs ---------- */
+.logout-button {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.logout-button:hover {
+    background: var(--page-bg);
+    border-color: #cfd6e3;
+}
+
+.admin-search {
+    border-radius: 8px;
+    background: var(--page-bg);
+}
+
+/* ---------- Thread list rows ---------- */
+.message-row {
+    padding: 11px 16px 11px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    border-left: 3px solid transparent;
+}
+
+.message-row:hover {
+    background: #fafbfd;
+}
+
+.message-row.selected {
+    background: var(--accent-soft);
+    border-left-color: var(--accent);
+    box-shadow: none;
+}
+
+.message-row-top .student {
+    font-weight: 600;
+}
+
+/* ---------- Badges: one style, soft background + coloured dot ---------- */
+.message-row .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px 2px 7px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.message-row .badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+}
+
+.message-row .badge.registered { background: var(--ok-soft); color: var(--ok); }
+.message-row .badge.rejected { background: var(--bad-soft); color: var(--bad); }
+.message-row .badge.code { background: var(--accent-soft); color: var(--accent); }
+.message-row .badge.code.expired { background: var(--warn-soft); color: var(--warn); }
+.message-row .badge.used { background: #eef1f6; color: #6b7488; }
+.message-row .badge.pending { background: #fff1e6; color: #b45309; }
+.message-row .badge.replied { background: #eef1f6; color: #5c6680; }
+
+.badge-code-value {
+    font-family: var(--font-mono);
+    color: var(--accent-dark);
+}
+
+/* ---------- Boxes above a thread ---------- */
+.key-info {
+    border-radius: 10px;
+    padding: 16px 18px;
+}
+
+.key-info-value {
+    font-family: var(--font-mono);
+}
+
+.key-info.rejected {
+    border: 1px solid #f1c4c1;
+    background: var(--bad-soft);
+}
+
+.key-info-heading {
+    color: var(--bad);
+}
+
+/* ---------- Thread pane ---------- */
+.detail-pane h2 {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+/* ---------- Loading placeholder and empty states ---------- */
+.list-skeleton {
+    display: grid;
+}
+
+.skeleton-row {
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-soft);
+}
+
+.skeleton-bar {
+    display: block;
+    height: 11px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #eef1f6 0%, #f7f8fb 50%, #eef1f6 100%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-bar.short {
+    width: 40%;
+}
+
+@keyframes skeleton-shimmer {
+    from { background-position: 100% 0; }
+    to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton-bar { animation: none; }
+}
+
+.empty-state {
+    color: var(--text-muted);
+    font-size: 13.5px;
+}
+
+/* Narrow windows: stack the panes and let the page scroll normally. */
+@media (max-width: 900px) {
+    .app {
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+    }
+
+    .app .main-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .app .list-pane {
+        max-height: 60vh;
+    }
+}

@@ -56,9 +56,10 @@ interface Props {
     threads: ThreadSummary[];
     selectedId: number | null;
     onSelect: (id: number) => void;
+    emptyText?: string;
 }
 
-export default function MessageList({ threads, selectedId, onSelect }: Props) {
+export default function MessageList({ threads, selectedId, onSelect, emptyText }: Props) {
     // Ticks every 30 s so code ages - and the code disappearing once it
     // expires - stay current without reloading the list.
     const [now, setNow] = useState(() => Date.now());
@@ -69,7 +70,7 @@ export default function MessageList({ threads, selectedId, onSelect }: Props) {
     }, []);
 
     if (threads.length === 0) {
-        return <p className="empty-state">No messages match.</p>;
+        return <p className="empty-state">{emptyText ?? "No emails match."}</p>;
     }
 
     return (

@@ -1535,8 +1535,20 @@ students):
   08:09" review time shown as "25 Sep 2026, 08:09" without timezone
   conversion. Verified on production data: 288 registration, 38 rejection
   and 2 code threads get English titles; the rest keep their subject.
-  Part 2 (typeface, palette, badges, app layout, loading/empty states) to
-  follow.
+- **Visual refresh, part 2**: IBM Plex Sans / Plex Mono (Google Fonts in
+  `index.html`) for the whole site; one palette as tokens in a single
+  "Visual refresh, part 2" layer at the end of `App.css` (overrides the
+  older values); page background forced light (the Vite starter
+  `index.css` switched it dark with the OS theme - the dark bands at the
+  window edges); header + search + filters in a fixed white top area
+  (`.console-top`) with the list and email panes filling the rest of the
+  window and scrolling on their own (thin scrollbars); calmer badges (soft
+  background + coloured dot, strong colour kept for the boxes); clearer
+  selected row (blue left edge); codes/passwords in Plex Mono; a shimmer
+  placeholder while the list loads; friendly per-filter empty messages
+  ("No rejected documents. Nothing to re-upload." …). Under 900 px the
+  panes stack and the page scrolls normally. Not screenshot-tested here
+  (no browser in this environment) - checked by the user after deploy.
 - Compact rows (user's idea, option a): subject · sender and a short
   time ("25 Sep, 6:03 PM") share one line (sender shortened with … before
   the time); the preview line is dropped for Edugate threads (always the
