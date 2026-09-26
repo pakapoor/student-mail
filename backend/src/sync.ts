@@ -32,72 +32,82 @@ export async function insertMessageForStudent(
         ? [parsed.references]
         : [];
 
-    const result = await db.query(
-        `
-        INSERT INTO messages (
-            message_id,
-            student_email,
-            sender_email,
-            subject,
-            received_at,
-            body_text,
-            body_html,
-            in_reply_to,
-            reference_ids,
-            central_email,
-            migadu_hold_seconds,
-            migadu_queue_id,
-            sent_at,
-            edugate_kind
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        ON CONFLICT (message_id, student_email)
-        DO NOTHING
-        RETURNING id
-        `,
-        [
-            messageId,
-            studentEmail,
-            senderEmail,
-            parsed.subject || "",
-            receivedAt,
-            parsed.text,
-            parsed.html || null,
-            parsed.inReplyTo,
-            referenceIds,
-            centralEmail,
-            migaduHold ? Math.round(migaduHold.holdMs / 1000) : null,
-            migaduHold?.queueId ?? null,
-            sentAt,
-            edugateKind,
-        ]
-    );
+    const connection = await db.connect();
+    let discardConnection = false;
+    try {
+        await connection.query("BEGIN");
+        const result = await connection.query(
+            `
+            INSERT INTO messages (
+                message_id,
+                student_email,
+                sender_email,
+                subject,
+                received_at,
+                body_text,
+                body_html,
+                in_reply_to,
+                reference_ids,
+                central_email,
+                migadu_hold_seconds,
+                migadu_queue_id,
+                sent_at,
+                edugate_kind
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            ON CONFLICT (message_id, student_email)
+            DO NOTHING
+            RETURNING id
+            `,
+            [
+                messageId,
+                studentEmail,
+                senderEmail,
+                parsed.subject || "",
+                receivedAt,
+                parsed.text,
+                parsed.html || null,
+                parsed.inReplyTo,
+                referenceIds,
+                centralEmail,
+                migaduHold ? Math.round(migaduHold.holdMs / 1000) : null,
+                migaduHold?.queueId ?? null,
+                sentAt,
+                edugateKind,
+            ]
+        );
 
-    const inserted = result.rowCount === 1;
+        const inserted = result.rowCount === 1;
 
-    if (inserted) {
-        // An Edugate email that matches none of the verified templates:
-        // Edugate may have changed its wording or added a new type (e.g. a
-        // password reset). Nothing breaks - no box, no status change - but
-        // it's logged so the template can be checked and added.
-        if (isEdugateSender(senderEmail) && !edugateKind) {
-            console.warn(
-                `[edugate] UNKNOWN LAYOUT from=${senderEmail} student=${studentEmail} ` +
-                    `subject="${parsed.subject || "(no subject)"}" message=${messageId}`
-            );
-        }
+        if (inserted) {
+            // An Edugate email that matches none of the verified templates:
+            // Edugate may have changed its wording or added a new type (e.g. a
+            // password reset). Nothing breaks - no box, no status change - but
+            // it's logged so the template can be checked and added.
+            if (isEdugateSender(senderEmail) && !edugateKind) {
+                console.warn(
+                    `[edugate] UNKNOWN LAYOUT from=${senderEmail} student=${studentEmail} ` +
+                        `subject="${parsed.subject || "(no subject)"}" message=${messageId}`
+                );
+            }
 
-        if (edugateKind === "code" || edugateKind === "login") {
-            try {
-                await applyRegistrationEvent(studentEmail, edugateKind, sentAt ?? receivedAt);
-            } catch (error) {
-                // The email is stored either way; only the status is stale.
-                console.error(`[edugate] status update failed student=${studentEmail}:`, error);
+            if (edugateKind === "code" || edugateKind === "login") {
+                await applyRegistrationEvent(studentEmail, edugateKind, sentAt ?? receivedAt, connection);
             }
         }
-    }
+        await connection.query("COMMIT");
 
-    return inserted;
+        return inserted;
+    } catch (error) {
+        try {
+            await connection.query("ROLLBACK");
+        } catch {
+            discardConnection = true;
+        }
+        throw error;
+    } finally {
+        connection.release(discardConnection);
+    }
 }
 
 // Migadu sometimes returns a just-arrived email without its content (seen
@@ -121,6 +131,16 @@ export interface SyncResult {
     skipped: number;
 }
 
+// A pass that fails part-way (deadline, dropped connection, DB error) still
+// carries what it stored: those emails are already committed, and the next
+// pass sees them as duplicates, so this is the only chance to announce them.
+export class SyncFailure extends Error {
+    constructor(cause: unknown, readonly partial: SyncResult) {
+        super(cause instanceof Error ? cause.message : String(cause), { cause });
+        this.name = "SyncFailure";
+    }
+}
+
 interface MailboxState {
     last_uid: string | null;
     uid_validity: string | null;
@@ -128,7 +148,8 @@ interface MailboxState {
 
 export async function syncInbox(
     centralEmail: string,
-    centralPassword: string
+    centralPassword: string,
+    signal?: AbortSignal
 ): Promise<SyncResult> {
     const client = new ImapFlow({
         host: process.env.IMAP_HOST!,
@@ -141,22 +162,40 @@ export async function syncInbox(
         logger: false,
     });
 
+    // Closing the socket makes pending IMAP commands settle. The caller keeps
+    // its per-mailbox guard until this entire function (including DB work)
+    // settles, so a timed-out run can never overlap its successor.
+    const abort = () => client.close();
+    client.on("error", () => {});
+    signal?.addEventListener("abort", abort, { once: true });
     const syncStart = Date.now();
-    await client.connect();
-
-    const lock = await client.getMailboxLock("INBOX", { acquireTimeout: 30000 });
+    let lock: { release(): void } | undefined;
 
     let inserted = 0;
     let retryPending = false;
+    // Progress for a pass that fails part-way: the UIDs this pass covers,
+    // which of them are fully handled, the watermark it started from (null
+    // when there's none to compare with), and the lowest UID to retry.
+    let listedUids: number[] | null = null;
+    const doneUids = new Set<number>();
+    let baselineUid: number | null = null;
+    let passUidValidity: bigint | null = null;
+    let retryFromUid: number | null = null;
     const insertedStudents = new Set<string>();
     let skipped = 0;
 
     try {
+        signal?.throwIfAborted();
+        await client.connect();
+        signal?.throwIfAborted();
+        lock = await client.getMailboxLock("INBOX", { acquireTimeout: 30000 });
+        signal?.throwIfAborted();
         const studentResult = await db.query(
             "SELECT email FROM students WHERE central_email = $1",
             [centralEmail]
         );
 
+        signal?.throwIfAborted();
         const students = new Set(
             studentResult.rows.map((row) => row.email.toLowerCase())
         );
@@ -182,6 +221,7 @@ export async function syncInbox(
             "SELECT last_uid, uid_validity FROM central_mailboxes WHERE email = $1",
             [centralEmail]
         );
+        signal?.throwIfAborted();
         const state = stateResult.rows[0];
         const storedUidValidity = state?.uid_validity != null ? BigInt(state.uid_validity) : null;
         const storedLastUid = state?.last_uid != null ? Number(state.last_uid) : null;
@@ -213,14 +253,36 @@ export async function syncInbox(
         }
 
         let maxUidSeen = storedLastUid ?? 0;
-        // Lowest UID that came back without content this pass (retry it).
-        let retryFromUid: number | null = null;
+        baselineUid = isFirstSync || uidValidityChanged ? null : storedLastUid;
+        passUidValidity = currentUidValidity;
+
+        // The server may stream FETCH results out of UID order (GoDaddy sent
+        // 64-76, then 57-63, then 77+ in one pass), so "everything up to UID X
+        // is handled" can't be read off arrival order. List this pass's UIDs
+        // up front so a failed pass knows what it hasn't reached yet.
+        // Only the failure checkpoint needs this list: if the server rejects
+        // the SEARCH, sync on normally and just skip checkpointing.
+        try {
+            listedUids = (await client.search(useUidMode ? { uid: fetchRange } : { seq: fetchRange }, { uid: true })) || [];
+        } catch (searchError) {
+            signal?.throwIfAborted();
+            console.warn(`[sync] [${centralEmail}] UID listing failed, no checkpoint this pass:`, searchError);
+        }
+        signal?.throwIfAborted();
+
+        let inFlightUid: number | null = null;
 
         for await (const message of client.fetch(
             fetchRange,
             { source: true, internalDate: true, uid: true },
             { uid: useUidMode }
         )) {
+            // Reaching the next email means the previous one is fully handled.
+            if (inFlightUid !== null) {
+                doneUids.add(inFlightUid);
+            }
+            inFlightUid = message.uid;
+            signal?.throwIfAborted();
             if (message.uid > maxUidSeen) {
                 maxUidSeen = message.uid;
             }
@@ -253,6 +315,7 @@ export async function syncInbox(
             missingSourceAttempts.delete(attemptKey);
 
             const parsed = await simpleParser(message.source);
+            signal?.throwIfAborted();
 
             const messageId = parsed.messageId;
 
@@ -302,6 +365,7 @@ export async function syncInbox(
             let insertedThisMessage = false;
 
             for (const studentEmail of matchingStudents) {
+                signal?.throwIfAborted();
                 const wasInserted = await insertMessageForStudent(
                     parsed,
                     messageId,
@@ -352,13 +416,53 @@ export async function syncInbox(
         const newLastUid = retryFromUid !== null ? Math.min(maxUidSeen, retryFromUid - 1) : maxUidSeen;
         retryPending = retryFromUid !== null;
 
+        signal?.throwIfAborted();
         await db.query(
             `UPDATE central_mailboxes SET last_uid = $2, uid_validity = $3 WHERE email = $1`,
             [centralEmail, newLastUid, currentUidValidity.toString()]
         );
+    } catch (error) {
+        // Keep the progress made so the next pass doesn't redo it - otherwise
+        // a pass that always needs longer than the deadline would never move
+        // the watermark. Still inside the caller's running guard, so this
+        // can't race a successor. The checkpoint stops just below the lowest
+        // listed UID not yet handled, and never passes an email to be retried.
+        if (listedUids !== null && doneUids.size > 0 && passUidValidity !== null) {
+            const newUids = listedUids.filter((uid) => baselineUid === null || uid > baselineUid);
+            const notDone = newUids.filter((uid) => !doneUids.has(uid));
+            let checkpoint = notDone.length > 0 ? Math.min(...notDone) - 1 : Math.max(0, ...newUids);
+
+            if (retryFromUid !== null) {
+                checkpoint = Math.min(checkpoint, retryFromUid - 1);
+            }
+
+            if (checkpoint > (baselineUid ?? 0)) {
+                try {
+                    await db.query(
+                        `UPDATE central_mailboxes SET last_uid = $2, uid_validity = $3 WHERE email = $1`,
+                        [centralEmail, checkpoint, passUidValidity.toString()]
+                    );
+                    console.warn(`[sync] [${centralEmail}] pass failed; kept progress up to UID ${checkpoint}`);
+                } catch (checkpointError) {
+                    console.error(`[sync] [${centralEmail}] could not save progress:`, checkpointError);
+                }
+            }
+        }
+
+        // An abort surfaces as whatever the closed connection threw; report
+        // the deadline instead.
+        throw new SyncFailure(signal?.aborted ? signal.reason : error, {
+            inserted,
+            skipped,
+            insertedStudentEmails: [...insertedStudents],
+        });
     } finally {
-        lock.release();
-        await client.logout();
+        signal?.removeEventListener("abort", abort);
+        try {
+            lock?.release();
+        } finally {
+            client.close();
+        }
     }
 
     console.log(`[TIMING] syncInbox [${centralEmail}] total duration: ${Date.now() - syncStart}ms (inserted=${inserted}, skipped=${skipped})`);

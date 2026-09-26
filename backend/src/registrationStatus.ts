@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { db } from "./db.js";
 
 // Edugate registration status per student (migration 010):
@@ -15,9 +16,10 @@ import { db } from "./db.js";
 export async function applyRegistrationEvent(
     studentEmail: string,
     kind: "code" | "login",
-    sentAt: Date | string
+    sentAt: Date | string,
+    connection: Pick<PoolClient, "query"> = db
 ): Promise<void> {
-    await db.query(
+    await connection.query(
         `
         UPDATE students SET
             code_sent_at = CASE WHEN $2 = 'code'

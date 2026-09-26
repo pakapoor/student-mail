@@ -1,5 +1,6 @@
+import { withSyncDeadline } from "./syncDeadline.js";
 import { ImapFlow } from "imapflow";
-import { syncInbox } from "./sync.js";
+import { SyncFailure, syncInbox } from "./sync.js";
 import { broadcast } from "./realtime.js";
 import { db } from "./db.js";
 import { noteEvent, noteSyncSuccess, noteWatcher } from "./systemStatus.js";
@@ -12,32 +13,9 @@ const runningSync = new Set<string>();
 const pendingRerun = new Set<string>();
 const activeWatchers = new Set<string>();
 
-// Hard ceiling on a single sync run. imapflow has no documented per-call
-// timeout, so a stalled network operation would otherwise hang forever -
-// which, combined with the runningSync guard, would permanently block both
-// future IDLE triggers and the fallback poll for that mailbox until the
-// process was restarted. This guarantees runningSync always clears within
-// bounded time regardless of what's hanging underneath.
+// The deadline aborts IMAP work; the running guard stays held until cleanup
+// and any in-flight database statement settle.
 const SYNC_WATCHDOG_MS = 45000;
-
-function withWatchdog<T>(promise: Promise<T>, email: string): Promise<T> {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error(`syncInbox [${email}] exceeded ${SYNC_WATCHDOG_MS}ms watchdog`));
-        }, SYNC_WATCHDOG_MS);
-
-        promise.then(
-            (value) => {
-                clearTimeout(timer);
-                resolve(value);
-            },
-            (error) => {
-                clearTimeout(timer);
-                reject(error);
-            }
-        );
-    });
-}
 
 // Colleges the newly synced mail belongs to - each console only chimes for
 // its own college. A lookup failure just means no chime, never a failed sync.
@@ -72,7 +50,7 @@ export async function triggerSync(
     const start = Date.now();
 
     try {
-        const { inserted, insertedStudentEmails, retryPending } = await withWatchdog(syncInbox(email, password), email);
+        const { inserted, insertedStudentEmails, retryPending } = await withSyncDeadline((signal) => syncInbox(email, password, signal), SYNC_WATCHDOG_MS, email);
         noteSyncSuccess(email);
 
         // An email came back without content - try again shortly rather
@@ -94,6 +72,16 @@ export async function triggerSync(
     } catch (error) {
         console.error(`Sync failed [${email}]:`, error);
         noteEvent("sync-failed", `${email}: ${error instanceof Error ? error.message : String(error)}`);
+
+        // Emails stored before the failure are committed but were never
+        // announced - the next pass sees them as duplicates, so it's now or
+        // never for the live update and chime.
+        if (error instanceof SyncFailure && error.partial.inserted > 0) {
+            const { inserted, insertedStudentEmails } = error.partial;
+            const collegeIds = await collegeIdsForStudents(insertedStudentEmails);
+            broadcast("update", { reason: "new-mail", inserted, collegeIds }, email);
+            console.log(`[TIMING] broadcast sent for ${inserted} message(s) stored before the failure [${email}]`);
+        }
     } finally {
         runningSync.delete(email);
 

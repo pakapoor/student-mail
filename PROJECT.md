@@ -1688,6 +1688,44 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 26 — Sync reliability (the batch held back from Step 22)
+
+This was review item 5. It was held because it changes the path every
+incoming email takes and had no live test. Now shipped:
+- **Real cancellation** (`syncDeadline.ts`, `mailboxSync.ts`, `sync.ts`).
+  The 45 s deadline aborts the IMAP work (closing the connection) and
+  waits for cleanup before the per-mailbox guard is released. Before, it
+  gave up on a stuck sync without stopping it, so the next sync could
+  overlap it and write the watermark out of order.
+- **Insert + registration status in one transaction** (`sync.ts`,
+  `registrationStatus.ts`). A failed status update rolls the email back so
+  a retry does both, instead of storing the email with a stale status.
+- **A failed pass keeps its progress.** It lists the pass's UIDs first
+  (GoDaddy streams FETCH results out of UID order) and saves the watermark
+  just below the lowest UID not yet handled, never past an email due for
+  retry. If the UID listing itself fails, the pass continues without a
+  checkpoint.
+- **Emails stored before a failure are still announced** (`SyncFailure`
+  carries them; `mailboxSync.ts` broadcasts). The next pass sees them as
+  duplicates and never would.
+
+Verified:
+- Unit tests 28/28 (20 in `reliability.test.mjs`), `tsc` clean.
+- **Live test with no real mailbox:** real imapflow + real Postgres against
+  a throwaway local TLS IMAP server (`hoodiecrow-imap`, scratch folder
+  only) with 60 synthetic emails, and a scratch database built from
+  `schema.sql` (dropped afterwards).
+  - Pass 1 was aborted after 20 stored emails. It reported the deadline
+    and what it stored, saved the watermark at UID 20, and every UID ≤ 20
+    was stored.
+  - Pass 2 stored exactly the other 40, each once, with the watermark
+    at 60.
+  - Pass 3 found nothing new.
+  - The synthetic Edugate code email set the student's status in the same
+    transaction.
+- Test scripts: the session scratchpad `imaptest/` (`server.cjs`,
+  `sync-live.mts`).
+
 ## Step 25 — Review fixes: live updates never go silent, sandboxed email, backups
 
 These are the first four findings of the full project review (the user
@@ -2016,22 +2054,6 @@ a live IDLE connection per hot student instead of 2-min polling (seconds
 instead of minutes, one login per student instead of one every 2 min).
 
 ## Not yet built / open items
-
-- **Held from Step 22: sync reliability changes** (outside the repo in
-  `~/student-mail-held/step22-sync-reliability/`, README there).
-  - What it contains:
-    - the 45 s deadline aborts IMAP work and waits for cleanup, so syncs
-      never overlap;
-    - message insert and registration-status update run in one transaction;
-    - a pass that fails part-way keeps its watermark progress (it lists the
-      pass's UIDs first, since GoDaddy returns FETCH results out of UID
-      order);
-    - emails stored by a failed pass are still announced live.
-  - Held because it changes the path every email takes and has had no live
-    test on Migadu. What it fixes is rare: overlapping syncs only re-fetch,
-    since inserts are idempotent.
-  - Before shipping: run a live forced-failure test on the dev setup
-    (5433 + `.env.local`), ideally also against a Migadu mailbox.
 
 - **`sync.ts`'s IMAP fetch is sequence-number-based, not UID-based - fix
   before scaling up.** It always fetches the last 50 messages by sequence

@@ -18,9 +18,9 @@ Reviewed against the staff workflow: request a government-site code, register on
 
 3. **Honest activity counts.** The API exposes the activity window, 500-event cap, retained-event count, and approximate flag. Once the cap drops events, the window starts at the oldest event kept. The status page labels memory-based recovery/retry/failure counts as approximate. Database-backed daily email/delivery totals remain labelled today.
 
-## Held back (not deployed)
+## Sync reliability (shipped in Step 26)
 
-Sync cancellation and serialization, atomic email + registration-state writes, failure checkpoints, and announcing emails stored by a failed pass. This code sits on the path every incoming email takes and has had no live test against Migadu, so it was split out. It is kept outside the repo in `~/student-mail-held/step22-sync-reliability/` (see its README), with the live test it needs before shipping. Local testing of it found and fixed one real defect: GoDaddy streams FETCH results out of UID order, so a checkpoint based on arrival order could have skipped emails.
+Held back from Step 22 until it had a live test, then shipped: real sync cancellation and serialization, atomic email + registration-state writes, failure checkpoints that list the pass's UIDs first (GoDaddy streams FETCH results out of UID order), and announcing emails stored by a failed pass. Live-tested against a throwaway local IMAP server with synthetic mail and a scratch database: an aborted pass kept its progress, and the next pass fetched exactly the remaining emails, each stored once.
 
 ## UI corrections from the review
 
