@@ -182,20 +182,81 @@ export interface UpdateEvent {
     collegeIds?: string[];
 }
 
-export function subscribeToUpdates(onUpdate: (event: UpdateEvent) => void): () => void {
-    const source = new EventSource(`${API_BASE}/api/events`, {
-        withCredentials: true,
-    });
-    source.addEventListener("update", (e) => {
-        let data: UpdateEvent = {};
-        try {
-            data = JSON.parse((e as MessageEvent).data);
-        } catch {
-            // Refresh anyway, just without the extra detail.
-        }
-        onUpdate(data);
-    });
-    return () => source.close();
+// Live updates that never silently stop. A browser only retries an
+// EventSource by itself after a network drop; after an HTTP error (401 once
+// logged out, 502 while the backend restarts) it gives up for good, and the
+// console would keep looking normal with no new mail arriving. So:
+// - after any reconnect, report { reason: "reconnected" } - events sent
+//   during the gap were missed, so the caller reloads;
+// - when the browser gives up, check the session: logged out → onSignedOut,
+//   otherwise try again with backoff (1 s, 2 s, 4 s … 30 s).
+export function subscribeToUpdates(
+    onUpdate: (event: UpdateEvent) => void,
+    onSignedOut: () => void
+): () => void {
+    let source: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    let hasOpened = false;
+    let failures = 0;
+
+    const connect = () => {
+        source = new EventSource(`${API_BASE}/api/events`, { withCredentials: true });
+
+        source.addEventListener("open", () => {
+            if (hasOpened) {
+                onUpdate({ reason: "reconnected" });
+            }
+            hasOpened = true;
+            failures = 0;
+        });
+
+        source.addEventListener("update", (e) => {
+            let data: UpdateEvent = {};
+            try {
+                data = JSON.parse((e as MessageEvent).data);
+            } catch {
+                // Refresh anyway, just without the extra detail.
+            }
+            onUpdate(data);
+        });
+
+        source.addEventListener("error", () => {
+            // Still CONNECTING: the browser is retrying by itself.
+            if (!source || source.readyState !== EventSource.CLOSED || stopped) {
+                return;
+            }
+
+            source.close();
+            failures++;
+            retryTimer = setTimeout(async () => {
+                if (stopped) return;
+
+                // null = logged out; a failed check (backend still starting)
+                // just means try again.
+                const session = await fetchCurrentSession().catch(() => undefined);
+
+                if (stopped) return;
+
+                if (session === null) {
+                    onSignedOut();
+                    return;
+                }
+
+                // Reconnecting after a give-up counts as a gap too.
+                hasOpened = true;
+                connect();
+            }, Math.min(30000, 1000 * 2 ** Math.min(failures - 1, 5)));
+        });
+    };
+
+    connect();
+
+    return () => {
+        stopped = true;
+        clearTimeout(retryTimer);
+        source?.close();
+    };
 }
 
 export async function sendReply(

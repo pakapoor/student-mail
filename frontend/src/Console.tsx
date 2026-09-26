@@ -249,6 +249,12 @@ function Console({ college, onLoggedOut }: Props) {
     const selectedIdRef = useRef(selectedId);
     const searchRef = useRef(debouncedSearch);
     const filterRef = useRef(filter);
+    // Stable for the live-update subscription (App passes a new arrow each render).
+    const onLoggedOutRef = useRef(onLoggedOut);
+
+    useEffect(() => {
+        onLoggedOutRef.current = onLoggedOut;
+    }, [onLoggedOut]);
 
     useEffect(() => {
         filterRef.current = filter;
@@ -284,7 +290,7 @@ function Console({ college, onLoggedOut }: Props) {
             if (selectedIdRef.current !== null) {
                 loadThread(selectedIdRef.current);
             }
-        });
+        }, () => onLoggedOutRef.current());
     }, [loadMessages, loadThread, college.id]);
 
     function handleReplySent() {

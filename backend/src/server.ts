@@ -28,6 +28,7 @@ import {
     getSession,
     setSessionCollege,
     SESSION_COOKIE,
+    SESSION_TTL_MS,
     verifyImapLogin,
 } from "./auth.js";
 import {
@@ -45,6 +46,8 @@ import {
 
 const upload = multer({ dest: "uploads/" });
 
+const SSE_KEEPALIVE_MS = 25 * 1000;
+
 const app = express();
 
 const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
@@ -58,13 +61,13 @@ app.use(cors({ origin: frontendOrigin, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
-function requireAuth(
+async function requireAuth(
     req: express.Request,
     res: express.Response,
     next: express.NextFunction
 ) {
     const token = req.cookies?.[SESSION_COOKIE];
-    const session = getSession(token);
+    const session = await getSession(token);
 
     if (!session) {
         res.status(401).json({ error: "Not authenticated" });
@@ -121,13 +124,13 @@ app.post("/api/auth/login", async (req, res) => {
     ensureWatcher(email, password);
     triggerSync(email, password);
 
-    const token = createSession(email);
+    const token = await createSession(email);
 
     res.cookie(SESSION_COOKIE, token, {
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
-        maxAge: 1000 * 60 * 60 * 24 * 7,
+        maxAge: SESSION_TTL_MS,
     });
 
     res.json({ email, college: null });
@@ -150,19 +153,22 @@ app.post("/api/auth/college", requireAuth, async (req, res) => {
         return;
     }
 
-    setSessionCollege(token, college);
+    if (!(await setSessionCollege(token, college))) {
+        res.status(401).json({ error: "Not authenticated" });
+        return;
+    }
 
     res.json({ email: res.locals.centralEmail, college });
 });
 
-app.post("/api/auth/logout", (req, res) => {
-    destroySession(req.cookies?.[SESSION_COOKIE]);
+app.post("/api/auth/logout", async (req, res) => {
+    await destroySession(req.cookies?.[SESSION_COOKIE]);
     res.clearCookie(SESSION_COOKIE);
     res.json({ loggedOut: true });
 });
 
-app.get("/api/auth/me", (req, res) => {
-    const session = getSession(req.cookies?.[SESSION_COOKIE]);
+app.get("/api/auth/me", async (req, res) => {
+    const session = await getSession(req.cookies?.[SESSION_COOKIE]);
 
     if (!session) {
         res.status(401).json({ error: "Not authenticated" });
@@ -413,7 +419,14 @@ app.get("/api/events", requireAuth, requireCollege, (req, res) => {
     res.write(": connected\n\n");
     console.log(`SSE client connected [${centralEmail}]`);
 
+    // Keep-alive: nginx closes a proxied connection after 60 s without data,
+    // which dropped every console's stream about once a minute (events sent
+    // during the reconnect gap were lost). A comment line every 25 s keeps it
+    // open; browsers ignore it.
+    const keepAlive = setInterval(() => res.write(": ping\n\n"), SSE_KEEPALIVE_MS);
+
     req.on("close", () => {
+        clearInterval(keepAlive);
         console.log(`SSE client disconnected [${centralEmail}]`);
         removeClient(res);
     });

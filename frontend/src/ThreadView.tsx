@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingThreadItem, ThreadItem } from "./types";
 import { sendFollowUp, sendReply } from "./api";
 import { linkifyPlainText, sanitizeHtml } from "./linkify";
+import EmailFrame from "./EmailFrame";
 import { findKeyInfo } from "./keyInfo";
 import { classifyEdugate, edugateTitle } from "../../shared/edugate";
 import { shortDateTime } from "./format";
@@ -391,6 +392,10 @@ function ThreadBubble({ item, full = false }: { item: ThreadItem; full?: boolean
         );
     }, [item]);
 
+    // External HTML email goes in a sandboxed frame (EmailFrame.tsx); our
+    // own replies and plain text are rendered inline as before.
+    const inFrame = item.type === "incoming" && Boolean(item.body_html);
+
     const bodyRef = useRef<HTMLDivElement>(null);
     const [isOverflowing, setIsOverflowing] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -409,11 +414,21 @@ function ThreadBubble({ item, full = false }: { item: ThreadItem; full?: boolean
 
     const body = (
         <>
-            <div
-                ref={bodyRef}
-                className={bodyClassName}
-                dangerouslySetInnerHTML={{ __html: renderedBody }}
-            />
+            {inFrame ? (
+                <div ref={bodyRef} className={bodyClassName + " bubble-body-frame"}>
+                    {/* The frame's height is only known once it loads. */}
+                    <EmailFrame
+                        html={renderedBody}
+                        onHeightChange={(height) => setIsOverflowing(height > CLAMP_HEIGHT_PX + 1)}
+                    />
+                </div>
+            ) : (
+                <div
+                    ref={bodyRef}
+                    className={bodyClassName}
+                    dangerouslySetInnerHTML={{ __html: renderedBody }}
+                />
+            )}
             {!full && isOverflowing && (
                 <button
                     type="button"
@@ -429,7 +444,7 @@ function ThreadBubble({ item, full = false }: { item: ThreadItem; full?: boolean
     if (item.type === "incoming") {
         return (
             <>
-                <div className="bubble bubble-incoming">
+                <div className={inFrame ? "bubble bubble-incoming bubble-framed" : "bubble bubble-incoming"}>
                     <div className="bubble-meta">
                         <span className="bubble-from">{item.sender_email}</span>
                         <span className="bubble-time">

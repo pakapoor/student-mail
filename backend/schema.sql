@@ -144,3 +144,15 @@ CREATE TABLE central_mailboxes (
     last_uid BIGINT,
     uid_validity BIGINT
 );
+
+-- Login sessions (migration 011, auth.ts). Only a SHA-256 of the cookie is
+-- stored; expires 7 days after login, like the cookie.
+CREATE TABLE sessions (
+    token_hash TEXT PRIMARY KEY,
+    email VARCHAR(320) NOT NULL,
+    college_id BIGINT REFERENCES colleges(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_sessions_expires_at ON sessions (expires_at);

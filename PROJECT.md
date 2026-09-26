@@ -1688,6 +1688,65 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 25 — Review fixes: live updates never go silent, sandboxed email, backups
+
+These are the first four findings of the full project review (the user
+chose 1–4 and said to leave the rest).
+
+1. **Sessions in Postgres** (migration `011_sessions.sql`, `auth.ts`).
+   - Before, a backend restart (deploy, crash, reboot) logged every staff
+     member out.
+   - Now only a SHA-256 of the cookie is stored, with a 7-day expiry as
+     before, and an in-memory cache refilled from the table after a
+     restart.
+   - The migration must be run **as `student_mail_app`** (it owns every
+     table); in dev, running it as the OS user left the app without access.
+
+   **Live updates reconnect themselves** (`api.ts` `subscribeToUpdates`,
+   `Console.tsx`). A browser never retries an EventSource after an HTTP
+   error (401, or 502 while the backend restarts), so open consoles used
+   to stop getting new mail with no sign of it. Now:
+   - after a give-up, the console checks the session: if signed out it
+     goes to the login screen, otherwise it reconnects with backoff
+     (1 s … 30 s);
+   - every reconnect reloads the list and the open thread, because events
+     sent during the gap were missed (no chime for those).
+2. **Nightly backup** (`backend/scripts/backup-db.sh`, cron 20:30 UTC).
+   - `pg_dump` into `~/backups/nightly/` (600), keeping 14 days.
+   - When `~/.backup.env` sets `BACKUP_S3_BUCKET` and the aws CLI exists,
+     it also uploads a gpg-encrypted copy (passphrase in
+     `~/.backup-passphrase`, which must also be kept off the server).
+   - The S3 part needs a bucket + instance IAM role set up by the user in
+     the AWS console.
+3. **SSE keep-alive** (`server.ts`). A `: ping` every 25 s. nginx's
+   60-second idle timeout had been cutting every stream about once a
+   minute (44 "upstream timed out" in one day's log). Events sent during
+   the ~3 s reconnect gap were lost.
+4. **Incoming HTML email in a sandboxed iframe** (`EmailFrame.tsx`).
+   - DOMPurify defaults kept `<style>` (which applied to the whole
+     console), `<form>`/`<input>` and `<button>`.
+   - The frame (`allow-same-origin allow-popups
+     allow-popups-to-escape-sandbox`: no scripts, no forms) isolates the
+     email's CSS and blocks form submits. It sizes itself to the content,
+     so "Show full message" still works. Links open in a new tab.
+   - Remote images still load (a user-facing choice, not changed).
+   - Replies and plain-text emails render inline as before.
+
+Verified locally:
+- Backend tests 13/13 (new `tests/auth.test.mjs`: hash-only storage,
+  survives restart, college persisted, logout, expiry). `tsc` clean,
+  frontend build clean, oxlint only the 3 known warnings.
+- The real session SQL ran against the dev Postgres (5433): a session
+  survives a module reload (a simulated restart) with its college, and is
+  gone after logout.
+- Headless Chromium with synthetic data
+  (`/tmp/student-mail-browser/step25.cjs`):
+  - a stream drop followed by a 502 → reconnected and the list reloaded;
+  - signed out while open → login screen;
+  - a hostile email (`<style>` making the page red and hiding rows, plus a
+    form posting to another site) → page unaffected, rows visible, zero
+    form requests, "Show full message" still shown.
+
 ## Step 24 — Application No in the message list
 
 Each list row's top line shows the student's Application No between the
