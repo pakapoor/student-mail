@@ -17,6 +17,7 @@ import FilterButtons from "./FilterButtons";
 import { saveSearchForReload, takeSearchSavedForReload, useNewVersionAvailable } from "./versionCheck";
 import ThreadView from "./ThreadView";
 import ManageStudents from "./ManageStudents";
+import CodeAlerts from "./CodeAlerts";
 import { collegeLogo, ISM_EDUTECH_LOGO } from "./branding";
 import type { College, StatusFilter, ThreadItem, ThreadSummary } from "./types";
 
@@ -73,6 +74,8 @@ function Console({ college, onLoggedOut }: Props) {
     const [threadError, setThreadError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [showManageStudents, setShowManageStudents] = useState(false);
+    // Bumped on every live update so the code alert rows refresh at once.
+    const [alertsRefreshKey, setAlertsRefreshKey] = useState(0);
 
     // Single search box shared across both tabs - the same term stays
     // applied when switching Pending/Closed, so a user unsure which tab a
@@ -286,6 +289,7 @@ function Console({ college, onLoggedOut }: Props) {
             // (list + open thread + pending count) stays consistent with
             // the server.
             loadMessages(statusRef.current, searchRef.current, filterRef.current);
+            setAlertsRefreshKey((k) => k + 1);
 
             if (selectedIdRef.current !== null) {
                 loadThread(selectedIdRef.current);
@@ -358,6 +362,10 @@ function Console({ college, onLoggedOut }: Props) {
                 />
             )}
 
+            {/* Search + filters on the left; code expiry alerts on the right,
+                above the email pane (Step 27). */}
+            <div className="console-controls">
+            <div className="console-controls-main">
             <div className="console-search">
                 <input
                     className="admin-search"
@@ -414,6 +422,13 @@ function Console({ college, onLoggedOut }: Props) {
             )}
 
             <FilterButtons filter={filter} counts={counts} onChange={setFilter} />
+            </div>
+            <CodeAlerts
+                refreshKey={alertsRefreshKey}
+                onOpen={setSelectedId}
+                onShowOlder={() => setFilter("code_expired")}
+            />
+            </div>
             </div>
 
             {error && <p className="error" role="alert">{error} <button className="mail-check-again" onClick={() => loadMessages(status, debouncedSearch, filter)}>Retry</button></p>}

@@ -15,6 +15,7 @@ import {
     sendReply,
 } from "./reply.js";
 import { THREAD_FILTERS, fetchThread, fetchThreadSummaries, findSearchMatches } from "./thread.js";
+import { fetchCodeAlerts } from "./codeAlerts.js";
 import { checkStudentMailbox } from "./checkStudentMail.js";
 import { startSweep } from "./sweep.js";
 import { startHotList } from "./hotList.js";
@@ -307,6 +308,12 @@ app.get("/api/threads", requireAuth, requireCollege, async (req, res) => {
         filter
     );
     res.json(page);
+});
+
+// Code expiry alert rows above the email pane (Step 27, codeAlerts.ts).
+// Each console polls this once a minute and after every live update.
+app.get("/api/codes/alerts", requireAuth, requireCollege, async (_req, res) => {
+    res.json(await fetchCodeAlerts(res.locals.centralEmail, res.locals.collegeId));
 });
 
 // System status page (/status, Step 21): health of the sync, hot list,

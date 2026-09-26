@@ -437,6 +437,32 @@ export async function markHandled(id: number): Promise<void> {
     }
 }
 
+// Code expiry alert rows (Step 27). Shape of backend codeAlerts.ts.
+export interface CodeAlert {
+    messageId: number;
+    email: string;
+    name: string | null;
+    appNo: string | null;
+    state: "expiring" | "expired";
+    expiresAt: string;
+}
+
+export interface CodeAlertsResult {
+    alerts: CodeAlert[];
+    olderExpired: number;
+    serverNow: string;
+}
+
+export async function fetchCodeAlerts(): Promise<CodeAlertsResult> {
+    const res = await fetch(`${API_BASE}/api/codes/alerts`, { credentials: "include" });
+
+    if (!res.ok) {
+        throw new Error(`Could not load code alerts (${res.status})`);
+    }
+
+    return res.json();
+}
+
 // System status page (/status). Shape of backend systemStatus.ts.
 export interface SystemStatus {
     generatedAt: string;
@@ -449,6 +475,20 @@ export interface SystemStatus {
     recoveredToday: { search: number; sweep: number; hot: number };
     mailboxFailures24h: number;
     delays: { heldOver5MinToday?: number; longestTodaySeconds?: number | null; longest7DaysSeconds?: number | null };
+    codes?:
+        | { error: string }
+        | {
+              days: {
+                  day: string;
+                  codes: number;
+                  expiredUnused: number;
+                  handled: number;
+                  open: number;
+                  migaduDelayed: number;
+                  medianMinutesToFreshCode: number | null;
+              }[];
+              timeline: { stepMinutes: number; points: { at: string; waiting: number }[] };
+          };
     database: { reachable: boolean; emails?: number };
     server: {
         disk: { totalBytes: number; usedBytes: number } | null;

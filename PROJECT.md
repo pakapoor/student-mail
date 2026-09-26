@@ -1688,6 +1688,80 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 27 — Code expiry alerts, expired-code tracking, square favicon
+
+**Status: built and tested locally, NOT committed or deployed.** The user
+wants to check in only once the site is quiet (it's live and in use).
+Deploying needs a backend restart; there's no database migration.
+
+Why: staff occasionally miss a verification code, and it expires before
+anyone types it into Edugate. The student then has to ask for a fresh
+code.
+
+- **Alert rows in the console** (`frontend/src/CodeAlerts.tsx`, placed in
+  `Console.tsx`). They sit to the right of the search box and filters,
+  above the email pane, so nothing else moves. At most 2 rows show; with
+  more, they roll up one every 4 s, pausing under the mouse (reduced motion:
+  no roll, "+N more" instead). Clicking a row opens that student's thread.
+  - Amber: a code in its last 5 minutes ("expires in 3 min").
+  - Red: expired unused ("expired 4 min ago · get fresh code").
+  - Red rows (user's rule): fewer than 5 waiting → all shown until
+    handled, with a 24 h outer limit so a student who gave up doesn't sit
+    there for days; 5 or more → only those from the last 30 min, plus a
+    "+N older expired" link that switches the list to "Code expired".
+  - Refreshes every 60 s and on every live update; amber turns red on the
+    client at the expiry time; countdowns use the server clock.
+  - Mockup the user approved (stacked, 2 rows, rolling):
+    https://claude.ai/artifact/TM36edvUMe9SL1sbNxv3c1
+- **One set of rules, no new table** (`backend/src/codeAlerts.ts`). It's
+  all derived from the stored code and login emails, so it survives
+  restarts and covers past days. Per code email:
+  - used = a login email sent before expiry + 5 min grace (as the hot list);
+  - replaced = a newer code came before expiry (not a miss);
+  - expired unused = neither, and the expiry time has passed;
+  - **handled = a fresh code arrived** (user's definition); time to handle
+    = fresh code time − expiry time;
+  - still waiting = no fresh code and no registration yet;
+  - Migadu-delayed = the code email itself was held > 5 min.
+  - Endpoint: `GET /api/codes/alerts` (logged-in college only).
+- **Status page** (`systemStatus.ts`, `StatusPage.tsx`,
+  `ExpiredCodesChart.tsx`):
+  - an amber warning line ("3 verification codes expired unused today; 2
+    still waiting for a fresh code.") - a staff miss, not a system fault;
+  - one "Recent problems" row per expiry in the last 24 h, with the outcome
+    and any Migadu hold;
+  - an "Expired codes" card: a smooth line (monotone, never overshoots) of
+    how many were waiting, every 5 min over the last 6 h (user: only the
+    most recent matters) - a fixed sliding window, no browsing back (user:
+    "whats gone is gone"); a time label every hour - plus a 7-day
+    table (codes, expired unused, handled, median time to fresh code, still
+    waiting). Days follow the database time zone, like the other "today"
+    figures.
+- **Favicon**: the tab icon was the wide ISM Edutech logo squashed into a
+  square. Now `public/logos/ism-edutech-icon.svg` (the shield, cropped from
+  the same PNG, embedded); the PNG stays as a fallback in `index.html`.
+
+Verified:
+- Backend tests 33/33 (5 new in `codeAlerts.test.mjs`); `tsc` clean on
+  both sides; frontend build OK; lint adds only 2 set-state-in-effect
+  warnings of the kind already present elsewhere.
+- **Local end-to-end with test data only, nothing reaching Migadu:** the
+  backend ran with `IMAP_HOST`/`SMTP_HOST=127.0.0.1` (port 9, refused) and
+  `HOT_ENABLED=false SWEEP_ENABLED=false`, against the local DB with 6
+  made-up students (`step27.*@example.test`, `is_test`) on a made-up
+  central mailbox, and a session row inserted directly (the normal login
+  checks the real mailbox). Alert order and states, the 5-or-more rule,
+  status figures and running-count points all matched the test data;
+  401 without a session. The user checked both pages in the browser.
+  Test scripts: the session scratchpad (`seed.mts`, `five.mts`,
+  `cleanup.mts`).
+- The local DB was brought up to date for this: migrations 008-011 plus
+  `idx_messages_student_email` (applied to production by hand in Step 16).
+
+Deploy notes (when the user says so): `git pull`, `npm run build` in
+`frontend/`, restart `student-mail.service`. Open consoles pick up the new
+bundle by themselves (`versionCheck.ts`).
+
 ## Step 26 — Sync reliability (the batch held back from Step 22)
 
 This was review item 5. It was held because it changes the path every

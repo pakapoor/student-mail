@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchSystemStatus, type SystemStatus } from "./api";
 import { shortDateTime } from "./format";
+import ExpiredCodesChart from "./ExpiredCodesChart";
 
 // System status page at /status (Step 21). Not linked from the staff
 // screens; needs the normal console login. Refreshes every 30 s. No alert
@@ -101,6 +102,8 @@ export default function StatusPage() {
     const sweep = s.sweep;
     const diskPct = s.server.disk ? Math.round((s.server.disk.usedBytes / s.server.disk.totalBytes) * 100) : null;
     const sweepPct = sweep && sweep.mailboxes > 0 ? Math.round((sweep.sweptThisRound / sweep.mailboxes) * 100) : 0;
+    const codes = s.codes && !("error" in s.codes) ? s.codes : null;
+    const waitingNow = codes?.timeline.points.at(-1)?.waiting ?? 0;
 
     return (
         <div className="status-page">
@@ -231,6 +234,56 @@ export default function StatusPage() {
                             <Row label="Database" value={s.database.reachable ? `Reachable · ${s.database.emails} emails` : "Not reachable"} />
                         </div>
                     </div>
+                </div>
+
+                {/* Step 27: verification codes that expired unused. */}
+                <div className="status-card">
+                    <div className="status-card-head">
+                        <b>Expired codes</b>
+                        {!codes ? (
+                            <Pill tone="warn">Unavailable</Pill>
+                        ) : waitingNow > 0 ? (
+                            <Pill tone="warn">{waitingNow} waiting now</Pill>
+                        ) : (
+                            <Pill tone="ok">None waiting</Pill>
+                        )}
+                    </div>
+                    {codes && (
+                        <>
+                            <p className="status-hint">Waiting for a fresh code, every 5 min over the last 6 h.</p>
+                            <ExpiredCodesChart points={codes.timeline.points} />
+                            <div className="status-table-wrap">
+                                <table className="status-table codes-days">
+                                    <thead>
+                                        <tr>
+                                            <th>Day</th>
+                                            <th>Codes</th>
+                                            <th>Expired unused</th>
+                                            <th>Handled</th>
+                                            <th>Median time to fresh code</th>
+                                            <th>Still waiting</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {[...codes.days].reverse().map((d) => (
+                                            <tr key={d.day}>
+                                                <td className="t">{new Date(`${d.day}T12:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })}</td>
+                                                <td>{d.codes}</td>
+                                                <td>
+                                                    {d.expiredUnused}
+                                                    {d.migaduDelayed > 0 && <small> ({d.migaduDelayed} Migadu delay)</small>}
+                                                </td>
+                                                <td>{d.handled}</td>
+                                                <td>{d.medianMinutesToFreshCode === null ? "—" : `${d.medianMinutesToFreshCode} min`}</td>
+                                                <td>{d.open}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p className="status-hint">Handled = a fresh code arrived. Migadu delay = the code email itself was held over 5 min.</p>
+                        </>
+                    )}
                 </div>
 
                 <div className="status-card">

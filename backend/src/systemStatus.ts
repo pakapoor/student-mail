@@ -1,6 +1,7 @@
 import { statfsSync } from "node:fs";
 import os from "node:os";
 import { db } from "./db.js";
+import { fetchCodeStatus, type CodeStatus } from "./codeAlerts.js";
 
 // System status page (Step 21, /status - user: "status page is fine", no
 // alert emails). The background jobs report into this module; the page
@@ -149,6 +150,20 @@ export async function getSystemStatus() {
         problems.push(`Database not reachable: ${error instanceof Error ? error.message : String(error)}`);
     }
 
+    // --- Verification codes (Step 27) -----------------------------------------
+    // A code expiring unused is a staff miss, not a system fault: warning only.
+    let codes: CodeStatus | { error: string };
+
+    try {
+        codes = await fetchCodeStatus();
+
+        if (codes.warning) {
+            warnings.push(codes.warning);
+        }
+    } catch (error) {
+        codes = { error: error instanceof Error ? error.message : String(error) };
+    }
+
     // --- Server ---------------------------------------------------------------
     let disk: Record<string, number> | null = null;
 
@@ -192,6 +207,7 @@ export async function getSystemStatus() {
 
     // --- Recent problems list -------------------------------------------------
     const recent = [
+        ...("recent" in codes ? codes.recent : []),
         ...recentDelays.map((d) => ({
             at: d.at,
             what: "Migadu delay",
@@ -237,6 +253,7 @@ export async function getSystemStatus() {
         },
         mailboxFailures24h: since("mailbox-failed").length,
         delays,
+        codes: "error" in codes ? codes : { days: codes.days, timeline: codes.timeline },
         database,
         server,
         ...extra,
