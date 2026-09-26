@@ -1947,14 +1947,16 @@ select,
 }
 
 /* Inbox hierarchy and stable feedback. */
-.message-row { position: relative; padding: 14px 16px; }
+/* Two-line rows (Step 24): name · Application No · email + badge, then
+   title + date. Only the email gives way when space is short (then the
+   name) - the number never truncates. */
+.message-row { position: relative; padding: 11px 16px; }
 .message-row:focus-visible { outline-offset: -3px; }
-.message-row-top { align-items: flex-start; gap: 12px; }
-.message-row-top .student-line { display: grid; gap: 2px; flex: 1; margin: 0; }
-.message-row-top .student-line .student { min-width: 0; font-size: 14px; line-height: 1.4; }
-.message-row-top .student-line .student-email { line-height: 1.4; }
-.message-row-top .badge { margin-top: 1px; }
-.message-row-line { margin-top: 9px; gap: 12px; }
+.message-row-top { align-items: center; gap: 12px; }
+.message-row-top .student-line { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; margin: 0; }
+.message-row-top .student-line .student { flex: 0 1 auto; min-width: 0; font-size: 14px; line-height: 1.4; }
+.message-row-top .student-line .student-email { flex: 1 1 0; line-height: 1.4; }
+.message-row-line { margin-top: 4px; gap: 12px; }
 .message-preview { margin: 5px 0 0; }
 .message-count { margin-top: 6px; }
 .waiting-registration { margin-top: 6px; }
@@ -1992,8 +1994,10 @@ select,
     .filter-buttons { gap: 6px; }
     .filter-chip { padding: 6px 9px; font-size: 12px; }
     .app .detail-pane { padding: 16px; }
-    .message-row { padding: 12px; }
+    .message-row { padding: 10px 12px; }
     .message-row-top .badge { font-size: 10px; padding-inline: 6px; }
+    /* Too narrow for the email in the row - it's in the opened header. */
+    .message-row-top .student-line .student-email { display: none; }
     .badge-code-value { font-size: 12px; }
     .status-grid { grid-template-columns: minmax(0, 1fr); }
     .login-card { padding: 24px; }

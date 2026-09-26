@@ -1700,7 +1700,19 @@ Application No **10012345** · email"), bold and selectable with one click
 `Console.tsx`, so it's frontend only). Backend `thread.ts`: the existing per-page name lookup also
 returns `admission_id` as `student_app_no` (no extra query, no schema
 change). Frontend `MessageList.tsx`, `types.ts`, `App.css`
-(`.student-app-no`). Verified: backend tests 9/9 (new: rows carry the
+(`.student-app-no`).
+
+Follow-up: rows went from ~4.5 lines to **two** (user: "each row in left
+is 4.5 lines"). Line 1 is name · Application No · email + badge, line 2 is
+title + date. Codex's `0e804d1` had stacked the student line
+(`display: grid`); it's now one flex line where only the email (then the
+name) truncates. Padding is 11px (was 14px), and the line gap 4px (was
+9px). On phones (<600px) the email is hidden in rows but stays in the
+opened header. Checked in headless Chromium with synthetic rows (Codex's
+`/tmp/student-mail-browser` Playwright setup, needs
+`LD_LIBRARY_PATH=libs/extracted/usr/lib/x86_64-linux-gnu`): plain rows are
+67px at 1440px wide (was ~110px), 64px at 390px, and a very long name
+truncates with the number still visible. Verified: backend tests 9/9 (new: rows carry the
 number), `tsc` clean, frontend build clean, oxlint only the 3 known
 warnings. The list query was run against the dev Postgres (5433).
 
