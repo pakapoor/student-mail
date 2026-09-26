@@ -3,6 +3,7 @@ import type {
     Session,
     AdminStudentPage,
     ImportResult,
+    RosterFilter,
     StatusFilter,
     StudentRow,
     ThreadItem,
@@ -284,12 +285,12 @@ export async function fetchAdminStudents(
     search: string,
     cursor: string | null,
     deleted: boolean,
-    registrationPendingOnly = false
+    status: RosterFilter | null = null
 ): Promise<AdminStudentPage> {
     const params = new URLSearchParams();
 
-    if (registrationPendingOnly) {
-        params.set("registration", "pending");
+    if (status) {
+        params.set("status", status);
     }
 
     if (search) {

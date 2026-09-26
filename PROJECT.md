@@ -1688,6 +1688,46 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 23 — Manage students: filter buttons like the console
+
+The user asked for Manage students to match the main console: the same
+pill buttons with counts. The **Students / Deleted / Add students**
+switcher is now pills (`.view-switch`; the old `.tabs` / `.tab` CSS is
+gone). The Students view has **All · Code received · Code expired ·
+Registered · Rejected**, with counts for the current search. These replace
+the "Show only: code sent, not registered" checkbox. Deleted has no
+status buttons.
+
+**Each student is in at most one bucket, decided by their latest Edugate
+event** (user-approved; same rule as the console's thread badge):
+- **Rejected:** the newest event is a document-rejection email. The
+  student is still registered (the account exists) but shows here
+  because staff must act.
+- **Code received / Code expired:** the newest event is a code, less or
+  more than 30 min old. This includes a new code after registration or
+  after a rejection.
+- **Registered:** the newest event is the registration email.
+- No Edugate email yet: All only.
+
+The Edugate status column shows the same bucket. A student in a later
+bucket keeps a "registered <date>" note.
+
+Backend `studentsAdmin.ts`: `edugate_state` is computed in SQL (a CTE over
+`students` + the newest `messages` rejection). `?status=` replaces
+`?registration=pending`, and the first page returns `counts` (all + 4).
+There's no schema change. Frontend: `ManageStudents.tsx`
+(`RosterFilterButtons` mirrors `FilterButtons.tsx`), `api.ts`, `types.ts`,
+`App.css`.
+
+Verified locally: backend tests 8/8 (new `tests/roster.test.mjs`: counts
+use scope + search only, the button filters the page, later pages skip the
+count query). Backend `tsc` clean, frontend build clean, oxlint only the 3
+known warnings. The SQL was run against the isolated dev Postgres (5433):
+every button's rows match its count. Five synthetic students, one per rule
+(including registered → rejected → Rejected and rejected → new code →
+Code received), all landed in the expected bucket, and were deleted
+afterwards. Not yet checked in a browser.
+
 ## Step 22 — UI polish and status/badge fixes (done; sync part held back)
 
 Codex made a UI pass plus five backend reliability fixes. Claude reviewed

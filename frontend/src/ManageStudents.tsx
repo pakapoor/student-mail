@@ -8,7 +8,7 @@ import {
     importStudents,
     restoreStudent,
 } from "./api";
-import type { AdminStudentRow, ImportResult, StudentRow } from "./types";
+import type { AdminStudentPage, AdminStudentRow, ImportResult, RosterFilter, StudentRow } from "./types";
 
 interface Props {
     collegeName: string;
@@ -22,30 +22,99 @@ const MAX_DELETE_BATCH = 5;
 
 
 // Edugate registration status (backend registrationStatus.ts).
+// Same bucket as the filter buttons (backend studentsAdmin.ts): the
+// student's latest Edugate event decides. A later code or rejection for a
+// registered student keeps a "registered" note, since the account exists.
 function RegistrationStatus({ s }: { s: AdminStudentRow }) {
-    if (s.registration_status === "REGISTERED" && s.registered_at) {
-        const newCode =
-            s.code_sent_at && new Date(s.code_sent_at) > new Date(s.registered_at);
+    const registeredNote = s.registered_at && s.edugate_state !== "registered" && (
+        <span className="reg-status-note">registered {shortDateTime(s.registered_at)}</span>
+    );
 
-        return (
-            <span className="admin-cell admin-status">
-                <span className="reg-status registered">Registered · {shortDateTime(s.registered_at)}</span>
-                {newCode && (
-                    <span className="reg-status-note">new code sent {shortDateTime(s.code_sent_at!)}</span>
-                )}
-            </span>
-        );
+    switch (s.edugate_state) {
+        case "rejected":
+            return (
+                <span className="admin-cell admin-status">
+                    <span className="reg-status rejected">Rejected · {shortDateTime(s.rejected_at!)}</span>
+                    {registeredNote}
+                </span>
+            );
+        case "registered":
+            return (
+                <span className="admin-cell admin-status">
+                    <span className="reg-status registered">Registered · {shortDateTime(s.registered_at!)}</span>
+                </span>
+            );
+        case "code_live":
+        case "code_expired":
+            return (
+                <span className="admin-cell admin-status">
+                    <span className={`reg-status ${s.edugate_state === "code_live" ? "pending" : "expired"}`}>
+                        {s.edugate_state === "code_live" ? "Code received" : "Code expired"} · {shortDateTime(s.code_sent_at!)}
+                    </span>
+                    {registeredNote}
+                </span>
+            );
+        default:
+            return <span className="admin-cell admin-status muted">—</span>;
     }
+}
 
-    if (s.registration_status === "REGISTRATION_PENDING" && s.code_sent_at) {
-        return (
-            <span className="admin-cell admin-status">
-                <span className="reg-status pending">Code sent · {shortDateTime(s.code_sent_at)}</span>
-            </span>
-        );
-    }
+// Filter buttons over the roster - same look and behaviour as the console's
+// FilterButtons (All, ✕ on the pressed button, click again to clear).
+const ROSTER_BUTTONS: { filter: RosterFilter; label: string; dot: string }[] = [
+    { filter: "code_live", label: "Code received", dot: "live" },
+    { filter: "code_expired", label: "Code expired", dot: "expired" },
+    { filter: "registered", label: "Registered", dot: "registered" },
+    { filter: "rejected", label: "Rejected", dot: "rejected" },
+];
 
-    return <span className="admin-cell admin-status muted">—</span>;
+function RosterFilterButtons({
+    filter,
+    counts,
+    onChange,
+}: {
+    filter: RosterFilter | null;
+    counts: AdminStudentPage["counts"] | null;
+    onChange: (filter: RosterFilter | null) => void;
+}) {
+    return (
+        <div className="filter-buttons" role="group" aria-label="Filter students">
+            <button
+                type="button"
+                className={filter === null ? "filter-chip all active" : "filter-chip all"}
+                aria-pressed={filter === null}
+                onClick={() => onChange(null)}
+            >
+                {filter === null ? "All" : "← All"}
+                {counts && <span className="filter-count">{counts.all}</span>}
+            </button>
+
+            {ROSTER_BUTTONS.map((b) => {
+                const active = filter === b.filter;
+
+                return (
+                    <button
+                        key={b.filter}
+                        type="button"
+                        className={["filter-chip", b.dot, active ? "active" : "", filter !== null && !active ? "dim" : ""]
+                            .filter(Boolean)
+                            .join(" ")}
+                        aria-pressed={active}
+                        onClick={() => onChange(active ? null : b.filter)}
+                    >
+                        <span className={`filter-dot ${b.dot}`} aria-hidden="true" />
+                        {b.label}
+                        {counts && <span className="filter-count">{counts[b.filter]}</span>}
+                        {active && (
+                            <span className="filter-x" aria-label="Clear filter">
+                                ✕
+                            </span>
+                        )}
+                    </button>
+                );
+            })}
+        </div>
+    );
 }
 
 function displayName(s: AdminStudentRow): string {
@@ -65,8 +134,10 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
     // Admin roster, scoped to this operator's mailbox and selected college.
     const [rosterTab, setRosterTab] = useState<RosterTab>("students");
     const [search, setSearch] = useState("");
-    // "Code sent, not registered" - the students staff should chase.
-    const [pendingOnly, setPendingOnly] = useState(false);
+    // Filter button pressed (null = All), and the per-button counts that
+    // come with each first page for the current search.
+    const [statusFilter, setStatusFilter] = useState<RosterFilter | null>(null);
+    const [counts, setCounts] = useState<AdminStudentPage["counts"] | null>(null);
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [rows, setRows] = useState<AdminStudentRow[]>([]);
     const [cursor, setCursor] = useState<string | null>(null);
@@ -106,16 +177,17 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
     }, [search]);
 
     const loadRoster = useCallback(
-        (tab: RosterTab, searchText: string, onlyPending: boolean) => {
+        (tab: RosterTab, searchText: string, status: RosterFilter | null) => {
             setRosterLoading(true);
             setRosterError(null);
             setSelected(new Set());
             setConfirming(false);
 
-            fetchAdminStudents(searchText, null, tab === "deleted", tab === "students" && onlyPending)
+            fetchAdminStudents(searchText, null, tab === "deleted", tab === "students" ? status : null)
                 .then((page) => {
                     setRows(page.students);
                     setCursor(page.nextCursor);
+                    setCounts(page.counts ?? null);
                 })
                 .catch((err) =>
                     setRosterError(
@@ -132,8 +204,8 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
             return;
         }
 
-        loadRoster(rosterTab, debouncedSearch, pendingOnly);
-    }, [rosterTab, debouncedSearch, pendingOnly, loadRoster]);
+        loadRoster(rosterTab, debouncedSearch, statusFilter);
+    }, [rosterTab, debouncedSearch, statusFilter, loadRoster]);
 
     const loadMore = useCallback(() => {
         if (!cursor || loadingMore) {
@@ -142,7 +214,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
 
         setLoadingMore(true);
 
-        fetchAdminStudents(debouncedSearch, cursor, rosterTab === "deleted", rosterTab === "students" && pendingOnly)
+        fetchAdminStudents(debouncedSearch, cursor, rosterTab === "deleted", rosterTab === "students" ? statusFilter : null)
             .then((page) => {
                 setRows((prev) => [...prev, ...page.students]);
                 setCursor(page.nextCursor);
@@ -151,7 +223,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                 setRosterError(err instanceof Error ? err.message : "Failed to load more")
             )
             .finally(() => setLoadingMore(false));
-    }, [cursor, loadingMore, debouncedSearch, rosterTab, pendingOnly]);
+    }, [cursor, loadingMore, debouncedSearch, rosterTab, statusFilter]);
 
     function handleScroll() {
         const el = listRef.current;
@@ -206,7 +278,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
         try {
             await deleteStudents(ids);
             setConfirming(false);
-            loadRoster(rosterTab, debouncedSearch, pendingOnly);
+            loadRoster(rosterTab, debouncedSearch, statusFilter);
             onImported();
         } catch (err) {
             setRosterError(err instanceof Error ? err.message : "Delete failed");
@@ -240,7 +312,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
             setResult(res);
             setCsv("");
             fetchStudents().then(setOwnStudents).catch(() => {});
-            loadRoster(rosterTab, debouncedSearch, pendingOnly);
+            loadRoster(rosterTab, debouncedSearch, statusFilter);
             onImported();
         } catch (err) {
             setImportError(err instanceof Error ? err.message : "Import failed");
@@ -288,29 +360,26 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                     </button>
                 </div>
 
-                <nav className="tabs" aria-label="Student views">
-                    <button
-                        aria-pressed={rosterTab === "students"}
-                        className={rosterTab === "students" ? "tab active" : "tab"}
-                        onClick={() => setRosterTab("students")}
-                    >
-                        Students
-                    </button>
-                    <button
-                        aria-pressed={rosterTab === "deleted"}
-                        className={rosterTab === "deleted" ? "tab active" : "tab"}
-                        onClick={() => setRosterTab("deleted")}
-                    >
-                        Deleted
-                    </button>
-                    <button
-                        aria-pressed={rosterTab === "add"}
-                        className={rosterTab === "add" ? "tab active" : "tab"}
-                        onClick={() => setRosterTab("add")}
-                    >
-                        Add students
-                    </button>
-                </nav>
+                {/* Same pill buttons as the console's filters. */}
+                <div className="filter-buttons view-switch" role="group" aria-label="Student views">
+                    {(
+                        [
+                            ["students", "Students"],
+                            ["deleted", "Deleted"],
+                            ["add", "Add students"],
+                        ] as const
+                    ).map(([tab, label]) => (
+                        <button
+                            key={tab}
+                            type="button"
+                            aria-pressed={rosterTab === tab}
+                            className={rosterTab === tab ? "filter-chip active" : "filter-chip"}
+                            onClick={() => setRosterTab(tab)}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
 
                 {rosterTab === "add" && (
                     <div className="import-section">
@@ -386,14 +455,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                     />
 
                     {rosterTab === "students" && (
-                        <label className="roster-filter">
-                            <input
-                                type="checkbox"
-                                checked={pendingOnly}
-                                onChange={(e) => setPendingOnly(e.target.checked)}
-                            />
-                            Show only: code sent, not registered
-                        </label>
+                        <RosterFilterButtons filter={statusFilter} counts={counts} onChange={setStatusFilter} />
                     )}
 
                     {rosterError && <p className="error" role="alert">{rosterError}</p>}

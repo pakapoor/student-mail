@@ -157,38 +157,6 @@
     margin-top: 4px;
 }
 
-.tabs {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 20px;
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 4px;
-    width: fit-content;
-}
-
-.tab {
-    padding: 8px 18px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
-}
-
-.tab:hover {
-    background: #f0f2f5;
-}
-
-.tab.active {
-    background: var(--accent);
-    color: #ffffff;
-}
-
 
 
 .main-layout {
@@ -816,16 +784,6 @@
     margin: 0;
 }
 
-.tabs-compact {
-    margin-bottom: 0;
-    padding: 3px;
-}
-
-.tabs-compact .tab {
-    padding: 6px 12px;
-    font-size: 13px;
-}
-
 .admin-search {
     width: 100%;
     box-sizing: border-box;
@@ -1160,19 +1118,20 @@
     color: #8a5a00;
 }
 
+/* Roster buckets (Step 23) - same colours as the console's filter dots. */
+.reg-status.expired {
+    background: #fdf0e6;
+    color: #9a4a00;
+}
+
+.reg-status.rejected {
+    background: #fdecec;
+    color: #b42323;
+}
+
 .reg-status-note {
     font-size: 11px;
     color: #9a5b00;
-}
-
-.roster-filter {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 10px;
-    font-size: 13px;
-    color: var(--text);
-    cursor: pointer;
 }
 
 /* Step 18 phase 2: thread badges (MessageList.tsx) - one meaning per colour. */
@@ -2040,7 +1999,6 @@ select,
 .student-dialog::backdrop { background: rgba(15, 18, 26, .5); }
 .student-dialog .modal-card { max-width: none; max-height: none; }
 .student-dialog .modal-close { min-width: 36px; min-height: 36px; }
-.student-dialog .tabs { max-width: 100%; flex-wrap: wrap; }
 .admin-list { scrollbar-gutter: stable; max-height: min(420px, 50dvh); }
 .admin-list-header, .admin-row { display: grid; grid-template-columns: 20px minmax(140px, 1fr) minmax(190px, 1.4fr) 110px 90px minmax(190px, 1.2fr); gap: 12px; min-width: 830px; }
 .admin-list.deleted .admin-list-header, .admin-list.deleted .admin-row { grid-template-columns: minmax(140px, 1fr) minmax(190px, 1.4fr) 110px 90px minmax(190px, 1.2fr) 90px; }
@@ -2061,7 +2019,6 @@ select,
 .required-action { padding: 12px; border: 1px solid #f1c4c1; background: var(--card-bg); border-radius: 8px; }
 @media (max-width: 600px) {
     .student-dialog .modal-card { padding: 16px; }
-    .student-dialog .tab { padding: 8px 10px; }
     .key-info-row.wide, .key-info-row.login { grid-template-columns: minmax(0, 1fr) auto; }
     .key-info-row.wide .key-info-label, .key-info-row.login .key-info-label { grid-column: 1 / -1; }
     .key-info-row.wide .key-info-text { grid-column: 1 / -1; }
@@ -2070,3 +2027,8 @@ select,
 .status-kv { grid-template-columns: minmax(0, 1fr) auto; }
 .status-kv > span { overflow-wrap: anywhere; }
 .admin-list-header .admin-cell { white-space: normal; overflow: visible; }
+
+/* Manage students view switcher: the console's filter pills (FilterButtons),
+   solid blue when selected. */
+.view-switch { margin: 0 0 18px; }
+.view-switch .filter-chip.active { background: var(--accent); }

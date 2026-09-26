@@ -38,6 +38,7 @@ import { fetchStudents, importStudents } from "./students.js";
 import {
     pendingCountsForStudents,
     restoreStudent,
+    ROSTER_FILTERS,
     searchAdminStudents,
     softDeleteStudents,
 } from "./studentsAdmin.js";
@@ -199,7 +200,7 @@ app.get("/api/admin/students", requireAuth, requireCollege, async (req, res) => 
     const search = typeof req.query.search === "string" ? req.query.search : "";
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : null;
     const deleted = req.query.deleted === "true";
-    const registrationPendingOnly = req.query.registration === "pending";
+    const status = ROSTER_FILTERS.find((f) => f === req.query.status) ?? null;
 
     const page = await searchAdminStudents({
         centralEmail: res.locals.centralEmail,
@@ -207,7 +208,7 @@ app.get("/api/admin/students", requireAuth, requireCollege, async (req, res) => 
         search,
         cursor,
         deleted,
-        registrationPendingOnly,
+        status,
     });
     res.json(page);
 });

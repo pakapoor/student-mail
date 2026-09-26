@@ -99,11 +99,19 @@ export interface AdminStudentRow {
     registration_status: "REGISTRATION_PENDING" | "REGISTERED" | null;
     code_sent_at: string | null;
     registered_at: string | null;
+    // Newest document-rejection email, and the roster filter bucket
+    // (backend studentsAdmin.ts: the student's latest Edugate event decides).
+    rejected_at: string | null;
+    edugate_state: RosterFilter | null;
 }
+
+export type RosterFilter = "code_live" | "code_expired" | "registered" | "rejected";
 
 export interface AdminStudentPage {
     students: AdminStudentRow[];
     nextCursor: string | null;
+    // First page only: per-button counts for the current search.
+    counts?: Record<RosterFilter | "all", number>;
 }
 
 export interface RejectedRow {
