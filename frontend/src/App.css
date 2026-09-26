@@ -1,13 +1,3 @@
-:root {
-    --accent: #3b6fe0;
-    --accent-dark: #2c56b8;
-    --page-bg: #f4f6f9;
-    --card-bg: #ffffff;
-    --border: #e4e7ec;
-    --text: #1a1a2e;
-    --text-muted: #6b7280;
-}
-
 .app {
     width: 100%;
     box-sizing: border-box;
@@ -199,16 +189,11 @@
     color: #ffffff;
 }
 
-:root {
-    /* Thread list width: a share of the window (Step 18, user), kept
-       readable on small screens and not too wide on very large ones. The
-       search box above it uses the same width. */
-    --list-width: clamp(380px, 38vw, 720px);
-}
+
 
 .main-layout {
     display: grid;
-    grid-template-columns: var(--list-width) 1fr;
+    grid-template-columns: var(--list-width) minmax(0, 1fr);
     gap: 20px;
     align-items: start;
 }
@@ -445,6 +430,7 @@
 
 .composer-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     margin-bottom: 8px;
@@ -1335,7 +1321,7 @@
 }
 
 .filter-chip.dim {
-    opacity: 0.5;
+    opacity: 1;
 }
 
 .filter-chip.dim:hover {
@@ -1362,7 +1348,7 @@
 .filter-dot.other { background: #8b8f99; }
 
 .filter-chip.active {
-    border-color: transparent;
+    border-color: var(--accent);
     color: #ffffff;
 }
 
@@ -1370,11 +1356,11 @@
     color: rgba(255, 255, 255, 0.85);
 }
 
-.filter-chip.active.live { background: #2c56b8; }
-.filter-chip.active.expired { background: #c98a00; }
-.filter-chip.active.registered { background: #16793a; }
-.filter-chip.active.rejected { background: #d64545; }
-.filter-chip.active.other { background: #6b7280; }
+.filter-chip.active.live { background: var(--accent); }
+.filter-chip.active.expired { background: var(--accent); }
+.filter-chip.active.registered { background: var(--accent); }
+.filter-chip.active.rejected { background: var(--accent); }
+.filter-chip.active.other { background: var(--accent); }
 
 /* "All": solid blue when selected; outlined in blue whenever a filter is
    on, so the way back is obvious. */
@@ -1383,7 +1369,7 @@
 }
 
 .filter-chip.all:not(.active) {
-    border: 2px solid var(--accent);
+    border: 1px solid var(--accent);
     color: var(--accent-dark);
 }
 
@@ -1446,21 +1432,21 @@
 
 .app .app-header .header-brand {
     justify-self: start;
-    gap: 48px;
+    gap: 32px;
 }
 
 /* Thin divider between the ISM Edutech and college logos, centred in the
    gap, so they read as two separate marks. */
 .app .app-header .header-college-logo {
-    /* 48px gap: the line sits 24px from each logo. */
-    padding-left: 24px;
-    margin-left: -24px;
+    /* Keep the divider centred between the two brand marks. */
+    padding-left: 16px;
+    margin-left: -16px;
     border-left: 1px solid var(--border);
     box-sizing: content-box;
 }
 
 .app .app-header .header-logo {
-    height: 64px;
+    height: 56px;
 }
 
 .app .app-header .header-title {
@@ -1468,7 +1454,7 @@
 }
 
 .app .app-header .header-title h1 {
-    font-size: 26px;
+    font-size: 23px;
 }
 
 .app .app-header .console-college {
@@ -1535,26 +1521,7 @@
    one layer at the end so it overrides the older values above.
    ===================================================================== */
 
-:root {
-    --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-    --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
-    --accent: #1f4fb8;
-    --accent-dark: #173d8f;
-    --accent-soft: #e9effc;
-    --page-bg: #f5f7fb;
-    --card-bg: #ffffff;
-    --border: #e3e7ef;
-    --border-soft: #eef1f6;
-    --text: #16213a;
-    --text-muted: #6b7488;
-    --ok: #15803d;
-    --ok-soft: #e7f5ec;
-    --bad: #c2352f;
-    --bad-soft: #fdeeed;
-    --warn: #a15c00;
-    --warn-soft: #fff4dc;
-    color-scheme: light;
-}
+
 
 /* The page behind the app is always the console's light background (the
    Vite starter styles switched it dark with the OS theme - the dark bands
@@ -1577,7 +1544,7 @@ select,
 
 /* ---------- App layout: fixed top, panes fill the rest ---------- */
 .app {
-    height: 100vh;
+    height: 100dvh;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -2002,4 +1969,63 @@ select,
 .login-card h1,
 .login-card .login-subtitle {
     text-align: center;
+}
+
+/* Inbox hierarchy and stable feedback. */
+.message-row { position: relative; padding: 14px 16px; }
+.message-row:focus-visible { outline-offset: -3px; }
+.message-row-top { align-items: flex-start; gap: 12px; }
+.message-row-top .student-line { display: grid; gap: 2px; flex: 1; margin: 0; }
+.message-row-top .student-line .student { min-width: 0; font-size: 14px; line-height: 1.4; }
+.message-row-top .student-line .student-email { line-height: 1.4; }
+.message-row-top .badge { margin-top: 1px; }
+.message-row-line { margin-top: 9px; gap: 12px; }
+.message-preview { margin: 5px 0 0; }
+.message-count { margin-top: 6px; }
+.waiting-registration { margin-top: 6px; }
+.logout-button.quiet { background: transparent; border-color: transparent; color: var(--text-muted); }
+.console-search .admin-search { min-height: 40px; padding: 9px 12px; }
+.console-search-clear { width: 32px; height: 32px; }
+.filter-chip { min-height: 34px; }
+.filter-chip.active .filter-dot { box-shadow: 0 0 0 2px rgba(255,255,255,.8); }
+.app .list-pane, .app .detail-pane { min-width: 0; }
+.pane-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 12px; }
+.pane-heading strong { color: var(--text); font-size: 13px; font-weight: 600; }
+.detail-empty { min-height: 240px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px; color: var(--text-muted); }
+.detail-empty strong { color: var(--text); font-size: 16px; font-weight: 600; }
+.detail-empty p { max-width: 300px; }
+.detail-loading { display: grid; gap: 16px; padding: 8px 0; }
+.detail-loading .skeleton-bar { height: 16px; }
+.detail-loading .skeleton-block { height: 120px; margin-top: 16px; }
+.thread-back { display: none; }
+.bubble { min-width: 0; overflow-wrap: anywhere; }
+.bubble-meta, .original-toggle { flex-wrap: wrap; }
+.login-page { min-height: 100dvh; }
+.login-field input { min-height: 42px; background: var(--card-bg); }
+.college-option:disabled { cursor: wait; opacity: .65; }
+@media (max-width: 600px) {
+    .console-top { padding: 12px 16px 4px; }
+    .app .app-header { gap: 12px; }
+    .app .app-header .header-brand { gap: 20px; }
+    .app .app-header .header-logo { height: 36px; }
+    .app .app-header .header-college-logo { padding-left: 10px; margin-left: -10px; }
+    .app .app-header .header-title h1 { font-size: 20px; }
+    .session-bar { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+    .logout-button { padding: 7px 9px; font-size: 12px; }
+    .app .main-layout { padding: 12px 16px 16px; }
+    .console-search { max-width: none; }
+    .filter-buttons { gap: 6px; }
+    .filter-chip { padding: 6px 9px; font-size: 12px; }
+    .app .detail-pane { padding: 16px; }
+    .message-row { padding: 12px; }
+    .message-row-top .badge { font-size: 10px; padding-inline: 6px; }
+    .badge-code-value { font-size: 12px; }
+    .status-grid { grid-template-columns: minmax(0, 1fr); }
+    .login-card { padding: 24px; }
+}
+@media (max-width: 900px) {
+    .main-layout.has-selection .list-pane { display: none; }
+    .main-layout:not(.has-selection) .detail-pane { display: none; }
+    .app .list-pane { max-height: none; }
+    .thread-back { display: inline-flex; margin-bottom: 18px; }
 }

@@ -88,15 +88,24 @@ export default function MessageList({ threads, selectedId, onSelect, emptyText }
                             .filter(Boolean)
                             .join(" ")
                     }
+                    role="button"
+                    tabIndex={0}
+                    aria-current={thread.threadId === selectedId ? "true" : undefined}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onSelect(thread.threadId);
+                        }
+                    }}
                     onClick={() => onSelect(thread.threadId)}
                 >
                     <div className="message-row-top">
                         <span className="student-line">
-                            <span className="student">
+                            <span className="student" title={thread.student_name ?? thread.student_email}>
                                 {thread.student_name ?? thread.student_email}
                             </span>
                             {thread.student_name && (
-                                <span className="student-email">{thread.student_email}</span>
+                                <span className="student-email" title={thread.student_email}>{thread.student_email}</span>
                             )}
                         </span>
                         <Badge thread={thread} now={now} />
@@ -120,7 +129,7 @@ export default function MessageList({ threads, selectedId, onSelect, emptyText }
                         thread.code_at &&
                         now - new Date(thread.code_at).getTime() <
                             (thread.code_valid_minutes ?? CODE_VALID_MINUTES) * 60000 && (
-                            <div className="waiting-registration">⏳ Waiting for registration email…</div>
+                            <div className="waiting-registration">Waiting for registration email…</div>
                         )}
                     {thread.preview && !EDUGATE_BADGES.has(thread.badge) && (
                         <div className="message-preview">{thread.preview}</div>

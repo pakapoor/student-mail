@@ -180,7 +180,7 @@ export default function ThreadView({ items, onReplySent, studentName }: Props) {
                 <div className="success-card">
                     <span className="success-icon">&#10003;</span>
                     <div>
-                        <p className="success-title">Done</p>
+                        <p className="success-title">Message sent</p>
                         <p className="success-subtitle">
                             This thread is now up to date.
                         </p>
@@ -353,7 +353,7 @@ function CollapsedOriginal({ item }: { item: IncomingThreadItem }) {
 
     return (
         <div className="original-email">
-            <button type="button" className="original-toggle" onClick={() => setOpen((v) => !v)}>
+            <button type="button" className="original-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
                 {open ? "▾ Hide original email" : "▸ Show original email"}
                 <span className="original-meta">
                     {item.sender_email} · {shortDateTime(item.at)}

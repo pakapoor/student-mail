@@ -66,7 +66,11 @@ function Console({ college, onLoggedOut }: Props) {
     const [loadingMore, setLoadingMore] = useState(false);
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [threadItems, setThreadItems] = useState<ThreadItem[] | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const listRequest = useRef(0);
+    const threadRequest = useRef(0);
+    const [loadedThreadId, setLoadedThreadId] = useState<number | null>(null);
+    const [threadError, setThreadError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [showManageStudents, setShowManageStudents] = useState(false);
 
@@ -92,48 +96,65 @@ function Console({ college, onLoggedOut }: Props) {
     const mailCheckSeq = useRef(0);
 
     const loadMessages = useCallback(async (statusFilter: StatusFilter, searchText: string, filterValue: ThreadFilter | null) => {
+        const request = ++listRequest.current;
         setLoading(true);
         setError(null);
 
         try {
             const page = await fetchThreadSummaries(statusFilter, 0, undefined, searchText, filterValue);
+            if (request !== listRequest.current) return;
             setCounts(page.counts ?? null);
             setThreads(page.threads);
             setHasMore(page.hasMore);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load messages");
+            if (request === listRequest.current) {
+                setError(err instanceof Error ? err.message : "Failed to load messages");
+            }
         } finally {
-            setLoading(false);
+            if (request === listRequest.current) setLoading(false);
         }
     }, []);
 
     const loadMore = useCallback(async () => {
+        const request = listRequest.current;
         setLoadingMore(true);
         setError(null);
 
         try {
             const page = await fetchThreadSummaries(status, threads.length, undefined, debouncedSearch, filter);
+            if (request !== listRequest.current) return;
             setThreads((prev) => [...prev, ...page.threads]);
             setHasMore(page.hasMore);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load more");
+            if (request === listRequest.current) setError(err instanceof Error ? err.message : "Failed to load more");
         } finally {
             setLoadingMore(false);
         }
     }, [status, threads.length, debouncedSearch, filter]);
 
     const loadThread = useCallback((id: number) => {
+        const request = ++threadRequest.current;
+        setThreadError(null);
         fetchThread(id)
-            .then(setThreadItems)
-            .catch((err) =>
-                setError(err instanceof Error ? err.message : "Failed to load thread")
-            );
+            .then((items) => {
+                if (request !== threadRequest.current) return;
+                setThreadItems(items);
+                setLoadedThreadId(id);
+            })
+            .catch((err) => {
+                if (request !== threadRequest.current) return;
+                setThreadError(err instanceof Error ? err.message : "Failed to load thread");
+            });
     }, []);
 
     useEffect(() => {
         loadMessages(status, debouncedSearch, filter);
+        setThreads([]);
         setSelectedId(null);
         setThreadItems(null);
+        setLoadedThreadId(null);
+        setThreadError(null);
+        threadRequest.current++;
     }, [status, debouncedSearch, filter, loadMessages]);
 
     // Checks every matched student's mailbox in parallel and reports the
@@ -315,7 +336,7 @@ function Console({ college, onLoggedOut }: Props) {
                     >
                         Manage students
                     </button>
-                    <button className="logout-button" onClick={handleLogout}>
+                    <button className="logout-button quiet" onClick={handleLogout}>
                         Log out
                     </button>
                 </div>
@@ -335,7 +356,8 @@ function Console({ college, onLoggedOut }: Props) {
                 <input
                     className="admin-search"
                     type="text"
-                    placeholder="Search by first name, last name, or email..."
+                    aria-label="Search students by name or email"
+                    placeholder="Search students by name or email…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                 />
@@ -388,11 +410,15 @@ function Console({ college, onLoggedOut }: Props) {
             <FilterButtons filter={filter} counts={counts} onChange={setFilter} />
             </div>
 
-            {error && <p className="error">{error}</p>}
+            {error && <p className="error" role="alert">{error} <button className="mail-check-again" onClick={() => loadMessages(status, debouncedSearch, filter)}>Retry</button></p>}
 
-            <div className="main-layout">
-                <div className="list-pane">
-                    {loading ? (
+            <div className={`main-layout${selectedId !== null ? " has-selection" : ""}`}>
+                <div className="list-pane" aria-label="Messages" aria-busy={loading}>
+                    <div className="pane-heading">
+                        <strong>Messages</strong>
+                        <span role="status">{loading ? "Updating…" : `${threads.length}${hasMore ? "+" : ""} conversations`}</span>
+                    </div>
+                    {loading && threads.length === 0 ? (
                         <div className="list-skeleton" aria-label="Loading">
                             {[0, 1, 2, 3, 4, 5].map((i) => (
                                 <div className="skeleton-row" key={i}>
@@ -407,13 +433,16 @@ function Console({ college, onLoggedOut }: Props) {
                                 emptyText={EMPTY_TEXT[filter ?? "all"]}
                                 threads={threads}
                                 selectedId={selectedId}
-                                onSelect={setSelectedId}
+                                onSelect={(id) => {
+                                    setThreadError(null);
+                                    setSelectedId(id);
+                                }}
                             />
                             {hasMore && (
                                 <button
                                     className="load-more-button"
                                     onClick={loadMore}
-                                    disabled={loadingMore}
+                                    disabled={loadingMore || loading}
                                 >
                                     {loadingMore ? "Loading..." : "Load more"}
                                 </button>
@@ -422,16 +451,27 @@ function Console({ college, onLoggedOut }: Props) {
                     )}
                 </div>
 
-                <div className="detail-pane">
-                    {threadItems ? (
+                <div className="detail-pane" aria-label="Message details">
+                    <button className="secondary-button thread-back" onClick={() => setSelectedId(null)}>← Back to messages</button>
+                    {selectedId !== null && threadError && <p className="error" role="alert">{threadError} <button className="mail-check-again" onClick={() => selectedId !== null && loadThread(selectedId)}>Retry</button></p>}
+                    {selectedId !== null && loadedThreadId === selectedId && threadItems ? (
                         <ThreadView
                             studentName={threads.find((t) => t.threadId === selectedId)?.student_name ?? null}
                             key={selectedId}
                             items={threadItems}
                             onReplySent={handleReplySent}
                         />
+                    ) : selectedId !== null ? (
+                        !threadError && <div className="detail-loading" role="status" aria-label="Loading message">
+                            <span className="skeleton-bar" style={{ width: "60%" }} />
+                            <span className="skeleton-bar short" />
+                            <span className="skeleton-bar skeleton-block" />
+                        </div>
                     ) : (
-                        <p className="empty-state">Select a message to view the thread.</p>
+                        <div className="detail-empty">
+                            <strong>Select a conversation</strong>
+                            <p>View student details, registration updates, and replies here.</p>
+                        </div>
                     )}
                 </div>
             </div>

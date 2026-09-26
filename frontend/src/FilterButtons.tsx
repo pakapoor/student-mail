@@ -26,6 +26,7 @@ export default function FilterButtons({ filter, counts, onChange }: Props) {
             <button
                 type="button"
                 className={filter === null ? "filter-chip all active" : "filter-chip all"}
+                aria-pressed={filter === null}
                 onClick={() => onChange(null)}
             >
                 {filter === null ? "All" : "← All"}
@@ -50,7 +51,7 @@ export default function FilterButtons({ filter, counts, onChange }: Props) {
                         aria-pressed={active}
                         onClick={() => onChange(active ? null : b.filter)}
                     >
-                        {!active && <span className={`filter-dot ${b.dot}`} />}
+                        <span className={`filter-dot ${b.dot}`} aria-hidden="true" />
                         {b.label}
                         {counts && <span className="filter-count">{counts[b.filter]}</span>}
                         {active && (
