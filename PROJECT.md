@@ -1736,6 +1736,9 @@ code.
     still waiting for a fresh code.") - a staff miss, not a system fault;
   - one "Recent problems" row per expiry in the last 24 h, with the outcome
     and any Migadu hold;
+  - Hot list card (user: the description line looked like a row missing
+    its number): first row renamed "Waiting for a registration email",
+    description replaced by a "Codes expired unused today" row;
   - an "Expired codes" card: a smooth line (monotone, never overshoots) of
     how many were waiting, every 5 min over the last 6 h (user: only the
     most recent matters) - a fixed sliding window, no browsing back (user:

@@ -166,11 +166,11 @@ export default function StatusPage() {
                             {!hot || hot.error ? <Pill tone="warn">Unavailable</Pill> : hot.enabled ? <Pill tone="ok">Enabled</Pill> : <Pill tone="warn">Off</Pill>}
                         </div>
                         <div className="status-kv">
-                            <Row label="Students being watched now" value={hot?.watchingNow ?? "—"} />
+                            <Row label="Waiting for a registration email" value={hot?.watchingNow ?? "—"} />
                             <Row label="Checks in current hourly window" value={hot?.checksThisHour ?? "—"} />
                             <Row label="Recovered emails (approx.)" value={s.recoveredToday.hot} />
+                            <Row label="Codes expired unused today" value={codes?.days.at(-1)?.expiredUnused ?? "—"} />
                         </div>
-                        <p className="status-hint">Students waiting for a registration email after a code.</p>
                     </div>
 
                     <div className="status-card">
