@@ -1694,8 +1694,10 @@ Each list row's top line shows the student's Application No between the
 name and the email (`Jane Doe  10012345  jane.doe@…`). Staff type it into
 Edugate, and search already matches it. It is small and muted, and never
 truncated; the email is what gets shortened. There's no number shown when
-the roster has none. The list only; the opened email's header is
-unchanged. Backend `thread.ts`: the existing per-page name lookup also
+the roster has none. The opened email's header shows it too ("Jane Doe ·
+Application No **10012345** · email"), bold and selectable with one click
+(`ThreadView.tsx` `.thread-app-no`; it comes from the list row via
+`Console.tsx`, so it's frontend only). Backend `thread.ts`: the existing per-page name lookup also
 returns `admission_id` as `student_app_no` (no extra query, no schema
 change). Frontend `MessageList.tsx`, `types.ts`, `App.css`
 (`.student-app-no`). Verified: backend tests 9/9 (new: rows carry the

@@ -1453,6 +1453,14 @@
     color: var(--text-muted);
 }
 
+/* The number staff type into Edugate - easy to spot and select. */
+.thread-app-no {
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    user-select: all;
+}
+
 .original-email {
     display: grid;
     gap: 8px;

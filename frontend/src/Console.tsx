@@ -457,6 +457,7 @@ function Console({ college, onLoggedOut }: Props) {
                     {selectedId !== null && loadedThreadId === selectedId && threadItems ? (
                         <ThreadView
                             studentName={threads.find((t) => t.threadId === selectedId)?.student_name ?? null}
+                            studentAppNo={threads.find((t) => t.threadId === selectedId)?.student_app_no ?? null}
                             key={selectedId}
                             items={threadItems}
                             onReplySent={handleReplySent}

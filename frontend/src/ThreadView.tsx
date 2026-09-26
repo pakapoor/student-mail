@@ -13,9 +13,10 @@ interface Props {
     onReplySent: () => void;
     // From the list row - shown under the heading.
     studentName?: string | null;
+    studentAppNo?: string | null;
 }
 
-export default function ThreadView({ items, onReplySent, studentName }: Props) {
+export default function ThreadView({ items, onReplySent, studentName, studentAppNo }: Props) {
     const editorRef = useRef<HTMLDivElement>(null);
     const [hasContent, setHasContent] = useState(false);
     const [files, setFiles] = useState<File[]>([]);
@@ -160,6 +161,7 @@ export default function ThreadView({ items, onReplySent, studentName }: Props) {
             <h2>{keyInfo ? edugateTitle(keyInfo) : subject}</h2>
             <p className="thread-student">
                 {studentName ? `${studentName} · ` : ""}
+                {studentAppNo && <>Application No <span className="thread-app-no">{studentAppNo}</span> · </>}
                 {items[0]?.student_email}
             </p>
 
