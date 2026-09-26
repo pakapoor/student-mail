@@ -1690,9 +1690,15 @@ non-email input → no result.
 
 ## Step 27 — Code expiry alerts, expired-code tracking, square favicon
 
-**Status: built and tested locally, NOT committed or deployed.** The user
-wants to check in only once the site is quiet (it's live and in use).
-Deploying needs a backend restart; there's no database migration.
+**Status: DEPLOYED 2026-09-26 13:25 UTC** (`ecc9fd2`) while 3-4 staff
+were using the site - judged low risk because staff only copy codes /
+login passwords and open the Edugate link (nobody uses Send). Backend
+restart: sync caught up with nothing missed, live-update clients
+reconnected within seconds. No database migration.
+
+First run on production data (read-only, 0.1 s): 2 codes expired unused
+today with no fresh code yet (2 red rows); the previous week had 1-2
+expiries a day, all handled - median 19-21 min, one on 09-25 after ~21 h.
 
 Why: staff occasionally miss a verification code, and it expires before
 anyone types it into Edugate. The student then has to ask for a fresh
