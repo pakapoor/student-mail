@@ -92,7 +92,11 @@ export default function StatusPage() {
     }
 
     const s = status;
-    const mailbox = s.sync.mailboxes[0];
+    const mailboxes = s.sync.mailboxes;
+    // Same rule as the backend: no sync yet since a restart only counts as
+    // overdue 10 min after the app started.
+    const syncStale = mailboxes.some((mailbox) => new Date(s.generatedAt).getTime() - new Date(mailbox.lastSuccessAt ?? s.server.appStartedAt).getTime() > 10 * 60 * 1000);
+    const syncConnected = mailboxes.length > 0 && mailboxes.every((mailbox) => mailbox.connected);
     const hot = s.hot;
     const sweep = s.sweep;
     const diskPct = s.server.disk ? Math.round((s.server.disk.usedBytes / s.server.disk.totalBytes) * 100) : null;
@@ -109,6 +113,7 @@ export default function StatusPage() {
             </div>
 
             <div className="status-content">
+                {error && <p className="status-refresh-error" role="alert">Refresh failed. Showing the last successful snapshot from {shortDateTime(s.generatedAt)}. Retrying automatically.</p>}
                 <div className={`status-overall ${s.overall}`}>
                     <div className="status-overall-icon">{s.overall === "ok" ? "✓" : "!"}</div>
                     <div>
@@ -116,8 +121,8 @@ export default function StatusPage() {
                             {s.overall === "ok"
                                 ? "All systems working"
                                 : s.overall === "warning"
-                                  ? "Working, with things to look at"
-                                  : "Something is wrong"}
+                                  ? "Service needs attention"
+                                  : "Service issue detected"}
                         </b>
                         {s.problems.concat(s.warnings).length === 0 ? (
                             <span>Mail is arriving and being processed normally.</span>
@@ -134,15 +139,19 @@ export default function StatusPage() {
                     </div>
                 </div>
 
+                <p className="status-hint" role="note">
+                    Recovery, retry, and mailbox-failure counts are approximate: they use up to {s.activityCoverage?.maxEvents ?? 500} recent activity events from the last 24 hours and reset when the app restarts.
+                    {s.activityCoverage && <> Activity window starts {shortDateTime(s.activityCoverage.since)}.</>}
+                    {" "}Email and delivery-delay totals labelled “today” come from the database.
+                </p>
                 <div className="status-grid">
                     <div className="status-card">
                         <div className="status-card-head">
                             <b>Central mailbox sync</b>
-                            {mailbox && mailbox.connected ? <Pill tone="ok">Healthy</Pill> : <Pill tone="warn">Reconnecting</Pill>}
+                            {syncStale || mailboxes.length === 0 ? <Pill tone="bad">Sync overdue</Pill> : syncConnected ? <Pill tone="ok">Healthy</Pill> : <Pill tone="warn">Reconnecting</Pill>}
                         </div>
                         <div className="status-kv">
-                            <Row label={`Live connection to ${mailbox?.email ?? "central"}`} value={mailbox?.connected ? "Connected" : "Not connected"} />
-                            <Row label="Last successful sync" value={ago(mailbox?.lastSuccessAt)} />
+                            {mailboxes.map((mailbox) => <Row key={mailbox.email} label={mailbox.email} value={<>{mailbox.connected ? "Connected" : "Disconnected"}<br /><small>Synced {ago(mailbox.lastSuccessAt)}</small></>} />)}
                             <Row label="Emails received today" value={s.sync.emailsToday} />
                         </div>
                         <p className="status-hint">A problem if no sync succeeds for 10 min.</p>
@@ -151,12 +160,12 @@ export default function StatusPage() {
                     <div className="status-card">
                         <div className="status-card-head">
                             <b>Hot list</b>
-                            {hot?.enabled ? <Pill tone="ok">Running</Pill> : <Pill tone="warn">Off</Pill>}
+                            {!hot || hot.error ? <Pill tone="warn">Unavailable</Pill> : hot.enabled ? <Pill tone="ok">Enabled</Pill> : <Pill tone="warn">Off</Pill>}
                         </div>
                         <div className="status-kv">
-                            <Row label="Students being watched now" value={hot?.watchingNow ?? 0} />
-                            <Row label="Checks this hour" value={hot?.checksThisHour ?? 0} />
-                            <Row label="Emails recovered today" value={s.recoveredToday.hot} />
+                            <Row label="Students being watched now" value={hot?.watchingNow ?? "—"} />
+                            <Row label="Checks in current hourly window" value={hot?.checksThisHour ?? "—"} />
+                            <Row label="Recovered emails (approx.)" value={s.recoveredToday.hot} />
                         </div>
                         <p className="status-hint">Students waiting for a registration email after a code.</p>
                     </div>
@@ -164,17 +173,17 @@ export default function StatusPage() {
                     <div className="status-card">
                         <div className="status-card-head">
                             <b>Daily sweep</b>
-                            {sweep?.enabled ? <Pill tone="ok">Running</Pill> : <Pill tone="warn">Off</Pill>}
+                            {!sweep || sweep.error ? <Pill tone="warn">Unavailable</Pill> : sweep.enabled ? <Pill tone="ok">Enabled</Pill> : <Pill tone="warn">Off</Pill>}
                         </div>
                         <div className="status-meter">
                             <i style={{ width: `${sweepPct}%` }} />
                         </div>
                         <div className="status-kv">
-                            <Row label="This round" value={`${sweep?.sweptThisRound ?? 0} / ${sweep?.mailboxes ?? 0} mailboxes`} />
-                            <Row label="Emails recovered today" value={s.recoveredToday.sweep} />
-                            <Row label="Mailboxes that failed to open (24 h)" value={s.mailboxFailures24h} />
+                            <Row label="Attempted in rolling window" value={sweep && !sweep.error ? `${sweep.sweptThisRound} / ${sweep.mailboxes} mailboxes` : "—"} />
+                            <Row label="Recovered emails (approx.)" value={s.recoveredToday.sweep} />
+                            <Row label="Failed mailbox checks (approx.)" value={s.mailboxFailures24h} />
                         </div>
-                        <p className="status-hint">Failures are usually wrong stored passwords - see below.</p>
+                        <p className="status-hint">Counts include failed attempts in the last {sweep?.roundHours ?? 24} hours. Review failures below.</p>
                     </div>
 
                     <div className="status-card">
@@ -183,9 +192,9 @@ export default function StatusPage() {
                             {s.retries.gaveUpToday > 0 ? <Pill tone="warn">{s.retries.gaveUpToday} given up</Pill> : <Pill tone="ok">OK</Pill>}
                         </div>
                         <div className="status-kv">
-                            <Row label="Retried today" value={s.retries.retriedToday} />
-                            <Row label="Given up today" value={s.retries.gaveUpToday} />
-                            <Row label="Recovered by search today" value={s.recoveredToday.search} />
+                            <Row label="Retries (approx.)" value={s.retries.retriedToday} />
+                            <Row label="Given up (approx.)" value={s.retries.gaveUpToday} />
+                            <Row label="Recovered by search (approx.)" value={s.recoveredToday.search} />
                         </div>
                         <p className="status-hint">Migadu sometimes serves a new email empty; it's retried a few seconds later.</p>
                     </div>

@@ -8,7 +8,7 @@ export default function CollegePicker({ onSelect }: { onSelect: (session: Sessio
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [attempt, setAttempt] = useState(0);
-    const [selecting, setSelecting] = useState(false);
+    const [selecting, setSelecting] = useState<string | null>(null);
     const [selectError, setSelectError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -23,7 +23,7 @@ export default function CollegePicker({ onSelect }: { onSelect: (session: Sessio
     }, [attempt]);
 
     async function handleSelect(college: College) {
-        setSelecting(true);
+        setSelecting(college.id);
         setSelectError(null);
 
         try {
@@ -31,7 +31,7 @@ export default function CollegePicker({ onSelect }: { onSelect: (session: Sessio
             onSelect(session);
         } catch (err) {
             setSelectError(err instanceof Error ? err.message : "Failed to select college");
-            setSelecting(false);
+            setSelecting(null);
         }
     }
 
@@ -51,15 +51,17 @@ export default function CollegePicker({ onSelect }: { onSelect: (session: Sessio
                             key={college.id}
                             className="college-option"
                             onClick={() => handleSelect(college)}
-                            disabled={selecting}
+                            disabled={selecting !== null}
+                            aria-busy={selecting === college.id}
                         >
                             {logo && <img className="college-option-logo" src={logo} alt="" />}
                             <span className="college-option-name">{college.name}</span>
-                            <span aria-hidden="true">→</span>
+                            {selecting === college.id ? <span className="spinner spinner-dark" aria-hidden="true" /> : <span aria-hidden="true">→</span>}
                         </button>
                     );
                 })}</div>
             }
+            {selecting && <p className="college-progress" role="status">Opening {colleges.find((college) => college.id === selecting)?.name}…</p>}
             {selectError && <p className="error" role="alert">{selectError}</p>}
         </section>
     </main>;

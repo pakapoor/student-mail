@@ -81,6 +81,18 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
     const [restoringId, setRestoringId] = useState<number | null>(null);
 
     const listRef = useRef<HTMLDivElement>(null);
+    const dialogRef = useRef<HTMLDialogElement>(null);
+
+    useEffect(() => {
+        const dialog = dialogRef.current;
+        const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        dialog?.showModal();
+        return () => {
+            dialog?.close();
+            opener?.focus();
+        };
+    }, []);
+
 
     useEffect(() => {
         fetchStudents()
@@ -242,33 +254,57 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
         0
     );
 
+    // Escape and a stray backdrop click are easy to hit by accident - ignore
+    // them while an import/delete is in flight, or its result panel (which
+    // rows were rejected) is lost. The × button still closes deliberately.
+    function closeUnlessBusy() {
+        if (!submitting && !deleting) {
+            onClose();
+        }
+    }
+
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <dialog ref={dialogRef} className="student-dialog" onKeyDown={(event) => {
+            if (event.key !== "Tab") return;
+            const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]')].filter((element) => element.getClientRects().length > 0);
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        }} aria-labelledby="manage-students-title" onCancel={(event) => { event.preventDefault(); closeUnlessBusy(); }} onClick={(event) => { if (event.target === event.currentTarget) closeUnlessBusy(); }}>
             <div
                 className="modal-card modal-card-wide"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="modal-header">
-                    <h2>Manage students</h2>
+                    <h2 id="manage-students-title">Manage students</h2>
                     <button className="modal-close" onClick={onClose} aria-label="Close">
                         &times;
                     </button>
                 </div>
 
-                <nav className="tabs">
+                <nav className="tabs" aria-label="Student views">
                     <button
+                        aria-pressed={rosterTab === "students"}
                         className={rosterTab === "students" ? "tab active" : "tab"}
                         onClick={() => setRosterTab("students")}
                     >
                         Students
                     </button>
                     <button
+                        aria-pressed={rosterTab === "deleted"}
                         className={rosterTab === "deleted" ? "tab active" : "tab"}
                         onClick={() => setRosterTab("deleted")}
                     >
                         Deleted
                     </button>
                     <button
+                        aria-pressed={rosterTab === "add"}
                         className={rosterTab === "add" ? "tab active" : "tab"}
                         onClick={() => setRosterTab("add")}
                     >
@@ -278,25 +314,19 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
 
                 {rosterTab === "add" && (
                     <div className="import-section">
-                        <p className="hint-text">
-                            One student per line, in the order{" "}
-                            <code>Student Name,Application No,Email,Password</code>.
-                            An optional header line in that exact form is
-                            skipped if you include it. All rows import
-                            into your currently selected college,{" "}
-                            <strong>{collegeName}</strong>. Password is
-                            optional - leave it blank to default to{" "}
-                            <code>password</code>; otherwise it's that
-                            student's mailbox password, used for sending
-                            replies. Re-pasting an unchanged row for a student
-                            that was previously deleted restores them;
-                            re-pasting a row with different details for an
-                            existing email is flagged for review, never
-                            silently overwritten.
-                        </p>
+                        <h3>Import into {collegeName}</h3>
+                        <p className="hint-text" id="import-help">Paste one student per line using the column order below. You can include the header.</p>
+                        <div className="import-example"><code>Student Name,Application No,Email,Password</code></div>
+                        <details className="import-details">
+                            <summary>Password and duplicate row details</summary>
+                            <p>Leave Password blank to use <code>password</code>, or supply the student's mailbox password for sending replies.</p>
+                            <p>An unchanged row restores a previously deleted student. Different details for an existing email are flagged for review, never silently overwritten.</p>
+                        </details>
 
                         <textarea
-                            rows={5}
+                            aria-label="Student import rows"
+                            aria-describedby="import-help"
+                            rows={6}
                             placeholder={
                                 "Student Name,Application No,Email,Password\n" +
                                 "Jane Doe,10012345,jane.doe@myemailinfo.com,S3cret!\n" +
@@ -307,7 +337,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                             disabled={submitting}
                         />
 
-                        {importError && <p className="error">{importError}</p>}
+                        {importError && <p className="error" role="alert">{importError}</p>}
 
                         <button
                             className="send-button"
@@ -319,7 +349,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         </button>
 
                         {result && (
-                            <div className="import-result">
+                            <div className="import-result" role="status">
                                 <p>
                                     {result.imported} added, {result.skipped} already
                                     imported, {result.rejected.length} rejected.
@@ -349,7 +379,8 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                     <input
                         className="admin-search"
                         type="text"
-                        placeholder="Search name, email, or Application No..."
+                        aria-label="Search student roster"
+                        placeholder="Search name, email, or Application No…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
@@ -365,7 +396,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         </label>
                     )}
 
-                    {rosterError && <p className="error">{rosterError}</p>}
+                    {rosterError && <p className="error" role="alert">{rosterError}</p>}
 
                     {rosterTab === "students" && selected.size > 0 && !confirming && (
                         <div className="selection-bar">
@@ -410,6 +441,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         </div>
                     )}
 
+                    <div className={`admin-list ${rosterTab}`} ref={listRef} onScroll={handleScroll} tabIndex={0} role="region" aria-label="Student roster">
                     <div className="admin-list-header">
                         {rosterTab === "students" && <span className="admin-checkbox-spacer" />}
                         <span className="admin-cell admin-name">Name</span>
@@ -420,7 +452,6 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         {rosterTab === "deleted" && <span className="admin-action-spacer" />}
                     </div>
 
-                    <div className="admin-list" ref={listRef} onScroll={handleScroll}>
                         {rosterLoading ? (
                             <p className="empty-state">Loading...</p>
                         ) : rows.length === 0 ? (
@@ -436,6 +467,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                                         {rosterTab === "students" && (
                                             <input
                                                 type="checkbox"
+                                                aria-label={`Select ${displayName(s)}`}
                                                 checked={selected.has(s.id)}
                                                 onChange={() => toggleSelected(s.id)}
                                                 disabled={
@@ -444,10 +476,10 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                                                 }
                                             />
                                         )}
-                                        <span className="admin-cell admin-name">
+                                        <span className="admin-cell admin-name" title={displayName(s)}>
                                             {displayName(s)}
                                         </span>
-                                        <span className="admin-cell admin-email">{s.email}</span>
+                                        <span className="admin-cell admin-email" title={s.email}>{s.email}</span>
                                         <span className="admin-cell admin-admission">
                                             {s.admission_id || "—"}
                                         </span>
@@ -475,6 +507,6 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                 </div>
                 )}
             </div>
-        </div>
+        </dialog>
     );
 }

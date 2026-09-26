@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import StatusIcon from "./StatusIcon";
 import type { KeyInfo } from "./keyInfo";
 import { edugateDate, shortDateTime } from "./format";
 import { EDUGATE_LOGIN_URL, EDUGATE_REGISTER_URL } from "../../shared/edugate";
@@ -79,7 +80,7 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
         return (
             <div className="key-info rejected">
                 <div className="key-info-heading">
-                    <span>❌ Document rejected</span>
+                    <span className="status-label"><StatusIcon kind="error" /> Document rejected</span>
                     <span className="key-info-source">received {receivedTime}</span>
                 </div>
                 <div className="key-info-row wide">
@@ -87,7 +88,7 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                     <span className="key-info-text">{info.document}</span>
                 </div>
                 {info.note && (
-                    <div className="key-info-row wide">
+                    <div className="key-info-row wide required-action">
                         <span className="key-info-label">
                             {info.noteKind === "action" ? "Action needed" : "Reason"}
                         </span>
@@ -122,7 +123,7 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                         </div>
                         {login.newer_edugate_at && (
                             <p className="key-info-warning">
-                                ⚠ A newer Edugate email arrived on {dateTime(login.newer_edugate_at)}. Check it before using this password.
+                                <StatusIcon kind="warning" /> A newer Edugate email arrived on {dateTime(login.newer_edugate_at)}. Check it before using this password.
                             </p>
                         )}
                     </>
@@ -148,7 +149,7 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                     {expired ? (
                         <>
                             <p className="key-info-warning">
-                                ⚠ Received {ageText(ageMinutes)}. This code has probably expired. Ask for a new code.
+                                <StatusIcon kind="warning" /> Received {ageText(ageMinutes)}. This code has probably expired. Ask for a new code.
                             </p>
                             {/* A new code is requested on Edugate's registration page. */}
                             <div className="key-info-footer">
@@ -164,7 +165,7 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                             {/* Backend hot list checks the mailbox every 30 s,
                                 then every 2 min, until the registration arrives. */}
                             <p className="waiting-registration">
-                                ⏳ Watching the mailbox for the registration email…
+                                <StatusIcon kind="clock" /> Watching the mailbox for the registration email…
                             </p>
                         </>
                     )}
@@ -187,12 +188,12 @@ export default function KeyInfoBox({ info }: { info: KeyInfo }) {
                     </div>
                     {newerLogin && (
                         <p className="key-info-warning">
-                            ⚠ A newer login was sent on {dateTime(newerLogin)}. Use that one.
+                            <StatusIcon kind="warning" /> A newer login was sent on {dateTime(newerLogin)}. Use that one.
                         </p>
                     )}
                     {newerEdugate && (
                         <p className="key-info-warning">
-                            ⚠ A newer Edugate email arrived on {dateTime(newerEdugate)}. Check it before using this password.
+                            <StatusIcon kind="warning" /> A newer Edugate email arrived on {dateTime(newerEdugate)}. Check it before using this password.
                         </p>
                     )}
                 </>

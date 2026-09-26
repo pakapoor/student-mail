@@ -2029,3 +2029,44 @@ select,
     .app .list-pane { max-height: none; }
     .thread-back { display: inline-flex; margin-bottom: 18px; }
 }
+
+/* Account controls and student management share the console's spacing. */
+.login-field > label { display: block; margin-bottom: 4px; font-weight: 600; }
+.password-field { position: relative; }
+.password-field input { padding-right: 64px; }
+.password-toggle { position: absolute; right: 4px; top: 4px; bottom: 4px; border: 0; background: transparent; color: var(--accent); padding: 0 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.college-progress { margin-top: 16px; color: var(--text-muted); font-size: 13px; text-align: center; }
+.student-dialog { border: 0; padding: 0; background: transparent; width: min(1028px, calc(100% - 32px)); max-width: none; max-height: calc(100dvh - 32px); color: var(--text); overflow: auto; }
+.student-dialog::backdrop { background: rgba(15, 18, 26, .5); }
+.student-dialog .modal-card { max-width: none; max-height: none; }
+.student-dialog .modal-close { min-width: 36px; min-height: 36px; }
+.student-dialog .tabs { max-width: 100%; flex-wrap: wrap; }
+.admin-list { scrollbar-gutter: stable; max-height: min(420px, 50dvh); }
+.admin-list-header, .admin-row { display: grid; grid-template-columns: 20px minmax(140px, 1fr) minmax(190px, 1.4fr) 110px 90px minmax(190px, 1.2fr); gap: 12px; min-width: 830px; }
+.admin-list.deleted .admin-list-header, .admin-list.deleted .admin-row { grid-template-columns: minmax(140px, 1fr) minmax(190px, 1.4fr) 110px 90px minmax(190px, 1.2fr) 90px; }
+.admin-list-header { position: sticky; top: 0; z-index: 1; background: var(--page-bg); border-bottom: 1px solid var(--border); padding-block: 12px; }
+.admin-row { min-height: 56px; }
+.admin-row:hover { background: var(--page-bg); }
+.admin-row input { margin: 0; width: 16px; height: 16px; accent-color: var(--accent); }
+.admin-cell { min-width: 0; }
+.admin-row .admin-status { white-space: normal; }
+.admin-row .secondary-button { padding: 7px 10px; }
+.import-section { border: 0; padding-bottom: 0; margin-bottom: 0; }
+.import-example { margin-top: 12px; padding: 12px; background: var(--page-bg); border-radius: 8px; }
+.import-details { margin-top: 12px; font-size: 13px; color: var(--text-muted); }
+.import-details summary { color: var(--accent); cursor: pointer; }
+.import-details p { margin-top: 8px; }
+.status-icon { display: inline-block; width: 17px; height: 17px; flex: none; vertical-align: -3px; margin-right: 4px; }
+.status-label { display: inline-flex; align-items: center; gap: 4px; }
+.required-action { padding: 12px; border: 1px solid #f1c4c1; background: var(--card-bg); border-radius: 8px; }
+@media (max-width: 600px) {
+    .student-dialog .modal-card { padding: 16px; }
+    .student-dialog .tab { padding: 8px 10px; }
+    .key-info-row.wide, .key-info-row.login { grid-template-columns: minmax(0, 1fr) auto; }
+    .key-info-row.wide .key-info-label, .key-info-row.login .key-info-label { grid-column: 1 / -1; }
+    .key-info-row.wide .key-info-text { grid-column: 1 / -1; }
+}
+.status-refresh-error { padding: 12px 16px; border: 1px solid #f1d7a0; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }
+.status-kv { grid-template-columns: minmax(0, 1fr) auto; }
+.status-kv > span { overflow-wrap: anywhere; }
+.admin-list-header .admin-cell { white-space: normal; overflow: visible; }

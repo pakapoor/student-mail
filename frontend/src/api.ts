@@ -378,6 +378,7 @@ export async function markHandled(id: number): Promise<void> {
 // System status page (/status). Shape of backend systemStatus.ts.
 export interface SystemStatus {
     generatedAt: string;
+    activityCoverage?: { since: string; maxEvents: number; retainedEvents: number; approximate: boolean };
     overall: "ok" | "warning" | "problem";
     problems: string[];
     warnings: string[];
@@ -392,8 +393,8 @@ export interface SystemStatus {
         memory: { totalBytes: number; usedBytes: number };
         appStartedAt: string;
     };
-    hot?: { enabled: boolean; watchingNow: number; checksThisHour: number; recoveredThisHour: number };
-    sweep?: { enabled: boolean; roundHours: number; mailboxes: number; sweptThisRound: number };
+    hot?: { error?: string; enabled: boolean; watchingNow: number; checksThisHour: number; recoveredThisHour: number };
+    sweep?: { error?: string; enabled: boolean; roundHours: number; mailboxes: number; sweptThisRound: number };
     recent: { at: string; what: string; details: string }[];
 }
 

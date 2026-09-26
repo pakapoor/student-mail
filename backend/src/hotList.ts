@@ -15,19 +15,25 @@ import { registerStatusProvider } from "./systemStatus.js";
 //
 // No table of its own: "hot" is derived from the Step 18 status columns, so
 // the list maintains itself -
-//   code_sent_at within HOT_WINDOW_MIN (code validity 30 min + 5 grace)
+//   code_sent_at within the last 35 min (code validity 30 min + 5 grace)
 //   AND no registration email sent after that code.
 // A registration email arriving, or the code expiring, drops the student;
 // a new code (even after registration) makes them hot again.
 //
 // Config: HOT_ENABLED (default true), HOT_FAST_INTERVAL_S (30),
-// HOT_FAST_MINUTES (5), HOT_INTERVAL_S (120), HOT_WINDOW_MIN (35).
+// HOT_FAST_MINUTES (5), HOT_INTERVAL_S (120). The 35-min window is fixed.
 
 const ENABLED = process.env.HOT_ENABLED !== "false";
 const FAST_INTERVAL_MS = Number(process.env.HOT_FAST_INTERVAL_S || 30) * 1000;
 const FAST_WINDOW_MS = Number(process.env.HOT_FAST_MINUTES || 5) * 60 * 1000;
 const INTERVAL_MS = Number(process.env.HOT_INTERVAL_S || 120) * 1000;
-const WINDOW_MIN = Number(process.env.HOT_WINDOW_MIN || 35);
+// The government verification code expires after 30 minutes, but staff can
+// register at minute 29 and the registration email still has to arrive - so
+// keep checking 5 minutes past expiry. Fixed; the old HOT_WINDOW_MIN env
+// setting is no longer read.
+const CODE_VALID_MIN = 30;
+const REGISTRATION_EMAIL_GRACE_MIN = 5;
+const WINDOW_MIN = CODE_VALID_MIN + REGISTRATION_EMAIL_GRACE_MIN;
 const TICK_MS = 10 * 1000;
 const MAX_PARALLEL = 5;
 const SUMMARY_EVERY_MS = 60 * 60 * 1000;

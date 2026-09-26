@@ -38,7 +38,11 @@ export function noteEvent(kind: EventKind, detail: string, source?: string): voi
 
 export function noteWatcher(mailbox: string, connected: boolean): void {
     const current = sync.get(mailbox);
-    sync.set(mailbox, { connected, changedAt: Date.now(), lastSuccessAt: current?.lastSuccessAt ?? null });
+    sync.set(mailbox, {
+        connected,
+        changedAt: current?.connected === connected ? current.changedAt : Date.now(),
+        lastSuccessAt: current?.lastSuccessAt ?? null,
+    });
 }
 
 export function noteSyncSuccess(mailbox: string): void {
@@ -172,7 +176,7 @@ export async function getSystemStatus() {
     const gaveUp = since("gave-up");
 
     if (gaveUp.length > 0) {
-        warnings.push(`${gaveUp.length} email(s) could not be fetched after 5 tries today (search the student to recover).`);
+        warnings.push(`${gaveUp.length} email(s) in retained activity could not be fetched after 5 tries (search the student to recover).`);
     }
 
     // --- Providers (hot list, sweep) -----------------------------------------
@@ -211,6 +215,16 @@ export async function getSystemStatus() {
 
     return {
         generatedAt: new Date(now).toISOString(),
+        activityCoverage: {
+            // Once the cap is hit, older events were dropped - coverage then
+            // starts at the oldest one still kept, not 24 h ago.
+            since: new Date(
+                Math.max(startedAt, now - DAY_MS, events.length >= MAX_EVENTS ? events[0]!.at : 0)
+            ).toISOString(),
+            maxEvents: MAX_EVENTS,
+            retainedEvents: events.length,
+            approximate: true,
+        },
         overall: problems.length > 0 ? "problem" : warnings.length > 0 ? "warning" : "ok",
         problems,
         warnings,

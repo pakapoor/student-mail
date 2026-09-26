@@ -10,6 +10,7 @@ interface Props {
 export default function Login({ onLoggedIn }: Props) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -52,19 +53,23 @@ export default function Login({ onLoggedIn }: Props) {
                     />
                 </label>
 
-                <label className="login-field">
-                    <span>Password</span>
+                <div className="login-field">
+                    <label htmlFor="login-password">Password</label>
+                    <div className="password-field">
                     <input
-                        type="password"
+                        id="login-password"
+                        type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         autoComplete="current-password"
                         disabled={submitting}
                         required
                     />
-                </label>
+                    <button type="button" className="password-toggle" aria-controls="login-password" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button>
+                    </div>
+                </div>
 
-                {error && <p className="error">{error}</p>}
+                {error && <p className="error" role="alert">{error}</p>}
 
                 <button className="send-button" type="submit" disabled={submitting}>
                     {submitting && <span className="spinner" />}

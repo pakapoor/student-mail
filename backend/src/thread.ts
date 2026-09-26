@@ -598,12 +598,12 @@ function threadBadge(
     const none = { code: null, code_valid_minutes: null };
     const newestFirst = [...groupMessages].sort((a, b) => sentTime(b) - sentTime(a));
 
-    if (groupMessages.some((m) => m.edugate_kind === "login")) {
-        return { badge: "registered", code_at: null, ...none };
-    }
-
-    if (newestFirst[0]?.edugate_kind === "rejected") {
-        return { badge: "rejected", code_at: null, ...none };
+    // A later document review is actionable even in a thread that contains
+    // the earlier account-registration email. Student registration remains
+    // unchanged; this badge describes the latest recognized workflow event.
+    const latestWorkflow = newestFirst.find((m) => m.edugate_kind === "login" || m.edugate_kind === "rejected");
+    if (latestWorkflow) {
+        return { badge: latestWorkflow.edugate_kind === "rejected" ? "rejected" : "registered", code_at: null, ...none };
     }
 
     const codes = newestFirst.filter((m) => m.edugate_kind === "code");

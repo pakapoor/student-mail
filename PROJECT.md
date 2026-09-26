@@ -1688,6 +1688,53 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 22 — UI polish and status/badge fixes (done; sync part held back)
+
+Codex made a UI pass plus five backend reliability fixes. Claude reviewed
+them and fixed its findings. The user then chose to **ship only the
+low-risk part** and hold the sync changes (see open items). No schema
+change and no migration: rollback is `git revert` plus a restart.
+
+Shipped:
+- **Login:** show/hide password toggle; errors announced to screen readers.
+- **College picker:** spinner and an "Opening <college>…" message on the
+  chosen college; the other buttons are disabled while it opens.
+- **Manage students:** a native modal `<dialog>` with focus trapping,
+  Escape, and focus restored to the opener. The roster header sticks, and
+  the import help is shorter with the details expandable. Escape and
+  backdrop clicks are ignored while an import or delete is running, so
+  the result panel (rejected rows) isn't lost; the × button still closes.
+- **Thread summary box:** SVG icons replace the emoji, and rejection
+  "Action needed" is more prominent (`StatusIcon.tsx`).
+- **Status page** (`StatusPage.tsx`, `systemStatus.ts`):
+  - Shows all central mailboxes.
+  - "Sync overdue" uses the backend's rule: 10 min, measured from app
+    start if there has been no sync yet.
+  - Hot list and sweep show "Unavailable" if their status can't be read.
+  - Memory-based counts are labelled approximate, with the window
+    explained (`activityCoverage` in the API). The window starts at the
+    oldest kept event once the 500-event cap drops older ones.
+  - A refresh that fails keeps the last snapshot, with a warning.
+  - The "live connection down" warning keeps its outage start time
+    across repeated reconnect failures, so the 2-min threshold is reached.
+- **Thread badge** (`thread.ts`): in a thread holding both a registration
+  and a later document rejection, the newest of those decides the badge.
+  A later rejection now shows under Rejected. Student registration status
+  is unchanged ("registered" = the account exists).
+- **Hot list** (`hotList.ts`): the window stays **35 min** (30-min code
+  validity + 5 min for a last-minute registration email to arrive). It is
+  now fixed in code; the `HOT_WINDOW_MIN` env setting is no longer read.
+- **Tests:** `npm test --prefix backend` now runs
+  `backend/tests/reliability.test.mjs` (4 tests: status timing, activity
+  window, rejection badge; fake DB).
+- `docs/operational-review.md`: Codex's review notes, updated for the split.
+
+Verified locally: backend tests 4/4, backend `tsc` clean, frontend build
+clean, oxlint only the 3 known `set-state-in-effect` warnings. Codex
+checked the UI in Chromium with synthetic data. The browser checks for the
+two Claude UI fixes (Escape during import, `/status` right after a restart)
+are still to do on AWS.
+
 ## Step 21 — System status page (done)
 
 `https://app.myemailinfo.com/status` - behind the normal console login,
@@ -1842,6 +1889,22 @@ a live IDLE connection per hot student instead of 2-min polling (seconds
 instead of minutes, one login per student instead of one every 2 min).
 
 ## Not yet built / open items
+
+- **Held from Step 22: sync reliability changes** (outside the repo in
+  `~/student-mail-held/step22-sync-reliability/`, README there).
+  - What it contains:
+    - the 45 s deadline aborts IMAP work and waits for cleanup, so syncs
+      never overlap;
+    - message insert and registration-status update run in one transaction;
+    - a pass that fails part-way keeps its watermark progress (it lists the
+      pass's UIDs first, since GoDaddy returns FETCH results out of UID
+      order);
+    - emails stored by a failed pass are still announced live.
+  - Held because it changes the path every email takes and has had no live
+    test on Migadu. What it fixes is rare: overlapping syncs only re-fetch,
+    since inserts are idempotent.
+  - Before shipping: run a live forced-failure test on the dev setup
+    (5433 + `.env.local`), ideally also against a Migadu mailbox.
 
 - **`sync.ts`'s IMAP fetch is sequence-number-based, not UID-based - fix
   before scaling up.** It always fetches the last 50 messages by sequence
