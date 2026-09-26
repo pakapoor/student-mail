@@ -53,3 +53,11 @@ test('a later rejection linked to registration stays in the Rejected filter', as
     const newerLogin=await fetchThreadSummaries('all','staff@example.test','1',25,0,undefined,'registered');
     assert.equal(newerLogin.threads.length,1,'a genuinely newer registration can become the latest event');
 });
+
+test('thread list rows carry the student application number', async () => {
+    const msg={id:1,message_id:'<q>',student_email:'Student@example.test',sender_email:'student@example.test',subject:'Question',body_text:'hi',body_html:null,replied:false,replied_at:null,handled_without_reply:false,student_registered_at:null,in_reply_to:null,reference_ids:[],edugate_kind:null,received_at:'2026-09-26T10:00:00Z',sent_at:'2026-09-26T10:00:00Z'};
+    query=async sql=>({rows:sql.includes('AS app_no')?[{email:'student@example.test',name:'Jane Doe',app_no:'10012345'}]:sql.includes('FROM messages')?[msg]:[]});
+    const page=await fetchThreadSummaries('all','staff@example.test','1',25,0);
+    assert.equal(page.threads[0].student_name,'Jane Doe');
+    assert.equal(page.threads[0].student_app_no,'10012345');
+});

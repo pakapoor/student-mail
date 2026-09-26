@@ -25,6 +25,8 @@ export interface ThreadSummary {
     code: string | null;
     code_valid_minutes: number | null;
     student_name: string | null;
+    // Edugate application number from the roster, or null.
+    student_app_no: string | null;
     // English title for recognised Edugate emails, else the subject.
     title: string | null;
 }

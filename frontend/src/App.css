@@ -1230,6 +1230,14 @@
     margin-right: 0;
 }
 
+.message-row-top .student-line .student-app-no {
+    flex: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
 .message-row-top .student-line .student-email {
     min-width: 0;
     margin-top: 0;

@@ -1688,6 +1688,20 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 24 — Application No in the message list
+
+Each list row's top line shows the student's Application No between the
+name and the email (`Jane Doe  10012345  jane.doe@…`). Staff type it into
+Edugate, and search already matches it. It is small and muted, and never
+truncated; the email is what gets shortened. There's no number shown when
+the roster has none. The list only; the opened email's header is
+unchanged. Backend `thread.ts`: the existing per-page name lookup also
+returns `admission_id` as `student_app_no` (no extra query, no schema
+change). Frontend `MessageList.tsx`, `types.ts`, `App.css`
+(`.student-app-no`). Verified: backend tests 9/9 (new: rows carry the
+number), `tsc` clean, frontend build clean, oxlint only the 3 known
+warnings. The list query was run against the dev Postgres (5433).
+
 ## Step 23 — Manage students: filter buttons like the console
 
 The user asked for Manage students to match the main console: the same

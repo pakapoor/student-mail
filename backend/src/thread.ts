@@ -589,6 +589,8 @@ export interface ThreadSummary {
     title: string | null;
     // First + last name from the roster (as in Manage students), or null.
     student_name: string | null;
+    // Edugate application number from the roster, or null.
+    student_app_no: string | null;
 }
 
 function threadBadge(
@@ -720,7 +722,7 @@ export async function fetchThreadSummaries(
     const threadGroups = groupIntoThreads(messages);
     const allReplies = await fetchAllReplies();
 
-    const summaries: (Omit<ThreadSummary, "student_name"> & { sortAt: number; latestAt: number })[] = threadGroups.map(
+    const summaries: (Omit<ThreadSummary, "student_name" | "student_app_no"> & { sortAt: number; latestAt: number })[] = threadGroups.map(
         (groupMessages) => {
             const latest = groupMessages.reduce((a, b) =>
                 new Date(b.received_at) > new Date(a.received_at) ? b : a
@@ -813,12 +815,14 @@ export async function fetchThreadSummaries(
 
     // Student names for just this page (one query), shown in the list.
     const names = new Map<string, string>();
+    const appNos = new Map<string, string>();
     const pageEmails = [...new Set(pageRows.map((t) => t.student_email.toLowerCase()))];
 
     if (pageEmails.length > 0) {
-        const nameRows = await db.query<{ email: string; name: string | null }>(
+        const nameRows = await db.query<{ email: string; name: string | null; app_no: string | null }>(
             `SELECT lower(email) AS email,
-                    nullif(trim(coalesce(first_name, '') || ' ' || coalesce(last_name, '')), '') AS name
+                    nullif(trim(coalesce(first_name, '') || ' ' || coalesce(last_name, '')), '') AS name,
+                    nullif(trim(admission_id), '') AS app_no
              FROM students WHERE lower(email) = ANY($1)`,
             [pageEmails]
         );
@@ -827,12 +831,17 @@ export async function fetchThreadSummaries(
             if (row.name) {
                 names.set(row.email, row.name);
             }
+
+            if (row.app_no) {
+                appNos.set(row.email, row.app_no);
+            }
         }
     }
 
     const page = pageRows.map(({ sortAt, latestAt, ...summary }) => ({
         ...summary,
         student_name: names.get(summary.student_email.toLowerCase()) ?? null,
+        student_app_no: appNos.get(summary.student_email.toLowerCase()) ?? null,
     }));
 
     return {

@@ -104,6 +104,11 @@ export default function MessageList({ threads, selectedId, onSelect, emptyText }
                             <span className="student" title={thread.student_name ?? thread.student_email}>
                                 {thread.student_name ?? thread.student_email}
                             </span>
+                            {/* Application No - what staff type into
+                                Edugate. Never truncated; the email is. */}
+                            {thread.student_app_no && (
+                                <span className="student-app-no" title="Application No">{thread.student_app_no}</span>
+                            )}
                             {thread.student_name && (
                                 <span className="student-email" title={thread.student_email}>{thread.student_email}</span>
                             )}
