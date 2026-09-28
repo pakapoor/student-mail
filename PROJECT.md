@@ -1692,8 +1692,13 @@ non-email input → no result.
 
 ## Step 28 — Recent problems kept across restarts, solved rows, Migadu login retry
 
-**Status: built and tested locally 2026-09-26, not deployed or committed
-yet.** Needs migration 012 applied on the server before the new code starts.
+**Status: DEPLOYED 2026-09-28 18:51 UTC** (`75c44c1`) with no consoles
+open (00:21 IST). Re-checked before commit: `tsc` clean, backend tests
+33/33, frontend build OK. On the server: `git pull`, migration 012 applied
+(table + both indexes created), frontend rebuilt, `student-mail.service`
+restarted - API up, central IDLE watcher reconnected, syncs normal, no
+`[status]` errors. The Recent problems list starts empty (nothing from
+before the deploy was stored).
 
 Why (user, 2026-09-26): the status page showed 7 "login rejected (stored
 password wrong?)" rows at 7:59/8:02 PM IST, yet inayat.hassan's webmail
