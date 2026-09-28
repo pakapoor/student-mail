@@ -66,5 +66,9 @@ test('status: running count every 5 min over 6 h, recent entries, warning, Migad
     assert.equal(s.days.length, 7);
     assert.equal(s.days.at(-1).migaduDelayed, 1);
     assert.match(s.recent[0].details, /TANISHA SHARMA \(w@x\) · no fresh code yet · code email held 20 min by Migadu/);
+    assert.equal(s.recent[0].state, 'open');
+    assert.equal(s.recent[0].solvedAt, null);
+    assert.equal(s.recent[1].state, 'solved'); // h@x got a fresh code at 11:40
+    assert.equal(s.recent[1].solvedAt, '2026-09-26T11:40:00.000Z');
     assert.match(s.warning, /2 verification codes expired unused today; 1 still waiting/);
 });

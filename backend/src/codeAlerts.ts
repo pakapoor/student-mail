@@ -275,7 +275,7 @@ export interface CodeTimeline {
 export interface CodeStatus {
     days: CodeDay[];
     timeline: CodeTimeline;
-    recent: { at: string; what: string; details: string }[];
+    recent: { at: string; what: string; details: string; state: "open" | "solved"; solvedAt: string | null }[];
     warning: string | null;
 }
 
@@ -353,7 +353,7 @@ export function summarizeCodes(outcomes: CodeOutcome[], now: number, timeZone: s
     });
 
     const recent = outcomes
-        .filter((o) => expiredUnused(o, now) && o.expiresAt >= now - DAY_MS)
+        .filter((o) => expiredUnused(o, now))
         .sort((a, b) => b.expiresAt - a.expiresAt)
         .map((o) => {
             const outcome =
@@ -363,11 +363,15 @@ export function summarizeCodes(outcomes: CodeOutcome[], now: number, timeZone: s
                       ? "registered later without a new code"
                       : "no fresh code yet";
             const delay = o.migaduDelayed ? ` · code email held ${Math.round((o.heldSeconds ?? 0) / 60)} min by Migadu` : "";
+            // Solved once a fresh code arrived or the student registered anyway.
+            const solvedAt = o.freshCodeAt ?? o.registeredAt;
 
             return {
                 at: new Date(o.expiresAt).toISOString(),
                 what: "Code expired unused",
                 details: `${who(o)} · ${outcome}${delay}`,
+                state: solvedAt === null ? ("open" as const) : ("solved" as const),
+                solvedAt: solvedAt === null ? null : new Date(solvedAt).toISOString(),
             };
         });
 

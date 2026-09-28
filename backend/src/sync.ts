@@ -4,7 +4,7 @@ import { db } from "./db.js";
 import { logMigaduDelay, measureMigaduHold, type MigaduHold } from "./migaduDelay.js";
 import { classifyEdugate, isEdugateSender } from "../../shared/edugate.js";
 import { applyRegistrationEvent } from "./registrationStatus.js";
-import { noteEvent } from "./systemStatus.js";
+import { noteEvent, noteProblem, solveProblems } from "./systemStatus.js";
 
 // Shared by the central-mailbox sync below and the per-student direct check
 // (checkStudentMail.ts). Both paths key on (message_id, student_email), so a
@@ -96,6 +96,10 @@ export async function insertMessageForStudent(
             }
         }
         await connection.query("COMMIT");
+
+        if (inserted) {
+            solveProblems("gave-up", messageId);
+        }
 
         return inserted;
     } catch (error) {
@@ -274,7 +278,9 @@ export async function syncInbox(
 
         for await (const message of client.fetch(
             fetchRange,
-            { source: true, internalDate: true, uid: true },
+            // envelope: the Message-ID of an email we give up on, so its
+            // problem row is marked solved once a mailbox check recovers it.
+            { source: true, envelope: true, internalDate: true, uid: true },
             { uid: useUidMode }
         )) {
             // Reaching the next email means the previous one is fully handled.
@@ -306,7 +312,12 @@ export async function syncInbox(
                         `[sync] [${centralEmail}] GIVING UP uid=${message.uid} after ${MAX_SOURCE_ATTEMPTS} tries - ` +
                             `no message source; searching the student in the console (mailbox check) can still recover it`
                     );
-                    noteEvent("gave-up", `${centralEmail} UID ${message.uid}: no content after ${MAX_SOURCE_ATTEMPTS} tries`);
+                    const envelopeId = message.envelope?.messageId;
+                    noteProblem(
+                        "gave-up",
+                        envelopeId || `${centralEmail} UID ${message.uid}`,
+                        `${centralEmail} UID ${message.uid}${envelopeId ? ` ${envelopeId}` : ""}: no content after ${MAX_SOURCE_ATTEMPTS} tries`
+                    );
                 }
 
                 continue;

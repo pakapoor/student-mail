@@ -3,7 +3,7 @@ import { ImapFlow } from "imapflow";
 import { SyncFailure, syncInbox } from "./sync.js";
 import { broadcast } from "./realtime.js";
 import { db } from "./db.js";
-import { noteEvent, noteSyncSuccess, noteWatcher } from "./systemStatus.js";
+import { noteProblem, noteSyncSuccess, noteWatcher } from "./systemStatus.js";
 
 const runningSync = new Set<string>();
 // Set when a trigger arrives while a sync is already in flight for that
@@ -71,7 +71,7 @@ export async function triggerSync(
         }
     } catch (error) {
         console.error(`Sync failed [${email}]:`, error);
-        noteEvent("sync-failed", `${email}: ${error instanceof Error ? error.message : String(error)}`);
+        noteProblem("sync-failed", email, `${email}: ${error instanceof Error ? error.message : String(error)}`);
 
         // Emails stored before the failure are committed but were never
         // announced - the next pass sees them as duplicates, so it's now or

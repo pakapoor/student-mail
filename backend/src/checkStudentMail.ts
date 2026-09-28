@@ -2,7 +2,7 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { db } from "./db.js";
 import { insertMessageForStudent } from "./sync.js";
-import { noteEvent } from "./systemStatus.js";
+import { noteEvent, noteProblem, solveProblems } from "./systemStatus.js";
 import { measureMigaduHold } from "./migaduDelay.js";
 
 // On-demand fallback for "the email hasn't shown up in the console": reads
@@ -24,6 +24,13 @@ const LOOKBACK_DAYS = 7;
 const COOLDOWN_MS = 2 * 60 * 1000;
 // Same ceiling as the central sync's watchdog (mailboxSync.ts).
 const CHECK_TIMEOUT_MS = 45000;
+// Migadu sometimes refuses correct passwords for a few minutes (2026-09-26:
+// 7 mailboxes "Authentication failed" in 4 min, all fine minutes later).
+// The daily sweep tries once more after this wait before reporting a
+// problem. The hot list doesn't wait (it holds up other waiting students'
+// checks and rechecks the same mailbox within minutes anyway), and a console
+// search reports at once - the operator can press "Check again".
+const AUTH_RETRY_MS = 60 * 1000;
 
 export interface CheckStudent {
     id: number;
@@ -71,6 +78,24 @@ export function checkStudentMailbox(
 }
 
 async function runCheck(student: CheckStudent, centralEmail: string, source: CheckSource): Promise<CheckOutcome> {
+    const first = await attemptCheck(student, centralEmail, source, source === "sweep");
+
+    if (first.status === "failed" && first.reason === "auth" && source === "sweep") {
+        await new Promise((resolve) => setTimeout(resolve, AUTH_RETRY_MS));
+        return attemptCheck(student, centralEmail, source, false);
+    }
+
+    return first;
+}
+
+// One login + read. `willRetry`: a refused login is only logged, not
+// reported as a problem, because runCheck is about to try again.
+async function attemptCheck(
+    student: CheckStudent,
+    centralEmail: string,
+    source: CheckSource,
+    willRetry: boolean
+): Promise<CheckOutcome> {
     const start = Date.now();
     const client = new ImapFlow({
         host: process.env.IMAP_HOST!,
@@ -101,6 +126,8 @@ async function runCheck(student: CheckStudent, centralEmail: string, source: Che
                 `checked=${checked} added=${added} (${LOOKBACK_DAYS} days) took=${checkedAt - start}ms`
         );
 
+        solveProblems("mailbox-failed", student.email.toLowerCase());
+
         return { status: "ok", checked, added, checkedAt };
     } catch (error) {
         const reason = classifyFailure(error);
@@ -110,15 +137,25 @@ async function runCheck(student: CheckStudent, centralEmail: string, source: Che
                 ? ` server said: ${String((error as { responseText: unknown }).responseText)}`
                 : "";
 
+        const retrying = willRetry && reason === "auth";
+
         console.error(
-            `[${source}] FAILED student=${student.email} id=${student.id} operator=${centralEmail} ` +
-                `reason=${reason} (${detail}${serverResponse}) took=${Date.now() - start}ms`
+            `[${source}] ${retrying ? "LOGIN REFUSED, retrying in 60s" : "FAILED"} student=${student.email} id=${student.id} ` +
+                `operator=${centralEmail} reason=${reason} (${detail}${serverResponse}) took=${Date.now() - start}ms`
         );
-        noteEvent(
-            "mailbox-failed",
-            `${student.email}: ${reason === "auth" ? "login rejected (stored password wrong?)" : `${reason} (${detail})`}`,
-            source
-        );
+
+        if (!retrying) {
+            noteProblem(
+                "mailbox-failed",
+                student.email.toLowerCase(),
+                `${student.email}: ${
+                    reason === "auth"
+                        ? `Migadu refused the login${source === "sweep" ? " twice, 1 min apart" : ""} (often temporary; if it keeps failing, check the password)`
+                        : `${reason} (${detail})`
+                }`,
+                source
+            );
+        }
 
         return { status: "failed", reason };
     } finally {

@@ -156,3 +156,22 @@ CREATE TABLE sessions (
 );
 
 CREATE INDEX idx_sessions_expires_at ON sessions (expires_at);
+
+-- Status page "Recent problems" (migration 012, systemStatus.ts). subject is
+-- what gets marked solved (student email, Message-ID, or central mailbox);
+-- solved rows are deleted after 7 days, all rows after 30. One open row per
+-- (kind, subject); repeats bump times/last_at.
+CREATE TABLE status_problems (
+    id BIGSERIAL PRIMARY KEY,
+    at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    times INTEGER NOT NULL DEFAULT 1,
+    kind TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    source TEXT,
+    detail TEXT NOT NULL,
+    solved_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_status_problems_last_at ON status_problems (last_at DESC);
+CREATE UNIQUE INDEX idx_status_problems_open ON status_problems (kind, subject) WHERE solved_at IS NULL;

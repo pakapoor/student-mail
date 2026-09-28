@@ -145,7 +145,7 @@ export default function StatusPage() {
                 <p className="status-hint" role="note">
                     Recovery, retry, and mailbox-failure counts are approximate: they use up to {s.activityCoverage?.maxEvents ?? 500} recent activity events from the last 24 hours and reset when the app restarts.
                     {s.activityCoverage && <> Activity window starts {shortDateTime(s.activityCoverage.since)}.</>}
-                    {" "}Email and delivery-delay totals labelled “today” come from the database.
+                    {" "}Email and delivery-delay totals labelled “today” and the Recent problems list come from the database, so they survive restarts.
                 </p>
                 <div className="status-grid">
                     <div className="status-card">
@@ -289,12 +289,12 @@ export default function StatusPage() {
                 <div className="status-card">
                     <div className="status-card-head">
                         <b>Recent problems</b>
-                        <span className="status-hint">last 24 h</span>
+                        <span className="status-hint">latest {s.recent.length} · open first · solved ones greyed</span>
                     </div>
                     {s.recent.length === 0 ? (
-                        <p className="empty-state">No problems in the last 24 hours.</p>
+                        <p className="empty-state">No problems recorded.</p>
                     ) : (
-                        <div className="status-table-wrap">
+                        <div className="status-table-wrap status-table-scroll">
                             <table className="status-table">
                                 <thead>
                                     <tr>
@@ -305,10 +305,16 @@ export default function StatusPage() {
                                 </thead>
                                 <tbody>
                                     {s.recent.map((r, i) => (
-                                        <tr key={`${r.at}-${i}`}>
+                                        <tr key={`${r.at}-${i}`} className={r.state === "open" ? undefined : "status-row-done"}>
                                             <td className="t">{shortDateTime(r.at)}</td>
-                                            <td>{r.what}</td>
-                                            <td>{r.details}</td>
+                                            <td>
+                                                {r.what}
+                                                {r.state === "solved" && r.solvedAt && <div className="status-solved">solved {shortDateTime(r.solvedAt)}</div>}
+                                            </td>
+                                            <td>
+                                                {r.details}
+                                                {r.times && r.times > 1 && r.firstAt ? ` · ${r.times} times since ${shortDateTime(r.firstAt)}` : ""}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

@@ -5,10 +5,13 @@ import { fetchCodeStatus, type CodeStatus } from "./codeAlerts.js";
 
 // System status page (Step 21, /status - user: "status page is fine", no
 // alert emails). The background jobs report into this module; the page
-// reads a snapshot. Events live in memory for 24 h (a restart clears them;
-// Migadu delays come from the database, so they survive restarts).
+// reads a snapshot. Events live in memory for 24 h and only feed the counts
+// (a restart clears them). The "Recent problems" list comes from the
+// database, so it survives restarts: problems are stored in status_problems
+// (Step 28) and Migadu delays are read off messages.
 
 type EventKind = "retry" | "gave-up" | "mailbox-failed" | "recovered" | "sync-failed";
+type ProblemKind = "gave-up" | "mailbox-failed" | "sync-failed";
 
 interface StatusEvent {
     at: number;
@@ -37,6 +40,32 @@ export function noteEvent(kind: EventKind, detail: string, source?: string): voi
     prune();
 }
 
+// A problem worth listing until it's solved: counted in memory like any
+// event, and stored so it survives restarts. `subject` is what a later
+// solveProblems() call matches on; while it's still open, a repeat (the hot
+// list re-failing every few minutes) bumps the same row instead of adding
+// one. Never throws - a status write must not break the sync or mailbox
+// check that reported it.
+export function noteProblem(kind: ProblemKind, subject: string, detail: string, source?: string): void {
+    noteEvent(kind, detail, source);
+    db.query(
+        `INSERT INTO status_problems (kind, subject, source, detail) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (kind, subject) WHERE solved_at IS NULL
+         DO UPDATE SET times = status_problems.times + 1, last_at = NOW(), detail = EXCLUDED.detail, source = EXCLUDED.source`,
+        [kind, subject, source ?? null, detail]
+    ).catch((error) => console.error("[status] could not store problem:", error));
+}
+
+// The thing works again (mailbox opened, email stored, sync succeeded):
+// mark its open problems solved. Usually matches nothing - the partial index
+// on open problems keeps that a cheap lookup.
+export function solveProblems(kind: ProblemKind, subject: string): void {
+    db.query("UPDATE status_problems SET solved_at = NOW() WHERE kind = $1 AND subject = $2 AND solved_at IS NULL", [
+        kind,
+        subject,
+    ]).catch((error) => console.error("[status] could not mark problem solved:", error));
+}
+
 export function noteWatcher(mailbox: string, connected: boolean): void {
     const current = sync.get(mailbox);
     sync.set(mailbox, {
@@ -53,6 +82,7 @@ export function noteSyncSuccess(mailbox: string): void {
         changedAt: current?.changedAt ?? Date.now(),
         lastSuccessAt: Date.now(),
     });
+    solveProblems("sync-failed", mailbox);
 }
 
 // Hot-list and sweep figures are supplied by those modules (avoids import
@@ -68,6 +98,31 @@ export function registerStatusProvider(name: string, provider: Provider): void {
 // the console.
 const SYNC_STALE_MS = 10 * 60 * 1000;
 const DISK_PROBLEM_RATIO = 0.9;
+// "Recent problems": the newest RECENT_LIMIT rows, open ones first. Solved
+// problems are kept (greyed) for a week, everything is gone after 30 days.
+const RECENT_LIMIT = 100;
+const SOLVED_KEEP_DAYS = 7;
+const PROBLEM_KEEP_DAYS = 30;
+
+const PROBLEM_LABELS: Record<ProblemKind, string> = {
+    "mailbox-failed": "Mailbox won't open",
+    "gave-up": "Email could not be fetched",
+    "sync-failed": "Central sync failed",
+};
+
+export interface RecentProblem {
+    at: string;
+    what: string;
+    details: string;
+    // open: still needs attention · solved: fixed itself (solvedAt says
+    // when) · info: a record, nothing to solve (a Migadu delay).
+    state: "open" | "solved" | "info";
+    solvedAt: string | null;
+    // A stored problem that happened more than once while open: how often,
+    // and when it first did (`at` is the latest).
+    times?: number;
+    firstAt?: string;
+}
 
 function since(kind: EventKind, source?: string): StatusEvent[] {
     const cutoff = Date.now() - DAY_MS;
@@ -106,6 +161,8 @@ export async function getSystemStatus() {
     let emailsToday = 0;
     let delays: Record<string, unknown> = {};
     let recentDelays: { at: string; minutes: number; queue: string | null; from: string; student: string }[] = [];
+    let storedProblems: RecentProblem[] = [];
+    let openGaveUp = 0;
 
     try {
         const counts = await db.query<{ total: string; today: string }>(
@@ -132,8 +189,9 @@ export async function getSystemStatus() {
         const r = await db.query<{ received_at: string; migadu_hold_seconds: number; migadu_queue_id: string | null; sender_email: string; student_email: string }>(
             `SELECT received_at, migadu_hold_seconds, migadu_queue_id, sender_email, student_email
              FROM messages
-             WHERE migadu_hold_seconds > 300 AND received_at >= now() - interval '24 hours'
-             ORDER BY received_at DESC LIMIT 20`
+             WHERE migadu_hold_seconds > 300 AND received_at >= now() - make_interval(days => $1)
+             ORDER BY received_at DESC LIMIT $2`,
+            [PROBLEM_KEEP_DAYS, RECENT_LIMIT]
         );
         recentDelays = r.rows.map((x) => ({
             at: new Date(x.received_at).toISOString(),
@@ -146,6 +204,31 @@ export async function getSystemStatus() {
         if (Number(row?.today_count ?? 0) > 0) {
             warnings.push(`Migadu held ${row?.today_count} email(s) for more than 5 min today.`);
         }
+
+        await db.query(
+            `DELETE FROM status_problems
+             WHERE solved_at < now() - make_interval(days => $1) OR at < now() - make_interval(days => $2)`,
+            [SOLVED_KEEP_DAYS, PROBLEM_KEEP_DAYS]
+        );
+        const p = await db.query<{ at: Date; last_at: Date; times: number; kind: ProblemKind; detail: string; solved_at: Date | null }>(
+            `SELECT at, last_at, times, kind, detail, solved_at FROM status_problems
+             ORDER BY (solved_at IS NULL) DESC, last_at DESC LIMIT $1`,
+            [RECENT_LIMIT]
+        );
+        storedProblems = p.rows.map((x) => ({
+            at: new Date(x.last_at).toISOString(),
+            what: PROBLEM_LABELS[x.kind] ?? x.kind,
+            details: x.detail,
+            times: x.times,
+            firstAt: new Date(x.at).toISOString(),
+            state: x.solved_at ? "solved" : "open",
+            solvedAt: x.solved_at ? new Date(x.solved_at).toISOString() : null,
+        }));
+
+        const g = await db.query<{ n: string }>(
+            "SELECT count(*) AS n FROM status_problems WHERE kind = 'gave-up' AND solved_at IS NULL"
+        );
+        openGaveUp = Number(g.rows[0]?.n ?? 0);
     } catch (error) {
         problems.push(`Database not reachable: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -190,8 +273,8 @@ export async function getSystemStatus() {
     const retries = since("retry").length;
     const gaveUp = since("gave-up");
 
-    if (gaveUp.length > 0) {
-        warnings.push(`${gaveUp.length} email(s) in retained activity could not be fetched after 5 tries (search the student to recover).`);
+    if (openGaveUp > 0) {
+        warnings.push(`${openGaveUp} email(s) could not be fetched after 5 tries and are not recovered yet (search the student to recover).`);
     }
 
     // --- Providers (hot list, sweep) -----------------------------------------
@@ -206,28 +289,20 @@ export async function getSystemStatus() {
     }
 
     // --- Recent problems list -------------------------------------------------
-    const recent = [
+    // Open problems first (newest first), then solved ones and Migadu delays.
+    const recent: RecentProblem[] = [
         ...("recent" in codes ? codes.recent : []),
         ...recentDelays.map((d) => ({
             at: d.at,
             what: "Migadu delay",
             details: `Held ${d.minutes} min · queue ${d.queue ?? "unknown"} · ${d.from} → ${d.student}`,
+            state: "info" as const,
+            solvedAt: null,
         })),
-        ...events
-            .filter((e) => e.kind === "mailbox-failed" || e.kind === "gave-up" || e.kind === "sync-failed")
-            .map((e) => ({
-                at: new Date(e.at).toISOString(),
-                what:
-                    e.kind === "mailbox-failed"
-                        ? "Mailbox won't open"
-                        : e.kind === "gave-up"
-                          ? "Email could not be fetched"
-                          : "Central sync failed",
-                details: e.detail,
-            })),
+        ...storedProblems,
     ]
-        .sort((a, b) => b.at.localeCompare(a.at))
-        .slice(0, 50);
+        .sort((a, b) => Number(b.state === "open") - Number(a.state === "open") || b.at.localeCompare(a.at))
+        .slice(0, RECENT_LIMIT);
 
     return {
         generatedAt: new Date(now).toISOString(),

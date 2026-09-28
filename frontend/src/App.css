@@ -1929,6 +1929,28 @@ select,
     font-variant-numeric: tabular-nums;
 }
 
+/* Recent problems (Step 28): up to 100 rows, so the table scrolls inside
+   the card (about 12 rows visible) with the header pinned. */
+.status-table-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.status-table-scroll th {
+    position: sticky;
+    top: 0;
+    background: var(--card-bg);
+}
+
+.status-row-done td {
+    color: var(--text-muted);
+}
+
+.status-solved {
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
 /* Login + college picker (Step 18, user): ISM logo bigger and centred at
    the top of the card, title and subtitle centred under it; same typeface
    as the rest of the site. */

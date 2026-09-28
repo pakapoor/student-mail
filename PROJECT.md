@@ -747,7 +747,9 @@ day):**
 
   - EC2 instance running: `i-0c104f1bad8f6009b` (`student-mail-app`),
     Ubuntu 26.04, 8GB gp3 unencrypted, no SSH key pair (access via
-    browser-based EC2 Instance Connect instead). Logged into AWS via
+    browser-based EC2 Instance Connect instead; since then plain
+    `ssh ubuntu@52.86.63.127` also works from the dev machine, which is
+    how logs are read now). Logged into AWS via
     the root account rather than a dedicated IAM user, given the
     deadline - flagged as worth fixing later, not urgent.
   - Elastic IP `52.86.63.127`, GoDaddy DNS A record
@@ -1687,6 +1689,76 @@ and send the queue IDs + times to Migadu support. Verified against real
 headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
+
+## Step 28 — Recent problems kept across restarts, solved rows, Migadu login retry
+
+**Status: built and tested locally 2026-09-26, not deployed or committed
+yet.** Needs migration 012 applied on the server before the new code starts.
+
+Why (user, 2026-09-26): the status page showed 7 "login rejected (stored
+password wrong?)" rows at 7:59/8:02 PM IST, yet inayat.hassan's webmail
+opened by hand. Investigated on the server:
+- All 2,275 stored passwords match the shared password, these 7 included.
+- Migadu itself answered "Authentication failed" (each after about 20 s)
+  between 14:29 and 14:33 UTC. Other students logged in fine in the same
+  batches, and all 7 logged in fine from the server minutes later. It was a
+  short refusal on Migadu's side, not wrong passwords.
+- imapflow flags *any* NO to LOGIN as `authenticationFailed`, so the old
+  label blamed the password for every refusal.
+- The problem list lived in memory for 24 h, so the 13:24 UTC deploy
+  restart had wiped the morning's two "INBOX does not exist" failures
+  (sabya.sagar1, sai.choudhari - still worth checking in Migadu admin).
+
+User asked for: at least the last 30 problems, a scrollable list, problems
+that survive restarts, and solved problems cleared automatically. Agreed
+design: mark solved instead of deleting at once (so a transient Migadu
+outage stays visible), grey solved rows, delete solved rows after 7 days
+and every row after 30 days. Size: about 200-300 bytes a row, so 10,000
+rows is about 2-3 MB (the whole prod DB was 14 MB).
+
+- **`status_problems` table** (migration `012_status_problems.sql`, also in
+  `schema.sql`). `noteProblem(kind, subject, detail, source)` in
+  `systemStatus.ts` stores "Mailbox won't open", "Email could not be
+  fetched" and "Central sync failed". At most one open row per
+  (kind, subject), enforced by a partial unique index: a repeat (the hot list
+  re-failing every few minutes) bumps `times`/`last_at` instead of adding
+  rows. The in-memory events still feed the 24 h counters.
+- **Solved automatically** (`solveProblems`):
+  - mailbox won't open → that student's next successful mailbox check
+    (sweep, hot list, or console search);
+  - central sync failed → that mailbox's next successful sync
+    (`noteSyncSuccess`);
+  - email could not be fetched → that Message-ID gets stored
+    (`insertMessageForStudent`). The central fetch now also asks for
+    `envelope` so a give-up knows its Message-ID; without one it is keyed
+    on "central UID n" and just ages out;
+  - code expired unused → a fresh code arrived or the student registered
+    (`codeAlerts.ts`; the old 24 h limit is gone, the 7 days already loaded
+    are used);
+  - Migadu delays are records, not problems: shown greyed, never "open".
+- **Status page**: the newest 100 rows, open first, then solved and Migadu
+  delays by time. Solved rows are greyed with "solved <time>", repeats show
+  "· N times since <time>". The table scrolls inside the card (420px, about
+  12 rows) with a sticky header. The "could not be fetched" warning now
+  counts open give-ups from the database.
+- **Login refusals** (`checkStudentMail.ts`): the daily sweep tries a refused
+  login once more after 60 s before reporting it. The hot list does not wait
+  (it would hold up other waiting students' checks, and it rechecks the same
+  mailbox within minutes anyway), and a console search reports at once. The
+  label is now "Migadu refused the login (often temporary; if it keeps
+  failing, check the password)", with "twice, 1 min apart" for the sweep.
+
+Verified: `tsc` clean on both sides, frontend build OK, backend tests
+33/33 (the code-expiry test now also checks open/solved). Migration 012
+applied to the local DB; a probe script (session scratchpad `probe.mts`)
+recorded, repeated and solved problems against it. The results: a repeat gave
+times=2 on one row; a solved row stayed and a new failure opened a fresh
+row; open rows sorted first. Probe rows deleted afterwards.
+
+Deploy notes (when the user says so): `git pull`, then apply
+`backend/migrations/012_status_problems.sql` as the app role, then
+`npm run build` in `frontend/`, then restart `student-mail.service`.
+The migration must come before the restart.
 
 ## Step 27 — Code expiry alerts, expired-code tracking, square favicon
 

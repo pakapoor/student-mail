@@ -497,7 +497,16 @@ export interface SystemStatus {
     };
     hot?: { error?: string; enabled: boolean; watchingNow: number; checksThisHour: number; recoveredThisHour: number };
     sweep?: { error?: string; enabled: boolean; roundHours: number; mailboxes: number; sweptThisRound: number };
-    recent: { at: string; what: string; details: string }[];
+    // Newest 100, open problems first. solved/info rows are shown greyed.
+    recent: {
+        at: string;
+        what: string;
+        details: string;
+        state: "open" | "solved" | "info";
+        solvedAt: string | null;
+        times?: number;
+        firstAt?: string;
+    }[];
 }
 
 export async function fetchSystemStatus(): Promise<SystemStatus> {
