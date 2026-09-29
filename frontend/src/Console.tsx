@@ -344,7 +344,7 @@ function Console({ college, onLoggedOut }: Props) {
                         className="logout-button"
                         onClick={() => setShowManageStudents(true)}
                     >
-                        Students
+                        Find/Add Students
                     </button>
                     <a
                         className="logout-button"

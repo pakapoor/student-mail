@@ -342,7 +342,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                 <div className="filter-buttons view-switch" role="group" aria-label="Student views">
                     {(
                         [
-                            ["students", "Find students"],
+                            ["students", "Search students"],
                             ["add", "Add students"],
                         ] as const
                     ).map(([tab, label]) => (

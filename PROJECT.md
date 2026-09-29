@@ -1705,7 +1705,7 @@ tanisha.gawande (registered) and tanisha.rahaman (code_expired), both 2026;
 "2026" matches nobody; 0 active students with an empty year; the console's
 college-scoped counts and search are unchanged; delete route now 404, roster
 route 401 without login, `/status` and the app serve 200, the new bundle has
-"Find students" and "System status" and no delete UI. The browser click-
+"System status" and no delete UI. The browser click-
 through (layout, phone width) is still the user's. Why (user, 2026-09-29): staff had to search whether a student
 has an email at all (Tanisha Rahaman's case) and the roster only showed the
 selected college. The user also asked for a link to the status page and a
@@ -1724,8 +1724,10 @@ year on every student. Decisions made with the user in chat:
   them and deleting is the risky part; removing a student is now done by
   hand (soft delete = set `deleted_at`, after a backup). Re-importing an
   unchanged deleted student still restores it.
-- **Dialog**: renamed from "Manage students" to **Students** (header
-  button and title); tabs "Find students" and "Add students". A College
+- **Dialog**: renamed from "Manage students": the header button is
+  **Find/Add Students**, the dialog title **Students**, and the tabs
+  "Search students" and "Add students" (first named "Find students", renamed
+  the same evening at the user's request). A College
   button row (All default, then one per college, with counts for the
   current search) sits above the Status row, plus a **College** column.
   Counts: college buttons ignore the pressed college/status; status counts
