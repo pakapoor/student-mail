@@ -95,8 +95,13 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 31d — Opening a thread reads one student, in one snapshot
 
-**Status: checked in on branch `step-31d-thread-open`; NOT pushed, NOT deployed.** Based on
-`4b8e68e`. Two changes:
+**Status: DEPLOYED 2026-09-29 22:57 UTC** at `10142ca` (user authorized). Fresh backup first (server
+`student_mail-20260929T225648Z.dump`, S3, local `~/backups`), `git pull --ff-only`, migration
+`016_replies_student_index.sql` (index created), restart. Verified: service active, IMAP watcher
+and SSE reconnected, sync normal, 0 errors after the restart; the new thread-open queries were
+run read-only on prod inside a `REPEATABLE READ READ ONLY` transaction for a real message (about
+1 ms each; the planner still chooses a sequential scan on `replies` because the table has one row -
+the index takes over as it grows). Based on `4b8e68e`. Two changes:
 
 1. `fetchThread` (`backend/src/thread.ts`) used to load the whole mailbox (every visible
    message with its body, plus every reply) and pick one thread out of it. Threads never
@@ -126,7 +131,7 @@ pass; backend and frontend type checks pass.
 costs ~26 ms server-side, so this is protection for growth and for the access race, not a
 speed-up anyone will feel today.
 
-**Deploy order when the user says so:** fresh backup (server, S3 via `backup-db.sh`,
+**Deploy order used (kept for re-deploys):** fresh backup (server, S3 via `backup-db.sh`,
 local); `git pull --ff-only`; apply `016_replies_student_index.sql`; restart
 `student-mail.service`. The index can be applied before or after the code (old code
 ignores it). Rollback: `git revert` and restart.
