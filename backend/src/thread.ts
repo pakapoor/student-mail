@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { db } from "./db.js";
 import { classifyEdugate, edugateTitle } from "../../shared/edugate.js";
 
@@ -429,12 +430,96 @@ export async function countEffectivelyPendingByEmail(
     return counts;
 }
 
+// One student's messages and replies, for opening a thread. Threads never
+// span students (see threadKey), so this is all that is needed - reading the
+// whole mailbox and picking one thread out (what this used to do) cost more
+// with every student. The clicked message must be visible: active student in
+// the selected college, this operator's mailbox.
+async function fetchStudentThreadData(
+    client: PoolClient,
+    messageId: number,
+    centralEmail: string,
+    collegeId: string
+): Promise<{ messages: MessageRow[]; replies: ReplyRow[] } | null> {
+    const owner = await client.query<{ student_email: string }>(
+        `
+        SELECT student_email
+        FROM messages
+        WHERE id = $1 AND central_email = $2
+          AND EXISTS (
+              SELECT 1 FROM students s
+              WHERE s.email = messages.student_email
+                AND s.deleted_at IS NULL
+                AND s.college_id = $3
+          )
+        `,
+        [messageId, centralEmail, collegeId]
+    );
+    const studentEmail = owner.rows[0]?.student_email;
+
+    if (!studentEmail) {
+        return null;
+    }
+
+    const messages = await client.query<MessageRow>(
+        `
+        SELECT id, message_id, student_email, sender_email, subject, received_at,
+               replied, replied_at, body_text, body_html, in_reply_to, reference_ids,
+               handled_without_reply, ${EDUGATE_COLUMNS}
+        FROM messages
+        WHERE student_email = $1 AND central_email = $2
+        `,
+        [studentEmail, centralEmail]
+    );
+    const replies = await client.query<ReplyRow>(
+        `
+        SELECT id, incoming_message_id, student_email, recipient_email,
+               sent_message_id, sent_at, attachment_count, body_text, body_html
+        FROM replies
+        WHERE student_email = $1
+        `,
+        [studentEmail]
+    );
+
+    return { messages: messages.rows, replies: replies.rows };
+}
+
 export async function fetchThread(
     messageId: number,
     centralEmail: string,
     collegeId: string
 ): Promise<ThreadItem[] | null> {
-    const messages = await fetchAllMessages(centralEmail, collegeId);
+    const client = await db.connect();
+
+    try {
+        // Authorization, message bodies, replies, and Edugate details must
+        // all refer to the same view of the student's college and mailbox.
+        await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+        const items = await fetchThreadInSnapshot(client, messageId, centralEmail, collegeId);
+        await client.query("COMMIT");
+        return items;
+    } catch (error) {
+        // A failed ROLLBACK (lost connection) must not hide the real error.
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
+async function fetchThreadInSnapshot(
+    client: PoolClient,
+    messageId: number,
+    centralEmail: string,
+    collegeId: string
+): Promise<ThreadItem[] | null> {
+    const data = await fetchStudentThreadData(client, messageId, centralEmail, collegeId);
+
+    if (!data) {
+        return null;
+    }
+
+    const messages = data.messages;
     const target = messages.find((m) => Number(m.id) === messageId);
 
     if (!target) {
@@ -451,9 +536,7 @@ export async function fetchThread(
 
     const threadMessageIds = new Set(threadMessages.map((m) => m.message_id));
 
-    const allReplies = await fetchAllReplies();
-
-    const threadReplies = allReplies.filter(
+    const threadReplies = data.replies.filter(
         (r) => threadMessageIds.has(r.incoming_message_id) && r.student_email === target.student_email
     );
 
@@ -462,7 +545,7 @@ export async function fetchThread(
     const hasLogin = threadMessages.some((m) => m.edugate_kind === "login");
     const hasRejected = threadMessages.some((m) => m.edugate_kind === "rejected");
     const unknownEdugate = hasLogin || hasRejected
-        ? await db.query<{ at: string | null }>(
+        ? await client.query<{ at: string | null }>(
               `SELECT max(coalesce(sent_at, received_at)) AS at FROM messages
                WHERE lower(student_email) = lower($1)
                  AND sender_email IN ('confirm@edu.gov.kg', 'notify@edu.gov.kg')
@@ -477,7 +560,7 @@ export async function fetchThread(
     let edugateLogin: IncomingThreadItem["edugate_login"] = null;
 
     if (hasRejected) {
-        const latestLogin = await db.query<{
+        const latestLogin = await client.query<{
             sender_email: string;
             body_text: string | null;
             student_email: string;

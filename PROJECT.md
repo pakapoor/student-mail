@@ -93,6 +93,44 @@ Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
 
+## Step 31d — Opening a thread reads one student, in one snapshot
+
+**Status: checked in on branch `step-31d-thread-open`; NOT pushed, NOT deployed.** Based on
+`4b8e68e`. Two changes:
+
+1. `fetchThread` (`backend/src/thread.ts`) used to load the whole mailbox (every visible
+   message with its body, plus every reply) and pick one thread out of it. Threads never
+   span students, so it now reads only the clicked message's student: an owner lookup
+   (message in this operator's mailbox, student active and in the selected college), then
+   that student's messages and replies. All reads, including the Edugate login and
+   unknown-template lookups, run in one `REPEATABLE READ READ ONLY` transaction on one
+   client, so the access check and the content cannot disagree if the student is moved or
+   deleted mid-request (before, the check and later reads were separate statements). A
+   failed `ROLLBACK` no longer hides the original error. The console list
+   (`fetchThreadSummaries`) is unchanged.
+2. Migration `016_replies_student_index.sql` adds `idx_replies_student_email`, so the
+   per-student replies read is an index lookup. Index only; safe to re-run; harmless to
+   the old code. `schema.sql` includes it.
+
+**Tests:** new `tests/threadOpen.db.test.mjs` (20 real-database tests): whole-thread
+opening from any message, separate threads per student and per Message-ID, replies only
+in their own thread, unknown / other-college / other-mailbox / deleted-student opens
+nothing, the login/registration/rejection warnings, a snapshot test that moves the
+student between the owner lookup and the later reads, the index existing and being safe
+to re-create twice, and an index-usage plan check. Checked against the previous
+`fetchThread`: 19 of the 20 pass on both versions (same answers as before) and only the
+snapshot test fails on the old one. Whole backend suite on PostgreSQL 18: **96 of 96**
+pass; backend and frontend type checks pass.
+
+**Honest value note:** measured on prod (see the deploy record above), opening a thread
+costs ~26 ms server-side, so this is protection for growth and for the access race, not a
+speed-up anyone will feel today.
+
+**Deploy order when the user says so:** fresh backup (server, S3 via `backup-db.sh`,
+local); `git pull --ff-only`; apply `016_replies_student_index.sql`; restart
+`student-mail.service`. The index can be applied before or after the code (old code
+ignores it). Rollback: `git revert` and restart.
+
 ## Step 31a — UID reset safety fix (checked in; deployed 2026-09-29 22:39 UTC)
 
 Built in a separate worktree from `fe40491`; the existing Steps 31–33 working tree

@@ -166,6 +166,9 @@ CREATE TABLE replies (
     body_html TEXT
 );
 
+-- Opening a thread reads one student's replies (migration 016).
+CREATE INDEX idx_replies_student_email ON replies (student_email);
+
 -- One row per central/operator mailbox that has logged in. Auth verifies
 -- IMAP credentials live against this mailbox (see auth.ts) rather than
 -- storing a separate operator password.
