@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="720" viewBox="0 0 1040 720" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Data model</title><desc id="d">The tables and how they are linked: colleges, students, messages, replies, thread summaries, the rebuild queue, sessions, central mailboxes.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a94a8"/></marker><marker id="arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M10 0 L0 5 L10 10 z" fill="#8a94a8"/></marker></defs>
+<rect width="1040" height="720" fill="#ffffff"/>
+<rect x="0.75" y="0.75" width="1038.5" height="718.5" rx="14" fill="none" stroke="#e3e7ef"/>
+<text x="520" y="34" font-size="20" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="520" dy="0">Data model</tspan></text>
+<text x="520" y="56" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="520" dy="0">Linked by email address (always lower case: a trigger and a CHECK enforce it), except the foreign keys marked FK</tspan></text>
+<rect x="30" y="90" width="240" height="124" rx="10" fill="#ffffff" stroke="#1f4fb8" stroke-width="1.6"/>
+<path d="M30 124 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.6"/>
+<text x="150.0" y="113" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="150.0" dy="0">sessions</tspan></text>
+<text x="44" y="142" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">token_hash</tspan></text>
+<text x="258" y="142" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0">PK</tspan></text>
+<text x="44" y="162" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">email</tspan></text>
+<text x="258" y="162" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0"></tspan></text>
+<text x="44" y="182" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">college_id</tspan></text>
+<text x="258" y="182" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0">FK</tspan></text>
+<text x="44" y="202" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">expires_at</tspan></text>
+<text x="258" y="202" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0"></tspan></text>
+<rect x="395" y="90" width="240" height="84" rx="10" fill="#ffffff" stroke="#15803d" stroke-width="1.6"/>
+<path d="M395 124 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#e7f5ec" stroke="#15803d" stroke-width="1.6"/>
+<text x="515.0" y="113" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="515.0" dy="0">colleges</tspan></text>
+<text x="409" y="142" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">id</tspan></text>
+<text x="623" y="142" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0">PK</tspan></text>
+<text x="409" y="162" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">name</tspan></text>
+<text x="623" y="162" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0">unique</tspan></text>
+<rect x="770" y="90" width="240" height="144" rx="10" fill="#ffffff" stroke="#1f4fb8" stroke-width="1.6"/>
+<path d="M770 124 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.6"/>
+<text x="890.0" y="113" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="890.0" dy="0">thread_summaries</tspan></text>
+<text x="784" y="142" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">thread_id</tspan></text>
+<text x="998" y="142" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0">PK</tspan></text>
+<text x="784" y="162" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">student_email</tspan></text>
+<text x="998" y="162" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0"></tspan></text>
+<text x="784" y="182" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">college_id</tspan></text>
+<text x="998" y="182" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0">FK</tspan></text>
+<text x="784" y="202" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">badge</tspan></text>
+<text x="998" y="202" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0"></tspan></text>
+<text x="784" y="222" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">received_at</tspan></text>
+<text x="998" y="222" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0"></tspan></text>
+<rect x="30" y="290" width="240" height="144" rx="10" fill="#ffffff" stroke="#1f4fb8" stroke-width="1.6"/>
+<path d="M30 324 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.6"/>
+<text x="150.0" y="313" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="150.0" dy="0">messages</tspan></text>
+<text x="44" y="342" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">message_id</tspan></text>
+<text x="258" y="342" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0">unique with student</tspan></text>
+<text x="44" y="362" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">student_email</tspan></text>
+<text x="258" y="362" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0"></tspan></text>
+<text x="44" y="382" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">central_email</tspan></text>
+<text x="258" y="382" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0"></tspan></text>
+<text x="44" y="402" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">edugate_kind</tspan></text>
+<text x="258" y="402" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0">code/login/rejected</tspan></text>
+<text x="44" y="422" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">replied</tspan></text>
+<text x="258" y="422" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0"></tspan></text>
+<rect x="395" y="290" width="240" height="204" rx="10" fill="#ffffff" stroke="#1f4fb8" stroke-width="1.6"/>
+<path d="M395 324 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.6"/>
+<text x="515.0" y="313" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="515.0" dy="0">students</tspan></text>
+<text x="409" y="342" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">email</tspan></text>
+<text x="623" y="342" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0">unique</tspan></text>
+<text x="409" y="362" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">college_id</tspan></text>
+<text x="623" y="362" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0">FK</tspan></text>
+<text x="409" y="382" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">admission_id</tspan></text>
+<text x="623" y="382" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0">unique per college</tspan></text>
+<text x="409" y="402" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">central_email</tspan></text>
+<text x="623" y="402" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0"></tspan></text>
+<text x="409" y="422" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">code_sent_at</tspan></text>
+<text x="623" y="422" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0"></tspan></text>
+<text x="409" y="442" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">registered_at</tspan></text>
+<text x="623" y="442" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0"></tspan></text>
+<text x="409" y="462" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">rejected_at</tspan></text>
+<text x="623" y="462" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0"></tspan></text>
+<text x="409" y="482" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">deleted_at</tspan></text>
+<text x="623" y="482" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0">soft delete</tspan></text>
+<rect x="770" y="290" width="240" height="84" rx="10" fill="#ffffff" stroke="#a15c00" stroke-width="1.6"/>
+<path d="M770 324 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#fff4dc" stroke="#a15c00" stroke-width="1.6"/>
+<text x="890.0" y="313" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="890.0" dy="0">thread_dirty</tspan></text>
+<text x="784" y="342" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">student_email</tspan></text>
+<text x="998" y="342" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0">PK</tspan></text>
+<text x="784" y="362" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">marked_at</tspan></text>
+<text x="998" y="362" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0"></tspan></text>
+<rect x="30" y="540" width="240" height="104" rx="10" fill="#ffffff" stroke="#a15c00" stroke-width="1.6"/>
+<path d="M30 574 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#fff4dc" stroke="#a15c00" stroke-width="1.6"/>
+<text x="150.0" y="563" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="150.0" dy="0">central_mailboxes</tspan></text>
+<text x="44" y="592" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">email</tspan></text>
+<text x="258" y="592" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0">PK</tspan></text>
+<text x="44" y="612" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">last_uid</tspan></text>
+<text x="258" y="612" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0">the saved place</tspan></text>
+<text x="44" y="632" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="44" dy="0">uid_validity</tspan></text>
+<text x="258" y="632" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="258" dy="0"></tspan></text>
+<rect x="395" y="570" width="240" height="104" rx="10" fill="#ffffff" stroke="#1f4fb8" stroke-width="1.6"/>
+<path d="M395 604 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.6"/>
+<text x="515.0" y="593" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="515.0" dy="0">replies</tspan></text>
+<text x="409" y="622" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">incoming_message_id</tspan></text>
+<text x="623" y="622" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0"></tspan></text>
+<text x="409" y="642" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">student_email</tspan></text>
+<text x="623" y="642" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0"></tspan></text>
+<text x="409" y="662" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="409" dy="0">sent_at</tspan></text>
+<text x="623" y="662" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="623" dy="0"></tspan></text>
+<rect x="770" y="540" width="240" height="104" rx="10" fill="#ffffff" stroke="#8a94a8" stroke-width="1.6"/>
+<path d="M770 574 v-24 a10 10 0 0 1 10 -10 h220 a10 10 0 0 1 10 10 v24 z" fill="#f3f5f9" stroke="#8a94a8" stroke-width="1.6"/>
+<text x="890.0" y="563" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="890.0" dy="0">status_problems</tspan></text>
+<text x="784" y="592" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">kind, subject</tspan></text>
+<text x="998" y="592" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0">one open row</tspan></text>
+<text x="784" y="612" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">detail, times</tspan></text>
+<text x="998" y="612" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0"></tspan></text>
+<text x="784" y="632" font-size="12" text-anchor="start" font-weight="400" fill="#16213a"><tspan x="784" dy="0">solved_at</tspan></text>
+<text x="998" y="632" font-size="11" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="998" dy="0"></tspan></text>
+<path d="M270 107 L395 107" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)" marker-start="url(#arrow-start)"/>
+<rect x="317.5" y="84.0" width="30" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="332.5" y="99" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="332.5" dy="0">FK</tspan></text>
+<path d="M635 107 L770 107" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)" marker-start="url(#arrow-start)"/>
+<rect x="687.5" y="84.0" width="30" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="702.5" y="99" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="702.5" dy="0">FK</tspan></text>
+<path d="M515.0 174 L515.0 290" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)" marker-start="url(#arrow-start)"/>
+<rect x="500.0" y="221.0" width="30" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="515.0" y="236.0" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="515.0" dy="0">FK</tspan></text>
+<path d="M395 307 L270 307" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)" marker-start="url(#arrow-start)"/>
+<rect x="280.5" y="284.0" width="104" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="332.5" y="299" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="332.5" dy="0">student_email</tspan></text>
+<path d="M635 307 L770 307" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="712.0" y="284.0" width="52" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="738" y="299" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="738" dy="0">queued</tspan></text>
+<path d="M635 360 L690 360 L690 200 L770 200" fill="none" stroke="#8a94a8" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+<rect x="647.0" y="229.0" width="86" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="690" y="244" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="690" dy="0">rebuilt from</tspan></text>
+<path d="M515.0 494 L515.0 570" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)" marker-start="url(#arrow-start)"/>
+<rect x="463.0" y="521.0" width="104" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="515.0" y="536.0" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="515.0" dy="0">student_email</tspan></text>
+<path d="M150.0 434 L150.0 540" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)" marker-start="url(#arrow-start)"/>
+<rect x="101.0" y="476.0" width="98" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="150.0" y="491.0" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="150.0" dy="0">central_email</tspan></text>
+</svg>

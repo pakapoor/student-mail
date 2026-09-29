@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="430" viewBox="0 0 1000 430" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Who may see what</title><desc id="d">Every request needs a session, then a chosen college; every query is limited to the session's mailbox and college and to active students.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a94a8"/></marker><marker id="arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M10 0 L0 5 L10 10 z" fill="#8a94a8"/></marker></defs>
+<rect width="1000" height="430" fill="#ffffff"/>
+<rect x="0.75" y="0.75" width="998.5" height="428.5" rx="14" fill="none" stroke="#e3e7ef"/>
+<text x="500" y="34" font-size="20" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="500" dy="0">Who may see what</tspan></text>
+<text x="30" y="76" font-size="13" text-anchor="start" font-weight="400" fill="#5b6478"><tspan x="30" dy="0">Staff share one login per central mailbox, so the Students dialog lists</tspan></text>
+<text x="30" y="96" font-size="13" text-anchor="start" font-weight="400" fill="#5b6478"><tspan x="30" dy="0">every college of that mailbox, read-only; the console's threads are per college.</tspan></text>
+<rect x="30" y="190" width="130" height="60" rx="10" fill="#f3f5f9" stroke="#8a94a8" stroke-width="1.5"/>
+<text x="95.0" y="223.64" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="95.0" dy="0">Request</tspan></text>
+<polygon points="290,162.0 385.0,220 290,278.0 195.0,220" fill="#fff4dc" stroke="#a15c00" stroke-width="1.5"/>
+<text x="290" y="216" font-size="13" text-anchor="middle" font-weight="600" fill="#16213a"><tspan x="290" dy="0">Signed in?</tspan><tspan x="290" dy="16.6">session cookie</tspan></text>
+<polygon points="560,162.0 655.0,220 560,278.0 465.0,220" fill="#fff4dc" stroke="#a15c00" stroke-width="1.5"/>
+<text x="560" y="216" font-size="13" text-anchor="middle" font-weight="600" fill="#16213a"><tspan x="560" dy="0">College</tspan><tspan x="560" dy="16.6">chosen?</tspan></text>
+<rect x="760" y="188" width="210" height="64" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="865.0" y="208.28" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="865.0" dy="0">Scoped query</tspan></text>
+<text x="865.0" y="226.2" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="865.0" dy="0">this mailbox and college,</tspan><tspan x="865.0" dy="15.4">active students only</tspan></text>
+<path d="M160 220 L195 220" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M385 220 L465 220" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="408.0" y="197.0" width="34" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="425" y="212" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="425" dy="0">yes</tspan></text>
+<path d="M655 220 L760 220" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="690.0" y="197.0" width="34" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="707" y="212" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="707" dy="0">yes</tspan></text>
+<rect x="210" y="338" width="160" height="56" rx="10" fill="#fdeeed" stroke="#c2352f" stroke-width="1.5"/>
+<text x="290.0" y="361.32000000000005" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="290.0" dy="0">401</tspan></text>
+<text x="290.0" y="379.24000000000007" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="290.0" dy="0">not authenticated</tspan></text>
+<rect x="480" y="338" width="160" height="56" rx="10" fill="#fdeeed" stroke="#c2352f" stroke-width="1.5"/>
+<text x="560.0" y="361.32000000000005" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="560.0" dy="0">400</tspan></text>
+<text x="560.0" y="379.24000000000007" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="560.0" dy="0">Select a college</tspan></text>
+<path d="M290 278 L290 338" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="288.0" y="297.0" width="32" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="304" y="312" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="304" dy="0">no</tspan></text>
+<path d="M560 278 L560 338" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="558.0" y="297.0" width="32" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="574" y="312" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="574" dy="0">no</tspan></text>
+<rect x="760" y="100" width="210" height="56" rx="10" fill="#e7f5ec" stroke="#15803d" stroke-width="1.5"/>
+<text x="865.0" y="123.96" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="865.0" dy="0">200</tspan></text>
+<text x="865.0" y="141.88" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="865.0" dy="0">your own college's data</tspan></text>
+<path d="M865 188 L865 156" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="760" y="322" width="210" height="92" rx="10" fill="#fff4dc" stroke="#a15c00" stroke-width="1.5"/>
+<text x="865.0" y="348.6" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="865.0" dy="0">404</tspan></text>
+<text x="865.0" y="366.52000000000004" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="865.0" dy="0">another college or mailbox,</tspan><tspan x="865.0" dy="15.4">or a deleted student:</tspan><tspan x="865.0" dy="15.4">as if it did not exist</tspan></text>
+<path d="M865 252 L865 322" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+</svg>

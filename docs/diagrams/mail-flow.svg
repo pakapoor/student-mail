@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="480" viewBox="0 0 1000 480" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">How mail gets into the console</title><desc id="d">Six steps from a forwarded email to a live update in every console, with three safety nets for mail that never reaches the central mailbox.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a94a8"/></marker><marker id="arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M10 0 L0 5 L10 10 z" fill="#8a94a8"/></marker></defs>
+<rect width="1000" height="480" fill="#ffffff"/>
+<rect x="0.75" y="0.75" width="998.5" height="478.5" rx="14" fill="none" stroke="#e3e7ef"/>
+<text x="500" y="34" font-size="20" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="500" dy="0">How mail gets into the console</tspan></text>
+<rect x="40" y="76" width="280" height="110" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="180.0" y="109.67999999999999" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="180.0" dy="0">Mail arrives</tspan></text>
+<text x="180.0" y="127.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="180.0" dy="0">Migadu forwards each</tspan><tspan x="180.0" dy="16.6">student's mail to the</tspan><tspan x="180.0" dy="16.6">central mailbox</tspan></text>
+<circle cx="64" cy="100" r="13" fill="#1f4fb8"/>
+<text x="64" y="105" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff"><tspan x="64" dy="0">1</tspan></text>
+<rect x="360" y="76" width="280" height="110" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="500.0" y="109.67999999999999" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="500.0" dy="0">Sync wakes</tspan></text>
+<text x="500.0" y="127.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="500.0" dy="0">an IDLE "new mail" push,</tspan><tspan x="500.0" dy="16.6">or the 5-second</tspan><tspan x="500.0" dy="16.6">fallback poll</tspan></text>
+<circle cx="384" cy="100" r="13" fill="#1f4fb8"/>
+<text x="384" y="105" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff"><tspan x="384" dy="0">2</tspan></text>
+<rect x="680" y="76" width="280" height="110" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="820.0" y="109.67999999999999" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="820.0" dy="0">Fetch</tspan></text>
+<text x="820.0" y="127.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="820.0" dy="0">only UIDs newer than</tspan><tspan x="820.0" dy="16.6">the saved place</tspan><tspan x="820.0" dy="16.6">(last_uid)</tspan></text>
+<circle cx="704" cy="100" r="13" fill="#1f4fb8"/>
+<text x="704" y="105" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff"><tspan x="704" dy="0">3</tspan></text>
+<rect x="40" y="236" width="280" height="110" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="180.0" y="269.68" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="180.0" dy="0">Match and store</tspan></text>
+<text x="180.0" y="287.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="180.0" dy="0">To: addresses matched to</tspan><tspan x="180.0" dy="16.6">our students; one row</tspan><tspan x="180.0" dy="16.6">per student; repeats ignored</tspan></text>
+<circle cx="64" cy="260" r="13" fill="#1f4fb8"/>
+<text x="64" y="265" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff"><tspan x="64" dy="0">4</tspan></text>
+<rect x="360" y="236" width="280" height="110" rx="10" fill="#fff4dc" stroke="#a15c00" stroke-width="1.5"/>
+<text x="500.0" y="269.68" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="500.0" dy="0">Edugate email?</tspan></text>
+<text x="500.0" y="287.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="500.0" dy="0">a code, login or rejection</tspan><tspan x="500.0" dy="16.6">updates the student's</tspan><tspan x="500.0" dy="16.6">status as it is stored</tspan></text>
+<circle cx="384" cy="260" r="13" fill="#a15c00"/>
+<text x="384" y="265" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff"><tspan x="384" dy="0">5</tspan></text>
+<rect x="680" y="236" width="280" height="110" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="820.0" y="269.68" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="820.0" dy="0">Announce</tspan></text>
+<text x="820.0" y="287.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="820.0" dy="0">the new place is saved and</tspan><tspan x="820.0" dy="16.6">every console is told;</tspan><tspan x="820.0" dy="16.6">only the colleges concerned chime</tspan></text>
+<circle cx="704" cy="260" r="13" fill="#1f4fb8"/>
+<text x="704" y="265" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff"><tspan x="704" dy="0">6</tspan></text>
+<path d="M320 131 L360 131" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M640 131 L680 131" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M820 186 L820 211 L180 211 L180 236" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M320 291 L360 291" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M640 291 L680 291" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="40" y="380" width="920" height="80" rx="10" fill="#e7f5ec" stroke="#15803d" stroke-width="1.5"/>
+<text x="500" y="410" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="500" dy="0">When an email never reaches the central mailbox, three safety nets read the student's OWN mailbox:</tspan></text>
+<text x="500" y="438" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="500" dy="0">the console search  ·  the daily sweep (about 2,300 mailboxes a day)  ·  the hot list after a code (every 30 s, then 2 min)</tspan></text>
+</svg>

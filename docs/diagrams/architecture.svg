@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="560" viewBox="0 0 1080 560" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">System overview</title><desc id="d">Edugate, parents and Migadu feed the central mailbox; the API on one EC2 server syncs it into PostgreSQL and serves the staff console; nightly backups go to S3.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a94a8"/></marker><marker id="arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M10 0 L0 5 L10 10 z" fill="#8a94a8"/></marker></defs>
+<rect width="1080" height="560" fill="#ffffff"/>
+<rect x="0.75" y="0.75" width="1078.5" height="558.5" rx="14" fill="none" stroke="#e3e7ef"/>
+<text x="540" y="34" font-size="20" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="540" dy="0">The big picture</tspan></text>
+<rect x="24" y="60" width="336" height="470" rx="14" fill="none" stroke="#8a94a8" stroke-width="1.5" stroke-dasharray="7 5"/>
+<text x="40" y="84" font-size="13" text-anchor="start" font-weight="700" fill="#5b6478"><tspan x="40" dy="0">Outside services</tspan></text>
+<rect x="44" y="100" width="140" height="116" rx="10" fill="#fff4dc" stroke="#a15c00" stroke-width="1.5"/>
+<text x="114.0" y="136.68" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="114.0" dy="0">Edugate portal</tspan></text>
+<text x="114.0" y="154.60000000000002" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="114.0" dy="0">verification</tspan><tspan x="114.0" dy="16.6">codes, logins,</tspan><tspan x="114.0" dy="16.6">rejections</tspan></text>
+<rect x="200" y="100" width="140" height="116" rx="10" fill="#f3f5f9" stroke="#8a94a8" stroke-width="1.5"/>
+<text x="270.0" y="145.0" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="270.0" dy="0">Parents</tspan></text>
+<text x="270.0" y="162.92000000000002" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="270.0" dy="0">and students:</tspan><tspan x="270.0" dy="16.6">ordinary mail</tspan></text>
+<rect x="44" y="340" width="296" height="150" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="192.0" y="393.68" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="192.0" dy="0">Migadu</tspan></text>
+<text x="192.0" y="411.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="192.0" dy="0">a mailbox per student,</tspan><tspan x="192.0" dy="16.6">forwarding to one</tspan><tspan x="192.0" dy="16.6">central mailbox</tspan></text>
+<path d="M114 216 L114 340" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M270 216 L270 340" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="520" y="60" width="300" height="470" rx="14" fill="none" stroke="#8a94a8" stroke-width="1.5" stroke-dasharray="7 5"/>
+<text x="536" y="84" font-size="13" text-anchor="start" font-weight="700" fill="#5b6478"><tspan x="536" dy="0">One EC2 server</tspan></text>
+<rect x="540" y="100" width="260" height="76" rx="10" fill="#f3f5f9" stroke="#8a94a8" stroke-width="1.5"/>
+<text x="670.0" y="133.32" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="670.0" dy="0">nginx</tspan></text>
+<text x="670.0" y="151.24" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="670.0" dy="0">TLS + the static React console</tspan></text>
+<rect x="540" y="236" width="260" height="108" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="670.0" y="268.68" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="670.0" dy="0">Node / Express API</tspan></text>
+<text x="670.0" y="286.6" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="670.0" dy="0">mail sync, threads, roster,</tspan><tspan x="670.0" dy="16.6">replies, background jobs</tspan><tspan x="670.0" dy="16.6">(backend/src)</tspan></text>
+<path d="M570 405 v82 a100.0 9 0 0 0 200 0 v-82" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<ellipse cx="670.0" cy="405" rx="100.0" ry="9" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="670.0" y="438.18" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="670.0" dy="0">PostgreSQL</tspan></text>
+<text x="670.0" y="456.1" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="670.0" dy="0">students, messages,</tspan><tspan x="670.0" dy="15.4">thread summaries</tspan></text>
+<rect x="880" y="100" width="176" height="92" rx="10" fill="#e7f5ec" stroke="#15803d" stroke-width="1.5"/>
+<text x="968.0" y="133.0" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="968.0" dy="0">Staff browser</tspan></text>
+<text x="968.0" y="150.92000000000002" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="968.0" dy="0">the console</tspan><tspan x="968.0" dy="16.6">(React + Vite)</tspan></text>
+<path d="M880 405 v82 a88.0 9 0 0 0 176 0 v-82" fill="#f3f5f9" stroke="#8a94a8" stroke-width="1.5"/>
+<ellipse cx="968.0" cy="405" rx="88.0" ry="9" fill="#f3f5f9" stroke="#8a94a8" stroke-width="1.5"/>
+<text x="968.0" y="438.18" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="968.0" dy="0">S3</tspan></text>
+<text x="968.0" y="456.1" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="968.0" dy="0">nightly backups,</tspan><tspan x="968.0" dy="15.4">encrypted with gpg</tspan></text>
+<path d="M340 384 L420 384 L420 290 L540 290" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="382.0" y="319.0" width="76" height="38" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="420" y="334" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="420" dy="0">IMAP IDLE</tspan><tspan x="420" dy="15.6">+ sync</tspan></text>
+<path d="M540 322 L470 322 L470 448 L340 448" fill="none" stroke="#8a94a8" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+<rect x="405.0" y="397.0" width="130" height="38" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="470" y="412" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="470" dy="0">read one student's</tspan><tspan x="470" dy="15.6">mailbox; send replies</tspan></text>
+<path d="M880 138 L800 138" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="815.0" y="113.0" width="50" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="840" y="128" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="840" dy="0">HTTPS</tspan></text>
+<path d="M670 176 L670 236" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M670 344 L670 396" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)" marker-start="url(#arrow-start)"/>
+<path d="M800 290 L968 290 L968 192" fill="none" stroke="#8a94a8" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+<rect x="817.0" y="271.0" width="134" height="38" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="884" y="286" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="884" dy="0">live updates</tspan><tspan x="884" dy="15.6">(server-sent events)</tspan></text>
+<path d="M770 446 L880 446" fill="none" stroke="#8a94a8" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+<rect x="775.0" y="401.0" width="100" height="38" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="825" y="416" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="825" dy="0">pg_dump + gpg</tspan><tspan x="825" dy="15.6">+ cron</tspan></text>
+</svg>

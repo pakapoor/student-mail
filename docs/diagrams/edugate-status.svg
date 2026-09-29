@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">A student's Edugate status</title><desc id="d">The latest Edugate email decides: no mail, code live, code expired, registered or rejected, and which email moves a student between them.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8a94a8"/></marker><marker id="arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M10 0 L0 5 L10 10 z" fill="#8a94a8"/></marker></defs>
+<rect width="1000" height="500" fill="#ffffff"/>
+<rect x="0.75" y="0.75" width="998.5" height="498.5" rx="14" fill="none" stroke="#e3e7ef"/>
+<text x="500" y="34" font-size="20" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="500" dy="0">What a student's Edugate status means</tspan></text>
+<text x="500" y="58" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="500" dy="0">The latest Edugate email decides</tspan></text>
+<rect x="30" y="190" width="170" height="80" rx="10" fill="#f3f5f9" stroke="#8a94a8" stroke-width="1.5"/>
+<text x="115.0" y="225.32" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="115.0" dy="0">No Edugate mail</tspan></text>
+<text x="115.0" y="243.24" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="115.0" dy="0">shows as “—”</tspan></text>
+<rect x="300" y="90" width="190" height="84" rx="10" fill="#e9effc" stroke="#1f4fb8" stroke-width="1.5"/>
+<text x="395.0" y="119.0" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="395.0" dy="0">Code live</tspan></text>
+<text x="395.0" y="136.92000000000002" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="395.0" dy="0">a code arrived</tspan><tspan x="395.0" dy="16.6">in the last 30 min</tspan></text>
+<rect x="300" y="300" width="190" height="84" rx="10" fill="#fff4dc" stroke="#a15c00" stroke-width="1.5"/>
+<text x="395.0" y="329.0" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="395.0" dy="0">Code expired</tspan></text>
+<text x="395.0" y="346.92" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="395.0" dy="0">older than 30 min,</tspan><tspan x="395.0" dy="16.6">not registered</tspan></text>
+<rect x="620" y="190" width="190" height="84" rx="10" fill="#e7f5ec" stroke="#15803d" stroke-width="1.5"/>
+<text x="715.0" y="219.0" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="715.0" dy="0">Registered</tspan></text>
+<text x="715.0" y="236.92000000000002" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="715.0" dy="0">login + password</tspan><tspan x="715.0" dy="16.6">received</tspan></text>
+<rect x="790" y="340" width="180" height="84" rx="10" fill="#fdeeed" stroke="#c2352f" stroke-width="1.5"/>
+<text x="880.0" y="369.0" font-size="14" text-anchor="middle" font-weight="700" fill="#16213a"><tspan x="880.0" dy="0">Rejected</tspan></text>
+<text x="880.0" y="386.92" font-size="13" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="880.0" dy="0">a document was</tspan><tspan x="880.0" dy="16.6">rejected</tspan></text>
+<path d="M200 218 L300 150" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="200.0" y="157.0" width="80" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="240" y="172" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="240" dy="0">code email</tspan></text>
+<path d="M395 174 L395 300" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="339.0" y="226.0" width="112" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="395" y="241" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="395" dy="0">30 minutes pass</tspan></text>
+<path d="M490 132 L620 210" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="529.0" y="141.0" width="82" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="570" y="156" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="570" dy="0">login email</tspan></text>
+<path d="M490 342 L620 254" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="529.0" y="311.0" width="82" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="570" y="326" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="570" dy="0">login email</tspan></text>
+<path d="M330 300 L330 174" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<text x="322" y="246" font-size="12" text-anchor="end" font-weight="400" fill="#5b6478"><tspan x="322" dy="0">new code</tspan></text>
+<path d="M715 190 L715 132 L490 116" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="642.0" y="115.0" width="96" height="38" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="690" y="130" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="690" dy="0">another code</tspan><tspan x="690" dy="15.6">requested</tspan></text>
+<path d="M760 274 L850 340" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="792.0" y="295.0" width="120" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="852" y="310" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="852" dy="0">document rejected</tspan></text>
+<path d="M790 396 L700 396 L700 274" fill="none" stroke="#8a94a8" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="648.0" y="399.0" width="84" height="22" rx="5" fill="#ffffff" fill-opacity="0.94"/>
+<text x="690" y="414" font-size="12" text-anchor="middle" font-weight="400" fill="#5b6478"><tspan x="690" dy="0">newer login</tspan></text>
+<text x="30" y="452" font-size="12" text-anchor="start" font-weight="400" fill="#5b6478"><tspan x="30" dy="0">A newer code or login email always overrides an older rejection.</tspan></text>
+<text x="30" y="474" font-size="12" text-anchor="start" font-weight="400" fill="#5b6478"><tspan x="30" dy="0">The console list and the Students dialog use the same rule, so the buttons (Code received, Code expired, Registered, Rejected) always agree.</tspan></text>
+</svg>
