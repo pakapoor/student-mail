@@ -20,9 +20,27 @@ Coverage is a quality measure, not a check-in blocker (user clarification on
 2026-09-29). Measured against the old code, the 44 tests cover 55.8% of lines,
 74.6% of branches, and 80.2% of functions (up from 53.9% / 73.2% / 77.7%
 with 42 tests). The later target for the expanded suite is 85% / 80% / 85%.
-Coverage tooling, the load test, and the final-system README belong with the
-tests and features they describe. This check-in is local; it has not been
-pushed or deployed.
+Coverage tooling and the load test belong with the tests and features they
+describe. The README and diagrams were committed separately as `806efa5`.
+Both commits are on GitHub; neither has been deployed.
+
+## Step 31b — lowercase email rule and lookup indexes
+
+Local check-in, based on `806efa5`; not pushed or deployed. Migration 014 adds six indexes for
+student/message lookups, roster order, the hot list and sweep. It also adds
+triggers that lowercase newly written student and message addresses, backed by
+CHECK constraints; existing mixed-case rows stop the migration with a count
+for each table. `backend/schema.sql` includes the same indexes, triggers and
+constraints for fresh installs.
+
+A real-PostgreSQL test checks the mixed-case preflight and rollback, two safe
+runs of the migration, normalized new writes, duplicate refusal, and index
+plans for the two `lower(email)` lookups. A fresh-schema test checks the
+constraints and trigger. Migration 014 also applied successfully to the exact
+`fe40491` schema in a separate scratch database. All 46 backend tests pass,
+backend TypeScript checking passes, and the frontend builds. No production
+database was touched. Coverage on this staged code is 55.8% lines, 74.6% branches, and 80.2%
+functions. It is a quality measure, not a check-in blocker.
 
 ## Agreed TODO plan (2026-09-21)
 

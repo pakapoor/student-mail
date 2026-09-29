@@ -51,13 +51,22 @@ CREATE TABLE students (
     -- When the rolling daily sweep last checked this student's own mailbox
     -- (migration 008, sweep.ts); NULL = never.
     last_swept_at TIMESTAMPTZ,
-    CONSTRAINT students_college_admission_unique UNIQUE (college_id, admission_id)
+    CONSTRAINT students_college_admission_unique UNIQUE (college_id, admission_id),
+    CONSTRAINT students_email_lowercase CHECK (email = lower(email))
 );
 
 CREATE INDEX idx_students_central_email ON students (central_email);
 CREATE INDEX idx_students_deleted_at ON students (deleted_at);
-CREATE INDEX idx_students_sort ON students (first_name, last_name, id);
-CREATE INDEX idx_students_last_swept ON students (last_swept_at NULLS FIRST) WHERE deleted_at IS NULL;
+CREATE INDEX idx_students_roster_order ON students
+    (central_email, (coalesce(first_name, '')), (coalesce(last_name, '')), id)
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_students_sweep ON students (last_swept_at NULLS FIRST, id)
+    WHERE deleted_at IS NULL AND central_email IS NOT NULL AND smtp_password <> '';
+CREATE INDEX idx_students_hot_code ON students (code_sent_at)
+    WHERE deleted_at IS NULL AND code_sent_at IS NOT NULL;
+CREATE INDEX idx_students_email_lower ON students (lower(email));
+CREATE INDEX idx_students_college_email ON students (college_id, email)
+    WHERE deleted_at IS NULL;
 
 -- Free-text search across name/email/owner/college/admission_id for
 -- the admin roster page (pg_trgm ILIKE '%term%' against this concatenated
@@ -104,7 +113,8 @@ CREATE TABLE messages (
     -- 'code' | 'login' | 'rejected' when the email matches a verified
     -- Edugate template (shared/edugate.ts), else NULL.
     edugate_kind TEXT CHECK (edugate_kind IN ('code', 'login', 'rejected')),
-    CONSTRAINT messages_message_id_student_unique UNIQUE (message_id, student_email)
+    CONSTRAINT messages_message_id_student_unique UNIQUE (message_id, student_email),
+    CONSTRAINT messages_student_email_lowercase CHECK (student_email = lower(student_email))
 );
 
 CREATE INDEX idx_messages_central_email ON messages (central_email);
@@ -113,6 +123,25 @@ CREATE INDEX idx_messages_pending ON messages (replied, received_at DESC);
 -- email search (see fetchMessagesForStudentEmails in thread.ts), instead of
 -- scanning every message for the college.
 CREATE INDEX idx_messages_student_email ON messages (student_email);
+CREATE INDEX idx_messages_student_email_lower ON messages (lower(student_email), edugate_kind);
+
+CREATE FUNCTION students_lowercase_email() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+    NEW.email := lower(NEW.email);
+    RETURN NEW;
+END
+$fn$;
+CREATE TRIGGER students_lowercase_email BEFORE INSERT OR UPDATE OF email ON students
+    FOR EACH ROW EXECUTE FUNCTION students_lowercase_email();
+
+CREATE FUNCTION messages_lowercase_student_email() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+    NEW.student_email := lower(NEW.student_email);
+    RETURN NEW;
+END
+$fn$;
+CREATE TRIGGER messages_lowercase_student_email BEFORE INSERT OR UPDATE OF student_email ON messages
+    FOR EACH ROW EXECUTE FUNCTION messages_lowercase_student_email();
 
 -- One row per outgoing reply actually sent (only inserted after SMTP send
 -- succeeds - see reply.ts's claim-before-send logic).

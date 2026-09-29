@@ -42,9 +42,9 @@ can use an indexed query. The diagram shows that planned design and its fallback
 
 ![node --test runs one process per test file in parallel; every database test file gets its own throwaway PostgreSQL on its own port.](docs/diagrams/tests.svg)
 
-The current suite uses Node's test runner and fake dependencies. Step 33 adds real-database
-tests that each start a throwaway PostgreSQL from `backend/schema.sql`, plus an `EXPLAIN` test
-for the hottest queries. The diagram shows that planned test setup.
+The suite uses Node's test runner. Migration tests start a throwaway PostgreSQL; Step 33
+expands that approach to the backend and adds an `EXPLAIN` test for the hottest queries.
+The diagram shows the planned expanded test setup.
 
 ## Checks
 
@@ -80,7 +80,7 @@ backend/
   src/            API, mail sync, thread building, roster, background jobs
   migrations/     numbered SQL migrations; 014–016 arrive with Steps 31–32
   schema.sql      full schema for a fresh install
-  tests/          *.test.mjs; database test helper arrives in Step 33
+  tests/          *.test.mjs and helpers/testdb.mjs for throwaway PostgreSQL
   scripts/        backup scripts; coverage, mutation, and load scripts arrive later
 frontend/         React + Vite console
 shared/           edugate.ts: the email templates, used by both sides
