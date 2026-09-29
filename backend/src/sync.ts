@@ -91,7 +91,7 @@ export async function insertMessageForStudent(
                 );
             }
 
-            if (edugateKind === "code" || edugateKind === "login") {
+            if (edugateKind === "code" || edugateKind === "login" || edugateKind === "rejected") {
                 await applyRegistrationEvent(studentEmail, edugateKind, sentAt ?? receivedAt, connection);
             }
         }

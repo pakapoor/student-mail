@@ -42,8 +42,8 @@ can use an indexed query. The diagram shows that planned design and its fallback
 
 ![node --test runs one process per test file in parallel; every database test file gets its own throwaway PostgreSQL on its own port.](docs/diagrams/tests.svg)
 
-The suite uses Node's test runner. Migration tests start a throwaway PostgreSQL; Step 33
-expands that approach to the backend and adds an `EXPLAIN` test for the hottest queries.
+The suite uses Node's test runner. Migration and roster tests start a throwaway PostgreSQL;
+Step 33 expands that approach to the backend and adds an `EXPLAIN` test for the hottest queries.
 The diagram shows the planned expanded test setup.
 
 ## Checks

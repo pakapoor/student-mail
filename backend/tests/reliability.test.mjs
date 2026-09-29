@@ -52,7 +52,7 @@ const insertingConnection = onInsert => async () => ({
     release() {},
 });
 
-for (const kind of ['code', 'login']) {
+for (const kind of ['code', 'login', 'rejected']) {
     test(`${kind}: registration failure rolls back the message, retry commits both`, async () => {
         let stored = false, registered = false, fail = true, released = 0;
         const statements = [];
@@ -77,8 +77,11 @@ for (const kind of ['code', 'login']) {
         };
         const text = kind === 'code'
             ? 'Your verification code:\n\n123456\n\nEnter this code. The code is valid for 30 minutes.\n'
-            : 'Login (Email):\nstudent@example.test Password:\nexample-password\n\n';
-        const save = () => insertMessageForStudent({text}, '<test>', 'confirm@edu.gov.kg', 'student@example.test', new Date(), 'staff@example.test');
+            : kind === 'login'
+            ? 'Login (Email):\nstudent@example.test Password:\nexample-password\n\n'
+            : '\n--------------------\n\nHello, Ann Lee!\n\n❌ DOCUMENT REJECTED\n\nDocument: Passport\n\nPlease upload a clearer scan.\n\nReviewed by: Admin, 29.09.2026 10:00\n';
+        const sender = kind === 'rejected' ? 'notify@edu.gov.kg' : 'confirm@edu.gov.kg';
+        const save = () => insertMessageForStudent({text}, '<test>', sender, 'student@example.test', new Date(), 'staff@example.test');
         await assert.rejects(save(), /status write failed/);
         assert.equal(stored,false); assert.equal(registered,false);
         assert.equal(statements.at(-1),'ROLLBACK');

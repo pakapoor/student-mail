@@ -48,6 +48,8 @@ CREATE TABLE students (
         CHECK (registration_status IN ('REGISTRATION_PENDING', 'REGISTERED')),
     code_sent_at TIMESTAMPTZ,
     registered_at TIMESTAMPTZ,
+    -- Newest Edugate document-rejection email (migration 015).
+    rejected_at TIMESTAMPTZ,
     -- When the rolling daily sweep last checked this student's own mailbox
     -- (migration 008, sweep.ts); NULL = never.
     last_swept_at TIMESTAMPTZ,
@@ -65,6 +67,10 @@ CREATE INDEX idx_students_sweep ON students (last_swept_at NULLS FIRST, id)
 CREATE INDEX idx_students_hot_code ON students (code_sent_at)
     WHERE deleted_at IS NULL AND code_sent_at IS NOT NULL;
 CREATE INDEX idx_students_email_lower ON students (lower(email));
+-- Roster status buckets and counts: an index-only scan (migration 015).
+CREATE INDEX idx_students_roster_state ON students (central_email, college_id)
+    INCLUDE (code_sent_at, registered_at, rejected_at)
+    WHERE deleted_at IS NULL;
 CREATE INDEX idx_students_college_email ON students (college_id, email)
     WHERE deleted_at IS NULL;
 
@@ -203,3 +209,96 @@ CREATE TABLE status_problems (
 
 CREATE INDEX idx_status_problems_last_at ON status_problems (last_at DESC);
 CREATE UNIQUE INDEX idx_status_problems_open ON status_problems (kind, subject) WHERE solved_at IS NULL;
+
+-- Keeps the student's Edugate dates right when a code/login/rejection email is
+-- deleted or corrected (migration 015).
+CREATE FUNCTION students_refresh_edugate_status() RETURNS trigger
+    LANGUAGE plpgsql AS $fn$
+DECLARE
+    old_email TEXT;
+    new_email TEXT;
+BEGIN
+    old_email := OLD.student_email;
+
+    IF TG_OP = 'UPDATE' AND NEW.student_email IS DISTINCT FROM OLD.student_email THEN
+        new_email := NEW.student_email;
+    END IF;
+
+    -- A correction can move Edugate mail between two students. Lock both
+    -- student rows in email order before either UPDATE so opposite-direction
+    -- corrections cannot deadlock.
+    PERFORM 1 FROM students
+    WHERE email IN (old_email, new_email)
+    ORDER BY email FOR UPDATE;
+
+    UPDATE students s SET
+        code_sent_at = x.code_at,
+        registered_at = x.login_at,
+        rejected_at = x.rejected_at,
+        registration_status = CASE
+            WHEN x.login_at IS NOT NULL THEN 'REGISTERED'
+            WHEN x.code_at IS NOT NULL THEN 'REGISTRATION_PENDING' END
+    FROM (
+        SELECT max(coalesce(sent_at, received_at)) FILTER (WHERE edugate_kind = 'code') AS code_at,
+               max(coalesce(sent_at, received_at)) FILTER (WHERE edugate_kind = 'login') AS login_at,
+               max(coalesce(sent_at, received_at)) FILTER (WHERE edugate_kind = 'rejected') AS rejected_at
+        FROM messages
+        WHERE student_email = old_email AND edugate_kind IS NOT NULL
+    ) x
+    WHERE s.email = old_email;
+
+    IF new_email IS NOT NULL THEN
+        UPDATE students s SET
+            code_sent_at = x.code_at,
+            registered_at = x.login_at,
+            rejected_at = x.rejected_at,
+            registration_status = CASE
+                WHEN x.login_at IS NOT NULL THEN 'REGISTERED'
+                WHEN x.code_at IS NOT NULL THEN 'REGISTRATION_PENDING' END
+        FROM (
+            SELECT max(coalesce(sent_at, received_at)) FILTER (WHERE edugate_kind = 'code') AS code_at,
+                   max(coalesce(sent_at, received_at)) FILTER (WHERE edugate_kind = 'login') AS login_at,
+                   max(coalesce(sent_at, received_at)) FILTER (WHERE edugate_kind = 'rejected') AS rejected_at
+            FROM messages
+            WHERE student_email = new_email AND edugate_kind IS NOT NULL
+        ) x
+        WHERE s.email = new_email;
+    END IF;
+
+    RETURN NULL;
+END
+$fn$;
+
+CREATE TRIGGER messages_edugate_status_delete
+    AFTER DELETE ON messages
+    FOR EACH ROW
+    WHEN (OLD.edugate_kind IS NOT NULL)
+    EXECUTE FUNCTION students_refresh_edugate_status();
+
+CREATE TRIGGER messages_edugate_status_update
+    AFTER UPDATE OF edugate_kind, sent_at, received_at, student_email ON messages
+    FOR EACH ROW
+    WHEN ((OLD.edugate_kind IS NOT NULL OR NEW.edugate_kind IS NOT NULL)
+          AND (OLD.edugate_kind IS DISTINCT FROM NEW.edugate_kind
+               OR OLD.sent_at IS DISTINCT FROM NEW.sent_at
+               OR OLD.received_at IS DISTINCT FROM NEW.received_at
+               OR OLD.student_email IS DISTINCT FROM NEW.student_email))
+    EXECUTE FUNCTION students_refresh_edugate_status();
+
+CREATE OR REPLACE FUNCTION students_refresh_rejected_on_email_change() RETURNS trigger
+    LANGUAGE plpgsql AS $fn$
+BEGIN
+    NEW.rejected_at := (
+        SELECT max(coalesce(sent_at, received_at))
+        FROM messages
+        WHERE student_email = NEW.email AND edugate_kind = 'rejected'
+    );
+    RETURN NEW;
+END
+$fn$;
+
+CREATE TRIGGER students_rejected_on_email_change
+    BEFORE UPDATE OF email ON students
+    FOR EACH ROW
+    WHEN (OLD.email IS DISTINCT FROM NEW.email)
+    EXECUTE FUNCTION students_refresh_rejected_on_email_change();

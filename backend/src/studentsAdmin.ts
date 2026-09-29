@@ -56,9 +56,9 @@ const CODE_VALID_MINUTES = 30;
 
 const EDUGATE_STATE_SQL = `
     CASE
-        WHEN r.rejected_at IS NOT NULL
-             AND r.rejected_at >= coalesce(st.code_sent_at, '-infinity')
-             AND r.rejected_at >= coalesce(st.registered_at, '-infinity')
+        WHEN st.rejected_at IS NOT NULL
+             AND st.rejected_at >= coalesce(st.code_sent_at, '-infinity')
+             AND st.rejected_at >= coalesce(st.registered_at, '-infinity')
             THEN 'rejected'
         WHEN st.code_sent_at IS NOT NULL
              AND (st.registered_at IS NULL OR st.code_sent_at > st.registered_at)
@@ -73,16 +73,11 @@ function rosterCte(conditions: string[]): string {
         WITH roster AS (
             SELECT st.id, st.first_name, st.last_name, st.name, st.email, st.admission_id,
                    st.year_enrolled, st.created_at, st.deleted_at, st.registration_status,
-                   st.code_sent_at, st.registered_at, r.rejected_at,
+                   st.code_sent_at, st.registered_at, st.rejected_at,
                    st.college_id, c.name AS college_name,
                    ${EDUGATE_STATE_SQL} AS edugate_state
             FROM students st
             LEFT JOIN colleges c ON c.id = st.college_id
-            LEFT JOIN LATERAL (
-                SELECT max(coalesce(m.sent_at, m.received_at)) AS rejected_at
-                FROM messages m
-                WHERE lower(m.student_email) = lower(st.email) AND m.edugate_kind = 'rejected'
-            ) r ON true
             WHERE ${conditions.join(" AND ")}
         )`;
 }

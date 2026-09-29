@@ -42,6 +42,42 @@ backend TypeScript checking passes, and the frontend builds. No production
 database was touched. Coverage on this staged code is 55.8% lines, 74.6% branches, and 80.2%
 functions. It is a quality measure, not a check-in blocker.
 
+## Step 31c — cached Edugate rejection date and roster counts
+
+Checked in and pushed; NOT deployed. Based on `c3657e6` (31b). Migration 015 adds
+`students.rejected_at`, backfills the latest rejection email, and adds a
+covering roster-state index. Message correction/deletion triggers recompute
+code, login and rejection dates; changing a student's email refreshes its
+rejection date. The fresh-install schema mirrors the migration. The backend
+records new rejection mail in the same transaction as the message, and the
+Students dialog classifies status from the students table without reading
+messages. The Step 32 thread-summary code is not part of this slice.
+
+Verification: migration 015 applied twice to the exact `c3657e6` schema in a
+throwaway PostgreSQL instance and backfilled a rejection. Five new database
+tests cover backfill/idempotence, the event path, corrected/deleted mail,
+mail moved between students, and student email changes. The existing four
+registration tests and twenty real-database roster tests also pass on this
+slice; the mail-ingestion rollback test now includes a rejection. All 76
+backend tests pass, backend TypeScript checking passes, and the frontend
+build succeeds. Informational coverage: 55.7% lines, 75.2% branches, 80.6%
+functions. The full 10x load test belongs to the later thread-summary slice;
+PostgreSQL may choose a different available roster index on a small dataset.
+No production database was touched.
+
+**Deploy order (important):** take a fresh backup (server, S3, local), apply
+`015_rejected_at.sql`, and only then pull and restart the backend. The new
+`applyRegistrationEvent` writes `rejected_at` for every code, login and
+rejection email; if the code runs before the column exists, each of those
+updates fails, rolls back the message insert, and mail sync retries and stalls
+for those emails. Before applying, re-run the read-only checks: no student
+with a registered date/status lacking a login email, and none with a code date
+lacking a code email (the 015 triggers clear cached dates when their last
+supporting Edugate mail is deleted or corrected; a state set some other way
+would be cleared on such a delete). On the 2026-09-29 backup both counts were 0.
+Rollback: `git revert` and restart; the column, index and triggers are
+additive and harmless to the old code.
+
 ## Agreed TODO plan (2026-09-21)
 
 This section records the user's reviewed target plan, not implemented behavior.
