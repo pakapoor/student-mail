@@ -1692,10 +1692,14 @@ non-email input → no result.
 
 ## Step 29 — One code row per student: older code-only threads count as used
 
-**Status: OPEN - not deployed.** Written and unit-tested; awaiting the
-user's local check, then commit/push. Deploy is planned for night, once
-staff are off (the restart briefly drops requests). `tsc` clean, backend
-tests 34/34.
+**Status: DEPLOYED 2026-09-29 17:23 UTC** (`ede5408`), backend only, with
+no consoles open (user confirmed no usage). `tsc` clean, backend tests
+34/34. On the server: `git pull --ff-only`, restart of
+`student-mail.service` - API up, central IDLE watcher reconnected, sync
+normal, no errors in the log. Checked read-only against prod data with the
+new code: searching Tanisha shows 8018 as `code` and 7859 as `used`; the
+Code expired count is 1. A pre-deploy `pg_dump` (`manual-20260929T112918Z`)
+is in `~/backups` on the server and locally.
 
 Why (user, 2026-09-29): Tanisha Rahaman showed two "code expired" rows.
 Read-only prod check (`ssh ubuntu@52.86.63.127`): the messages are
