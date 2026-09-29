@@ -1692,8 +1692,21 @@ non-email input → no result.
 
 ## Step 30 — Students dialog: all colleges, read-only; status link; year on import
 
-**Status: IN PROGRESS - committed, deploy pending** (updated below once
-deployed). Why (user, 2026-09-29): staff had to search whether a student
+**Status: DEPLOYED 2026-09-29 18:11 UTC** (`0e27561`), no consoles in use
+(user asleep). Before it: fresh dump `student_mail-20260929T181106Z` on the
+server, in S3 (encrypted, via `backup-db.sh`) and locally in `~/backups`.
+On the server: `git pull --ff-only`, migration 013 applied (2280 empty years
+set to 2026, index rebuilt, one transaction), `npm run build` in
+`frontend/`, `student-mail.service` restarted - API up, central IDLE watcher
+reconnected, syncs normal, 0 errors in the log. Validated on prod with the
+real queries: roster 2280 = 1269 KSMA CENTRAL + 582 IHSM CENTRAL + 429 IHSM
+ELITE; each college filter returns only its college; Tanisha search shows
+tanisha.gawande (registered) and tanisha.rahaman (code_expired), both 2026;
+"2026" matches nobody; 0 active students with an empty year; the console's
+college-scoped counts and search are unchanged; delete route now 404, roster
+route 401 without login, `/status` and the app serve 200, the new bundle has
+"Find students" and "System status" and no delete UI. The browser click-
+through (layout, phone width) is still the user's. Why (user, 2026-09-29): staff had to search whether a student
 has an email at all (Tanisha Rahaman's case) and the roster only showed the
 selected college. The user also asked for a link to the status page and a
 year on every student. Decisions made with the user in chat:
