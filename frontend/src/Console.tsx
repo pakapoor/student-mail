@@ -344,8 +344,16 @@ function Console({ college, onLoggedOut }: Props) {
                         className="logout-button"
                         onClick={() => setShowManageStudents(true)}
                     >
-                        Manage students
+                        Students
                     </button>
+                    <a
+                        className="logout-button"
+                        href="/status"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        System status
+                    </a>
                     <button className="logout-button quiet" onClick={handleLogout}>
                         Log out
                     </button>

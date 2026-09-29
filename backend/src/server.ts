@@ -38,11 +38,8 @@ import {
 } from "./centralMailboxes.js";
 import { fetchStudents, importStudents } from "./students.js";
 import {
-    pendingCountsForStudents,
-    restoreStudent,
     ROSTER_FILTERS,
     searchAdminStudents,
-    softDeleteStudents,
 } from "./studentsAdmin.js";
 
 const upload = multer({ dest: "uploads/" });
@@ -201,69 +198,24 @@ app.post("/api/students/import", requireAuth, requireCollege, async (req, res) =
     res.json(result);
 });
 
-// Admin roster - scoped to the logged-in operator's own central mailbox and
-// selected college (same scope as /api/students), not cross-operator.
+// Admin roster (Students dialog) - read-only, scoped to the logged-in
+// operator's own central mailbox. Shows every college; the optional
+// `college` query narrows it to one (Step 30).
 app.get("/api/admin/students", requireAuth, requireCollege, async (req, res) => {
     const search = typeof req.query.search === "string" ? req.query.search : "";
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : null;
-    const deleted = req.query.deleted === "true";
     const status = ROSTER_FILTERS.find((f) => f === req.query.status) ?? null;
+    const collegeId =
+        typeof req.query.college === "string" && /^\d{1,18}$/.test(req.query.college) ? req.query.college : null;
 
     const page = await searchAdminStudents({
         centralEmail: res.locals.centralEmail,
-        collegeId: res.locals.collegeId,
+        collegeId,
         search,
         cursor,
-        deleted,
         status,
     });
     res.json(page);
-});
-
-app.post("/api/admin/students/pending-counts", requireAuth, requireCollege, async (req, res) => {
-    const ids = Array.isArray(req.body?.ids)
-        ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n))
-        : [];
-
-    const counts = await pendingCountsForStudents(ids, res.locals.centralEmail, res.locals.collegeId);
-    res.json(counts);
-});
-
-app.post("/api/admin/students/delete", requireAuth, requireCollege, async (req, res) => {
-    const ids = Array.isArray(req.body?.ids)
-        ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n))
-        : [];
-
-    if (ids.length === 0) {
-        res.status(400).json({ error: "No student ids provided" });
-        return;
-    }
-
-    if (ids.length > 5) {
-        res.status(400).json({ error: "Cannot delete more than 5 students at a time" });
-        return;
-    }
-
-    const deletedCount = await softDeleteStudents(ids, res.locals.centralEmail, res.locals.collegeId);
-    res.json({ deleted: deletedCount });
-});
-
-app.post("/api/admin/students/:id/restore", requireAuth, requireCollege, async (req, res) => {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id)) {
-        res.status(400).json({ error: "Invalid student id" });
-        return;
-    }
-
-    const ok = await restoreStudent(id, res.locals.centralEmail, res.locals.collegeId);
-
-    if (!ok) {
-        res.status(404).json({ error: "Student not found or not deleted" });
-        return;
-    }
-
-    res.json({ restored: true });
 });
 
 app.get("/api/messages", requireAuth, requireCollege, async (req, res) => {

@@ -1690,6 +1690,80 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 30 — Students dialog: all colleges, read-only; status link; year on import
+
+**Status: IN PROGRESS - committed, deploy pending** (updated below once
+deployed). Why (user, 2026-09-29): staff had to search whether a student
+has an email at all (Tanisha Rahaman's case) and the roster only showed the
+selected college. The user also asked for a link to the status page and a
+year on every student. Decisions made with the user in chat:
+
+- **Roster is read-only and shows every college** (still limited to the
+  operator's central mailbox, so the 8 old rows of the retired
+  `pankaj@system-design.in` mailbox stay hidden). This deliberately reverses
+  the per-college roster scoping of Step 6; staff share one login and could
+  already pick any college, so no permission boundary is crossed. The
+  console's Pending/Replied threads and their search stay college-scoped.
+  `GET /api/admin/students?college=<id>` narrows to one college.
+- **Delete, restore and the Deleted tab are gone** (UI, API and backend
+  functions: `softDeleteStudents`, `restoreStudent`,
+  `pendingCountsForStudents`, and their three routes). Reason: nobody used
+  them and deleting is the risky part; removing a student is now done by
+  hand (soft delete = set `deleted_at`, after a backup). Re-importing an
+  unchanged deleted student still restores it.
+- **Dialog**: renamed from "Manage students" to **Students** (header
+  button and title); tabs "Find students" and "Add students". A College
+  button row (All default, then one per college, with counts for the
+  current search) sits above the Status row, plus a **College** column.
+  Counts: college buttons ignore the pressed college/status; status counts
+  follow the pressed college. `collegeCounts` comes with the first page.
+- **System status** link next to the Students button, opens `/status` in a
+  new tab (read-only page behind the same login).
+- **"Other emails"** filter button in the console hides when its count is 0
+  and it is not the pressed filter.
+- **Year**: migration `013_year_and_search.sql` sets `year_enrolled = 2026`
+  on every active student with an empty year (the import format lost its
+  year in Step 3/4; it was never a deliberate blank). The 8 deleted legacy
+  rows already had years and are untouched. The year is **not searchable**
+  any more (every student would match "2026"): removed from the search
+  expression in `searchAdminStudents`, `findMatchingStudentEmails`,
+  `findSearchMatches` and `schema.sql`, and the trigram index is rebuilt to
+  match (Postgres only uses an expression index when the text matches). A
+  year search is a problem for next year.
+- **Import**: optional 5th column, `Student Name,Application No,Email,
+  Password[,Year]`. Blank or missing = current UTC year; otherwise 4 digits
+  within 2 years of it, else that row is rejected with a reason (never
+  silently defaulted). Set only on insert; a re-import never changes an
+  existing student's year. Both header forms are skipped. To set a year with
+  the default password leave the password empty: `Name,App,email,,2025`.
+  The import still goes into the college selected at login (the dialog says
+  so).
+- **Data cleanup (one-off, not a migration)**: deleted the test thread
+  "sdklfjs" for a.aditya@myemailinfo.com (messages 7127 and 7128 from
+  ashish.kaw@ismedutech.com, reply 25); the student row was kept.
+- Tanisha's two codes (Step 29) are a re-application of an old student that
+  Edugate will not move past the code step (staff are dealing with the
+  Kyrgyz embassy), so her code emails will keep arriving.
+
+Verified locally: `tsc` clean both sides, backend tests 41/41 (new: college
+filter and counts wiring, import year cases), frontend build OK. Migration
+013 applied to the local dev DB (2281 rows, re-run is a no-op) and the real
+queries run against it: all 2275 roster rows page through with no
+duplicates, per-college counts add up (1270 + 578 + 427), college filter
+returns only that college, searching "tanisha" finds both students with
+their college, "2026" no longer matches everyone, and the rebuilt index is
+used by the search. The browser UI was not clicked through by me (login
+needs the central mailbox password); the layout (new College column, two
+button rows, phone width) is for the user to eyeball.
+
+Deploy notes: dump first (server, S3 via `backup-db.sh`, and local), then
+`git pull`, apply `backend/migrations/013_year_and_search.sql` as the app
+role, `npm run build` in `frontend/`, restart `student-mail.service`. The
+migration comes before the restart. Rollback: revert the commit and
+redeploy; the migration only fills empty years and rebuilds an index, both
+harmless to old code (its year-including search then just skips the index).
+If a dump older than 013 is ever restored, re-apply 013.
+
 ## Step 29 — One code row per student: older code-only threads count as used
 
 **Status: DEPLOYED 2026-09-29 17:23 UTC** (`ede5408`), backend only, with

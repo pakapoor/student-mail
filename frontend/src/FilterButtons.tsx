@@ -5,6 +5,8 @@ import type { ThreadFilter, ThreadSummaryPage } from "./api";
 // to the full list, because staff miss small controls: the "All" button
 // (outlined in blue whenever a filter is on), the ✕ on the pressed button,
 // or clicking the pressed button again.
+// "Other emails" is normally empty, so it only shows while it has threads or
+// is the pressed filter (its ✕ is the way back to the full list).
 
 const BUTTONS: { filter: ThreadFilter; label: string; dot: string }[] = [
     { filter: "code_live", label: "Code received", dot: "live" },
@@ -35,6 +37,10 @@ export default function FilterButtons({ filter, counts, onChange }: Props) {
 
             {BUTTONS.map((b) => {
                 const active = filter === b.filter;
+
+                if (b.filter === "other" && counts && counts.other === 0 && !active) {
+                    return null;
+                }
 
                 return (
                     <button

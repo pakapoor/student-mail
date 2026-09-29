@@ -301,8 +301,7 @@ async function findMatchingStudentEmails(
           AND college_id = $1
           AND (coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
                coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
-               coalesce(college,'') || ' ' || coalesce(year_enrolled::text,'') || ' ' ||
-               coalesce(admission_id,'')) ILIKE $2
+               coalesce(college,'') || ' ' || coalesce(admission_id,'')) ILIKE $2
         `,
         [collegeId, `%${escapeLikePattern(search)}%`]
     );
@@ -341,8 +340,7 @@ export async function findSearchMatches(
           AND college_id = $1
           AND (coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
                coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
-               coalesce(college,'') || ' ' || coalesce(year_enrolled::text,'') || ' ' ||
-               coalesce(admission_id,'')) ILIKE $2
+               coalesce(college,'') || ' ' || coalesce(admission_id,'')) ILIKE $2
         ORDER BY id
         LIMIT $3
         `,

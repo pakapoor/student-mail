@@ -97,6 +97,9 @@ export interface AdminStudentRow {
     year_enrolled: number | null;
     created_at: string;
     deleted_at: string | null;
+    // The student's college (Students dialog shows every college).
+    college_id: string | null;
+    college_name: string | null;
     // Edugate registration status - see backend registrationStatus.ts.
     registration_status: "REGISTRATION_PENDING" | "REGISTERED" | null;
     code_sent_at: string | null;
@@ -112,8 +115,10 @@ export type RosterFilter = "code_live" | "code_expired" | "registered" | "reject
 export interface AdminStudentPage {
     students: AdminStudentRow[];
     nextCursor: string | null;
-    // First page only: per-button counts for the current search.
+    // First page only: per-button counts for the current search and college.
     counts?: Record<RosterFilter | "all", number>;
+    // First page only: students per college id (plus "all") for the search.
+    collegeCounts?: Record<string, number>;
 }
 
 export interface RejectedRow {

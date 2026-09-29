@@ -19,8 +19,37 @@ export interface ImportResult {
     rejected: RejectedRow[];
 }
 
-const EXPECTED_HEADER = "student name,application no,email,password";
+const EXPECTED_HEADERS = [
+    "student name,application no,email,password",
+    "student name,application no,email,password,year",
+];
 const DEFAULT_PASSWORD = "password";
+// A pasted Year may differ from the current year by at most this much.
+const YEAR_RANGE = 2;
+
+// The optional 5th import column. Blank/missing = the current (UTC) year;
+// otherwise a 4-digit year within YEAR_RANGE of it, or a reason to reject
+// the row (never silently replaced by the default).
+export function parseImportYear(
+    raw: string | undefined,
+    currentYear: number
+): { year: number } | { error: string } {
+    const text = raw?.trim() ?? "";
+
+    if (!text) {
+        return { year: currentYear };
+    }
+
+    const year = /^\d{4}$/.test(text) ? Number(text) : NaN;
+
+    if (!Number.isInteger(year) || Math.abs(year - currentYear) > YEAR_RANGE) {
+        return {
+            error: `Year "${text}" must be a 4-digit year within ${YEAR_RANGE} years of ${currentYear}`,
+        };
+    }
+
+    return { year };
+}
 
 export async function fetchStudents(
     centralEmail: string,
@@ -106,9 +135,12 @@ interface ExistingStudent {
 
 // Bulk CSV import (Step 7/8). Replaces the old ad hoc
 // `name,email,password,college,year_enrolled` paste format. Format:
-//   Student Name,Application No,Email,Password
-// An optional header line matching that exactly (case-insensitive) is
-// skipped if present; otherwise every line is treated as data - positional
+//   Student Name,Application No,Email,Password[,Year]
+// Year (Step 30) is optional: blank or missing = the current year; a
+// non-blank Year must be 4 digits within 2 years of it. It is set only when
+// a student is first inserted, never changed by a re-import.
+// An optional header line matching either form exactly (case-insensitive)
+// is skipped if present; otherwise every line is treated as data - positional
 // parsing doesn't need a header to map columns.
 // The importing operator's currently selected college (from the session)
 // is used directly - there's no College column, since the server already
@@ -138,7 +170,7 @@ export async function importStudents(
     const normalizedHeader = headerEntry
         ? parseCsvLine(headerEntry.line).join(",").toLowerCase()
         : "";
-    const hasHeader = normalizedHeader === EXPECTED_HEADER;
+    const hasHeader = EXPECTED_HEADERS.includes(normalizedHeader);
 
     const dataRows = hasHeader ? nonEmpty.slice(1) : nonEmpty;
 
@@ -146,12 +178,13 @@ export async function importStudents(
     let skipped = 0;
     const rejected: RejectedRow[] = [];
 
+    const currentYear = new Date().getUTCFullYear();
     const seenEmails = new Map<string, number>();
     const seenAdmissionIds = new Map<string, number>();
 
     for (const { line, number } of dataRows) {
         const fields = parseCsvLine(line);
-        const [nameRaw, admissionIdRaw, emailRaw, passwordRaw] = fields;
+        const [nameRaw, admissionIdRaw, emailRaw, passwordRaw, yearRaw] = fields;
 
         const name = nameRaw?.trim();
         const admissionId = admissionIdRaw?.trim();
@@ -170,6 +203,13 @@ export async function importStudents(
 
         if (!admissionId) {
             rejected.push({ line: number, email, reason: "Missing Application No" });
+            continue;
+        }
+
+        const parsedYear = parseImportYear(yearRaw, currentYear);
+
+        if ("error" in parsedYear) {
+            rejected.push({ line: number, email, reason: parsedYear.error });
             continue;
         }
 
@@ -256,10 +296,10 @@ export async function importStudents(
         try {
             await db.query(
                 `
-                INSERT INTO students (name, first_name, last_name, email, smtp_password, central_email, college, college_id, admission_id, is_test)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, FALSE)
+                INSERT INTO students (name, first_name, last_name, email, smtp_password, central_email, college, college_id, admission_id, year_enrolled, is_test)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, FALSE)
                 `,
-                [name, first, last, email, password, centralEmail, collegeName, collegeId, admissionId]
+                [name, first, last, email, password, centralEmail, collegeName, collegeId, admissionId, parsedYear.year]
             );
             imported++;
         } catch (error) {

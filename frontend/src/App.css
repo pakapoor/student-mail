@@ -2042,8 +2042,7 @@ select,
 .student-dialog .modal-card { max-width: none; max-height: none; }
 .student-dialog .modal-close { min-width: 36px; min-height: 36px; }
 .admin-list { scrollbar-gutter: stable; max-height: min(420px, 50dvh); }
-.admin-list-header, .admin-row { display: grid; grid-template-columns: 20px minmax(140px, 1fr) minmax(190px, 1.4fr) 110px 90px minmax(190px, 1.2fr); gap: 12px; min-width: 830px; }
-.admin-list.deleted .admin-list-header, .admin-list.deleted .admin-row { grid-template-columns: minmax(140px, 1fr) minmax(190px, 1.4fr) 110px 90px minmax(190px, 1.2fr) 90px; }
+.admin-list-header, .admin-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(190px, 1.4fr) 110px 120px 90px minmax(190px, 1.2fr); gap: 12px; min-width: 900px; }
 .admin-list-header { position: sticky; top: 0; z-index: 1; background: var(--page-bg); border-bottom: 1px solid var(--border); padding-block: 12px; }
 .admin-row { min-height: 56px; }
 .admin-row:hover { background: var(--page-bg); }
@@ -2196,3 +2195,17 @@ select,
     font-variant-numeric: tabular-nums;
 }
 .codes-days td small { color: var(--text-muted); }
+
+/* Students dialog (Step 30): College column, the College / Status button
+   rows, and the System status link styled like the other header buttons. */
+.admin-college { color: var(--text-muted); }
+.filter-row { display: flex; align-items: center; gap: 10px; }
+.filter-row .filter-buttons { margin: 6px 0; }
+.filter-label { flex: none; width: 56px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); }
+.filter-chip.college.active { background: var(--accent); border-color: var(--accent); color: #ffffff; }
+.filter-chip.college.active .filter-count { color: rgba(255, 255, 255, 0.85); }
+a.logout-button { display: inline-block; text-decoration: none; }
+@media (max-width: 600px) {
+    .filter-row { flex-direction: column; align-items: flex-start; gap: 0; }
+    .filter-label { width: auto; }
+}

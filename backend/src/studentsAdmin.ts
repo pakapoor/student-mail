@@ -1,9 +1,11 @@
 import { db } from "./db.js";
-import { countEffectivelyPendingByEmail } from "./thread.js";
 
-// Admin roster: scoped to the logged-in operator's own central mailbox AND
-// selected college, same as students.ts's fetchStudents. Only used for the
-// admin roster page; messages/threads stay scoped the same way elsewhere.
+// Admin roster (Students dialog): read-only, scoped to the logged-in
+// operator's own central mailbox and showing every college, with an optional
+// college filter (Step 30). Staff share one login and may already pick any
+// college, so this crosses no permission boundary. Messages/threads in the
+// console stay college-scoped. There is no delete or restore any more;
+// removing a student is done by hand.
 
 export interface AdminStudentRow {
     id: number;
@@ -15,6 +17,8 @@ export interface AdminStudentRow {
     year_enrolled: number | null;
     created_at: string;
     deleted_at: string | null;
+    college_id: string | null;
+    college_name: string | null;
     // Edugate registration status (migration 010, registrationStatus.ts).
     registration_status: "REGISTRATION_PENDING" | "REGISTERED" | null;
     code_sent_at: string | null;
@@ -32,11 +36,18 @@ export type RosterFilter = "code_live" | "code_expired" | "registered" | "reject
 export const ROSTER_FILTERS: RosterFilter[] = ["code_live", "code_expired", "registered", "rejected"];
 export type RosterCounts = Record<RosterFilter | "all", number>;
 
+// Students per college for the current search, keyed by college id, plus
+// "all" (every student matching the search, whatever the college).
+export type CollegeCounts = Record<string, number>;
+
 export interface AdminStudentPage {
     students: AdminStudentRow[];
     nextCursor: string | null;
-    // First page only: per-bucket counts for the current search.
+    // First page only: per-bucket counts for the current search and college.
     counts?: RosterCounts;
+    // First page only: per-college counts for the current search (not
+    // narrowed by the pressed college button or status button).
+    collegeCounts?: CollegeCounts;
 }
 
 // Edugate's code emails say "valid for 30 minutes" (same fallback as the
@@ -63,8 +74,10 @@ function rosterCte(conditions: string[]): string {
             SELECT st.id, st.first_name, st.last_name, st.name, st.email, st.admission_id,
                    st.year_enrolled, st.created_at, st.deleted_at, st.registration_status,
                    st.code_sent_at, st.registered_at, r.rejected_at,
+                   st.college_id, c.name AS college_name,
                    ${EDUGATE_STATE_SQL} AS edugate_state
             FROM students st
+            LEFT JOIN colleges c ON c.id = st.college_id
             LEFT JOIN LATERAL (
                 SELECT max(coalesce(m.sent_at, m.received_at)) AS rejected_at
                 FROM messages m
@@ -108,35 +121,40 @@ function decodeCursor(cursor: string): Cursor | null {
 
 export async function searchAdminStudents(opts: {
     centralEmail: string;
-    collegeId: string;
+    // One college button, or null/undefined for all colleges.
+    collegeId?: string | null;
     search?: string;
     cursor?: string | null;
-    deleted?: boolean;
     // One roster filter button, or null for All.
     status?: RosterFilter | null;
     limit?: number;
 }): Promise<AdminStudentPage> {
     const limit = Math.min(Math.max(opts.limit ?? PAGE_SIZE, 1), 100);
-    const deleted = Boolean(opts.deleted);
     const search = opts.search?.trim() || "";
 
-    // Scope + search: shared by the page and the counts, so the counts
-    // always describe the current search.
-    const base: string[] = [
-        deleted ? "st.deleted_at IS NOT NULL" : "st.deleted_at IS NULL",
-        "st.central_email = $1",
-        "st.college_id = $2",
-    ];
-    const params: unknown[] = [opts.centralEmail, opts.collegeId];
+    // Mailbox + search: shared by the page, the status counts and the
+    // college counts, so all of them describe the current search. The year
+    // is deliberately not searchable (every student has the same one).
+    const searchConds: string[] = ["st.deleted_at IS NULL", "st.central_email = $1"];
+    const searchParams: unknown[] = [opts.centralEmail];
 
     if (search) {
-        params.push(`%${search}%`);
-        base.push(`
+        searchParams.push(`%${search}%`);
+        searchConds.push(`
             (coalesce(st.first_name,'') || ' ' || coalesce(st.last_name,'') || ' ' ||
              coalesce(st.email,'') || ' ' || coalesce(st.central_email,'') || ' ' ||
-             coalesce(st.college,'') || ' ' || coalesce(st.year_enrolled::text,'') || ' ' ||
-             coalesce(st.admission_id,'')) ILIKE $${params.length}
+             coalesce(st.college,'') || ' ' || coalesce(st.admission_id,'')) ILIKE $${searchParams.length}
         `);
+    }
+
+    // The pressed college button narrows the page and the status counts,
+    // but not the college counts (they show every college for the search).
+    const base = [...searchConds];
+    const params: unknown[] = [...searchParams];
+
+    if (opts.collegeId) {
+        params.push(opts.collegeId);
+        base.push(`st.college_id = $${params.length}`);
     }
 
     const baseParams = [...params];
@@ -194,80 +212,28 @@ export async function searchAdminStudents(opts: {
         (["all", ...ROSTER_FILTERS] as const).map((k) => [k, Number(c?.[k] ?? 0)])
     ) as RosterCounts;
 
-    return { students: page, nextCursor, counts };
-}
-
-export async function pendingCountsForStudents(
-    ids: number[],
-    centralEmail: string,
-    collegeId: string
-): Promise<Record<number, number>> {
-    if (ids.length === 0) {
-        return {};
-    }
-
-    // Uses the same timing-based "effectively pending" definition as the
-    // console's own Pending/Replied tabs (thread.ts's
-    // countEffectivelyPendingByEmail) rather than a raw replied=false count,
-    // so this delete-confirmation warning never disagrees with what the
-    // console itself shows for that student.
-    const result = await db.query<{ id: number; email: string }>(
-        "SELECT id, email FROM students WHERE id = ANY($1) AND central_email = $2 AND college_id = $3",
-        [ids, centralEmail, collegeId]
-    );
-
-    const emails = result.rows.map((row) => row.email);
-    const countsByEmail = await countEffectivelyPendingByEmail(emails);
-
-    const counts: Record<number, number> = {};
-
-    for (const row of result.rows) {
-        counts[row.id] = countsByEmail[row.email] || 0;
-    }
-
-    return counts;
-}
-
-export async function softDeleteStudents(
-    ids: number[],
-    centralEmail: string,
-    collegeId: string
-): Promise<number> {
-    if (ids.length === 0) {
-        return 0;
-    }
-
-    if (ids.length > 5) {
-        throw new Error("Cannot delete more than 5 students at a time");
-    }
-
-    const result = await db.query(
+    const collegeResult = await db.query<{ college_id: string | null; n: string }>(
         `
-        UPDATE students
-        SET deleted_at = NOW()
-        WHERE id = ANY($1) AND deleted_at IS NULL
-          AND central_email = $2 AND college_id = $3
+        SELECT st.college_id, count(*) AS n
+        FROM students st
+        WHERE ${searchConds.join(" AND ")}
+        GROUP BY st.college_id
         `,
-        [ids, centralEmail, collegeId]
+        searchParams
     );
+    const collegeCounts: CollegeCounts = {};
+    let total = 0;
 
-    return result.rowCount ?? 0;
-}
+    for (const row of collegeResult.rows) {
+        const n = Number(row.n);
+        total += n;
 
-export async function restoreStudent(
-    id: number,
-    centralEmail: string,
-    collegeId: string
-): Promise<boolean> {
-    const result = await db.query(
-        `
-        UPDATE students
-        SET deleted_at = NULL
-        WHERE id = $1 AND deleted_at IS NOT NULL
-          AND central_email = $2 AND college_id = $3
-        `,
-        [id, centralEmail, collegeId]
-    );
+        if (row.college_id !== null) {
+            collegeCounts[String(row.college_id)] = n;
+        }
+    }
 
-    return (result.rowCount ?? 0) > 0;
+    collegeCounts.all = total;
+
+    return { students: page, nextCursor, counts, collegeCounts };
 }

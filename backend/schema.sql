@@ -59,15 +59,14 @@ CREATE INDEX idx_students_deleted_at ON students (deleted_at);
 CREATE INDEX idx_students_sort ON students (first_name, last_name, id);
 CREATE INDEX idx_students_last_swept ON students (last_swept_at NULLS FIRST) WHERE deleted_at IS NULL;
 
--- Free-text search across name/email/owner/college/year/admission_id for
+-- Free-text search across name/email/owner/college/admission_id for
 -- the admin roster page (pg_trgm ILIKE '%term%' against this concatenated
 -- column).
 CREATE INDEX idx_students_search_trgm ON students
     USING GIN (
         (coalesce(first_name, '') || ' ' || coalesce(last_name, '') || ' ' ||
          coalesce(email, '') || ' ' || coalesce(central_email, '') || ' ' ||
-         coalesce(college, '') || ' ' || coalesce(year_enrolled::text, '') || ' ' ||
-         coalesce(admission_id, '')) gin_trgm_ops
+         coalesce(college, '') || ' ' || coalesce(admission_id, '')) gin_trgm_ops
     );
 
 -- One row per individual incoming message (the unit of reply-tracking is the
