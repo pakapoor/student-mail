@@ -722,7 +722,7 @@ export async function fetchThreadSummaries(
     const threadGroups = groupIntoThreads(messages);
     const allReplies = await fetchAllReplies();
 
-    const summaries: (Omit<ThreadSummary, "student_name" | "student_app_no"> & { sortAt: number; latestAt: number })[] = threadGroups.map(
+    const summaries: (Omit<ThreadSummary, "student_name" | "student_app_no"> & { sortAt: number; latestAt: number; codesOnly: boolean })[] = threadGroups.map(
         (groupMessages) => {
             const latest = groupMessages.reduce((a, b) =>
                 new Date(b.received_at) > new Date(a.received_at) ? b : a
@@ -777,9 +777,35 @@ export async function fetchThreadSummaries(
                 ...threadBadge(groupMessages, pendingCount),
                 latestAt: new Date(latest.received_at).getTime(),
                 sortAt,
+                codesOnly: groupMessages.every((m) => m.edugate_kind === "code"),
             };
         }
     );
+
+    // Code status is per student: each code email arrives as its own
+    // thread, but only the student's newest code is still in play. Older
+    // threads holding nothing but code emails count as superseded ("used"),
+    // like codes superseded by a registration. A thread where someone wrote
+    // alongside the code stays visible.
+    const newestCodeAt = new Map<string, number>();
+
+    for (const s of summaries) {
+        if (s.badge === "code" && s.code_at) {
+            const key = s.student_email.toLowerCase();
+            newestCodeAt.set(key, Math.max(newestCodeAt.get(key) ?? -Infinity, new Date(s.code_at).getTime()));
+        }
+    }
+
+    for (const s of summaries) {
+        if (
+            s.badge === "code" &&
+            s.codesOnly &&
+            s.code_at &&
+            new Date(s.code_at).getTime() < (newestCodeAt.get(s.student_email.toLowerCase()) ?? -Infinity)
+        ) {
+            Object.assign(s, { badge: "used", code_at: null, code: null, code_valid_minutes: null });
+        }
+    }
 
     const base = summaries.filter((s) =>
         status === "all"
@@ -838,7 +864,7 @@ export async function fetchThreadSummaries(
         }
     }
 
-    const page = pageRows.map(({ sortAt, latestAt, ...summary }) => ({
+    const page = pageRows.map(({ sortAt, latestAt, codesOnly, ...summary }) => ({
         ...summary,
         student_name: names.get(summary.student_email.toLowerCase()) ?? null,
         student_app_no: appNos.get(summary.student_email.toLowerCase()) ?? null,

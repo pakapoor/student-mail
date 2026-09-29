@@ -323,3 +323,31 @@ test('thread list rows carry the student application number', async () => {
     assert.equal(page.threads[0].student_name,'Jane Doe');
     assert.equal(page.threads[0].student_app_no,'10012345');
 });
+
+test('a student with several code emails shows one code row: the newest', async () => {
+    const code=(id,email,at,extra={})=>({id,message_id:`<c${id}>`,student_email:email,sender_email:'confirm@edu.gov.kg',subject:'Edugate',body_text:'',body_html:null,replied:false,replied_at:null,handled_without_reply:false,student_registered_at:null,in_reply_to:null,reference_ids:[],edugate_kind:'code',received_at:at,sent_at:at,...extra});
+    const older=code(1,'a@example.test','2026-09-26T10:29:02Z');
+    const newer=code(2,'a@example.test','2026-09-28T09:48:14Z');
+    const otherStudent=code(3,'b@example.test','2026-09-25T08:00:00Z');
+    let rows=[older,newer,otherStudent];
+    query=async sql=>({rows:sql.includes('FROM messages')?rows:sql.includes('lower(email) AS email')?[]:[{email:'a@example.test'}]});
+
+    const page=await fetchThreadSummaries('all','staff@example.test','1',25,0);
+    assert.deepEqual(page.threads.map(t=>t.threadId).sort(),[2,3],'older code for the same student is hidden; other students unaffected');
+    assert.equal(page.counts.code_expired,2);
+    assert.equal(page.counts.all,2);
+
+    const expiredOnly=await fetchThreadSummaries('all','staff@example.test','1',25,0,undefined,'code_expired');
+    assert.equal(expiredOnly.threads.filter(t=>t.student_email==='a@example.test').length,1);
+
+    const searched=await fetchThreadSummaries('all','staff@example.test','1',25,0,'a@example.test');
+    const byId=Object.fromEntries(searched.threads.map(t=>[t.threadId,t]));
+    assert.equal(byId[1].badge,'used','superseded code still findable by search');
+    assert.equal(byId[1].code_at,null);
+    assert.equal(byId[2].badge,'code');
+
+    const reply={...code(4,'a@example.test','2026-09-26T11:00:00Z'),message_id:'<r4>',sender_email:'a@example.test',edugate_kind:null,in_reply_to:'<c1>',reference_ids:['<c1>'],body_text:'I did not get it'};
+    rows=[older,reply,newer];
+    const withReply=await fetchThreadSummaries('all','staff@example.test','1',25,0);
+    assert.equal(withReply.threads.length,2,'an older code thread with a human message stays visible');
+});

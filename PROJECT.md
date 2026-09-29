@@ -1690,6 +1690,48 @@ headers: central's copy of Shakil's Edugate email → 64 m, Shakil's copy
 → 344 m, Tahir's Gmail → 272 m, a fast delivery test → 0 m (no line),
 non-email input → no result.
 
+## Step 29 — One code row per student: older code-only threads count as used
+
+**Status: OPEN - not deployed.** Written and unit-tested; awaiting the
+user's local check, then commit/push. Deploy is planned for night, once
+staff are off (the restart briefly drops requests). `tsc` clean, backend
+tests 34/34.
+
+Why (user, 2026-09-29): Tanisha Rahaman showed two "code expired" rows.
+Read-only prod check (`ssh ubuntu@52.86.63.127`): the messages are
+tanisha.rahaman@myemailinfo.com, id 7859 (2026-09-26 10:29 UTC) and id 8018
+(2026-09-28 09:48 UTC), both `edugate_kind = code`, no replies. Each code
+email arrives as its own thread, so an old expired code stayed in the list
+and in the Code expired count after a newer code was requested.
+
+- **`fetchThreadSummaries`** (`thread.ts`): after the summaries are built,
+  the newest code time (`code_at`) is found per student (lower-cased email).
+  A thread whose badge is `code`, that holds only code emails (`codesOnly`),
+  and whose code is older than that student's newest becomes `used` (code,
+  `code_at` and validity cleared). Like codes superseded by a registration,
+  it leaves the main list and every count and filter, but a search for the
+  student still finds it, dimmed.
+- **Stays visible**: a code thread where an incoming human message sits
+  beside the code. Ties in time are both kept (strict comparison).
+  Ordering uses the sent time, so a Migadu-delayed newer code does not hide
+  the older one before it arrives.
+- **Known limits**: a staff reply is stored separately and does not count as
+  "someone wrote", so a superseded code thread staff replied to is still
+  hidden (staff do not use Send, so this is theoretical). Counts on "All" and
+  "Code expired" drop on deploy - expected.
+- **Not changed**: `codeAlerts.ts` (alerts, chart, hot list) already skips
+  replaced codes; the roster filter in `studentsAdmin.ts` is per student.
+  No migration, no data written, no frontend change.
+- **Test**: `reliability.test.mjs` "a student with several code emails shows
+  one code row: the newest" - older code hidden, other students unaffected,
+  counts and the Code expired filter agree, older row found by search, and an
+  older thread with a human message stays visible.
+
+Deploy notes (when the user says so): `git pull`, restart
+`student-mail.service` (backend only - no migration, no frontend rebuild),
+check `sudo journalctl -u student-mail`, then re-run the read-only query for
+Tanisha and confirm one code row.
+
 ## Step 28 — Recent problems kept across restarts, solved rows, Migadu login retry
 
 **Status: DEPLOYED 2026-09-28 18:51 UTC** (`75c44c1`) with no consoles
