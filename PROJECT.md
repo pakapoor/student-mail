@@ -5,7 +5,95 @@ up cold, mid-stream. If you're an AI continuing this work, read this whole
 file before touching anything - it captures decisions and constraints that
 aren't visible from the code alone.
 
-## Step 31a — UID reset safety fix (local check-in)
+## Deploy record — Steps 31a, 31b, 31c and nginx tuning (2026-09-29)
+
+**Status: DEPLOYED 2026-09-29 22:39 UTC** at `c14d2de` (31c, which contains 31a and
+31b), authorized by the user, with no consoles in use. Backend only; no frontend
+rebuild. Order followed:
+
+1. **Fresh backup in three places** (~22:32 UTC): server
+   `~/backups/nightly/student_mail-20260929T223226Z.dump`; S3 (gpg-encrypted copy
+   from `backup-db.sh`); local `~/backups/student_mail-20260929T223226Z.dump`.
+2. **Read-only preflight on the live database** (PostgreSQL 18.6, 2,288 students,
+   955 messages): mixed-case student emails 0, mixed-case message emails 0,
+   registered students without a login email 0, students with a code date but no
+   code email 0, `rejected_at` column absent.
+3. `git pull --ff-only` on the server (`fe40491` -> `c14d2de`), then migration
+   `014_lower_email_indexes.sql`, then `015_rejected_at.sql` as the app role with
+   `ON_ERROR_STOP` (015 backfilled `rejected_at` for 34 students), then restart of
+   `student-mail.service` (22:39:12 UTC).
+4. **Verified afterwards:** service active, API listening, IMAP watcher reconnected,
+   sync passes normal ("no new messages"), 0 errors in the journal after the restart;
+   7 of 7 new indexes and both lowercase constraints present; 5 new triggers
+   (`students_lowercase_email`, `messages_lowercase_student_email`,
+   `messages_edugate_status_delete`, `messages_edugate_status_update`,
+   `students_rejected_on_email_change`); 2,288 students / 955 messages unchanged;
+   0 mixed-case emails. The Students dialog itself was not opened by the assistant
+   (no browser); the user checks it.
+
+Rollback for all three: `git revert` the commits and restart; the migrations are
+additive and harmless to the old code (see the 31c deploy-order note before
+re-deploying).
+
+### Why the console felt slow: measurements (2026-09-29, after the deploy)
+
+The perceived "second or so" is network latency, not the database or the list code.
+
+| Measurement | Result |
+|---|---|
+| Whole console list call on a restored copy of the prod backup (PG18, 643 messages, 3.4 MB of bodies) | 26 ms median |
+| Fetching all messages from the prod database, on the prod server | ~0.04 s including psql start-up; server load 0.00 |
+| Roster query on prod: old shape / new shape / status counts | 3.1 ms / 0.5 ms / 0.3 ms |
+| Round trip from the user's machine to prod | ~0.28 s |
+| New connection (TCP + TLS) then first byte of a 1 KB page | ~0.6 s / 0.8-0.9 s |
+
+**Correction of an earlier estimate:** earlier notes said the list took ~0.55 s and
+Step 32 would cut it to a few milliseconds. The real backend time is ~40 ms, so
+Step 32 would not make the console feel faster at this size. It stays held back.
+The remaining floor is ~0.28 s per request (distance to the server); only a nearer
+region or a CDN (CloudFront) would remove it - an open decision for the user.
+
+### nginx tuning (server-side only; the nginx file is NOT in the repository)
+
+Found: HTTP/1.1 only, gzip limited to HTML (the JS bundle, CSS and JSON were sent
+uncompressed), and no long-term caching of the content-hashed assets. Changed in
+`/etc/nginx/sites-available/student-mail` (Certbot-managed lines untouched):
+
+```
+    http2 on;
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types application/json application/javascript text/css image/svg+xml text/plain;
+    ...
+    location /assets/ {                      # before "location /"
+        root /home/ubuntu/student-mail/frontend/dist;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+```
+
+Applied with `nginx -t` then `systemctl reload nginx` (no dropped connections).
+Backup of the previous file: `/etc/nginx/sites-available/student-mail.bak-20260929T224822Z`;
+rollback = copy it back, `sudo nginx -t`, `sudo systemctl reload nginx`.
+Verified from the user's machine: `http_version=2`; JS bundle 313,669 -> 98,062 bytes
+over the wire; CSS 36,658 -> 7,999 bytes; `index.html` not cached; API still answers
+(401 unauthenticated). Requests after the first on one connection cost one round
+trip (~0.28 s). The live-update (SSE) stream could not be tested without a session:
+the user should confirm new mail still appears without a refresh.
+
+### Still held back
+
+Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage,
+mutation and load tooling) plus the remaining Step 31 pieces are not deployed and not
+on GitHub. They are kept in `git stash` ("Full Steps 31-33 working tree ...") and in
+a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
+Next planned slice: 31d (opening a thread reads one student's data, with the
+`replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
+clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 31a — UID reset safety fix (checked in; deployed 2026-09-29 22:39 UTC)
 
 Built in a separate worktree from `fe40491`; the existing Steps 31–33 working tree
 is unchanged. This small slice fixes `syncInbox` after an IMAP UIDVALIDITY change:
@@ -22,11 +110,11 @@ Coverage is a quality measure, not a check-in blocker (user clarification on
 with 42 tests). The later target for the expanded suite is 85% / 80% / 85%.
 Coverage tooling and the load test belong with the tests and features they
 describe. The README and diagrams were committed separately as `806efa5`.
-Both commits are on GitHub; neither has been deployed.
+Both commits are on GitHub. Deployed together with 31b and 31c (see the deploy record above).
 
 ## Step 31b — lowercase email rule and lookup indexes
 
-Local check-in, based on `806efa5`; not pushed or deployed. Migration 014 adds six indexes for
+Checked in as `c3657e6` (based on `806efa5`), pushed with 31c, DEPLOYED 2026-09-29 22:39 UTC. Migration 014 adds six indexes for
 student/message lookups, roster order, the hot list and sweep. It also adds
 triggers that lowercase newly written student and message addresses, backed by
 CHECK constraints; existing mixed-case rows stop the migration with a count
@@ -44,7 +132,7 @@ functions. It is a quality measure, not a check-in blocker.
 
 ## Step 31c — cached Edugate rejection date and roster counts
 
-Checked in and pushed; NOT deployed. Based on `c3657e6` (31b). Migration 015 adds
+Checked in as `c14d2de`, pushed, DEPLOYED 2026-09-29 22:39 UTC (migration 015 backfilled 34 students). Based on `c3657e6` (31b). Migration 015 adds
 `students.rejected_at`, backfills the latest rejection email, and adds a
 covering roster-state index. Message correction/deletion triggers recompute
 code, login and rejection dates; changing a student's email refreshes its
