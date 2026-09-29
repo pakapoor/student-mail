@@ -256,7 +256,9 @@ export async function syncInbox(
             useUidMode = true;
         }
 
-        let maxUidSeen = storedLastUid ?? 0;
+        // A UIDVALIDITY change renumbers the mailbox, so the saved UID from
+        // the old numbering cannot become the new watermark.
+        let maxUidSeen = isFirstSync || uidValidityChanged ? 0 : (storedLastUid ?? 0);
         baselineUid = isFirstSync || uidValidityChanged ? null : storedLastUid;
         passUidValidity = currentUidValidity;
 

@@ -153,6 +153,27 @@ test('a failed UID listing does not fail the pass', async () => {
     setupImap=()=>{};
 });
 
+test('a UIDVALIDITY reset saves the new UID instead of the old watermark', async () => {
+    const watermarks = [];
+    mailboxWith([{uid:1,source:raw(1)}]);
+    const setup = setupImap;
+    setupImap = client => { setup(client); client.mailbox.uidValidity = 2n; };
+    const ordinaryQuery = mailboxQueries(watermarks);
+    query = async (sql, params) => sql.includes('SELECT last_uid')
+        ? { rows: [{ last_uid: '500', uid_validity: '1' }] }
+        : ordinaryQuery(sql, params);
+    connect = insertingConnection(() => {});
+    const warning = mock.method(console, 'warn', () => {});
+    try {
+        const result = await syncInbox('staff@example.test','fake');
+        assert.equal(result.inserted, 1);
+        assert.deepEqual(watermarks, [1], 'the next pass must be able to fetch UID 2');
+    } finally {
+        warning.mock.restore();
+        setupImap = () => {};
+    }
+});
+
 test('a failed pass never moves the watermark past an email still to be retried', async () => {
     const watermarks = [];
     mailboxWith([{uid:11,source:undefined},{uid:12,source:raw(12)},{uid:13,source:raw(13)}]);

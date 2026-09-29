@@ -5,6 +5,25 @@ up cold, mid-stream. If you're an AI continuing this work, read this whole
 file before touching anything - it captures decisions and constraints that
 aren't visible from the code alone.
 
+## Step 31a — UID reset safety fix (local check-in)
+
+Built in a separate worktree from `fe40491`; the existing Steps 31–33 working tree
+is unchanged. This small slice fixes `syncInbox` after an IMAP UIDVALIDITY change:
+its new watermark starts at zero rather than carrying the old mailbox's UID.
+A focused fake-mail-server test first failed with saved UID 500 instead of 1,
+then passed after the fix. Two small mail utility tests cover reply HTML
+sanitization/list numbering and Migadu delay detection. All 44 backend tests
+pass; backend TypeScript checking and the frontend build passed before the
+two test-only additions.
+
+Coverage is a quality measure, not a check-in blocker (user clarification on
+2026-09-29). Measured against the old code, the 44 tests cover 55.8% of lines,
+74.6% of branches, and 80.2% of functions (up from 53.9% / 73.2% / 77.7%
+with 42 tests). The later target for the expanded suite is 85% / 80% / 85%.
+Coverage tooling, the load test, and the final-system README belong with the
+tests and features they describe. This check-in is local; it has not been
+pushed or deployed.
+
 ## Agreed TODO plan (2026-09-21)
 
 This section records the user's reviewed target plan, not implemented behavior.
