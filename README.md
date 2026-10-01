@@ -30,6 +30,13 @@ can use an indexed query. The diagram shows that planned design and its fallback
 
 ![Writes queue a student in thread_dirty; the summaries are rebuilt per student into thread_summaries; LIST_MODE picks legacy, shadow or table.](docs/diagrams/thread-summaries.svg)
 
+## Searching for a student
+
+Both search bars (the console and the Students dialog) split what you type into words, and every
+word must match somewhere in the student's name, email, college or admission ID. Order does not
+matter, words can be partial, and case is ignored, so `MOHD KHAN`, `khan farman mohd` and
+`farma moh kha` all find MOHD FARMAN KHAN. The shared code is `backend/src/searchTerms.ts`.
+
 ## Data model
 
 ![Tables and links: colleges, students, messages, replies, thread summaries, the rebuild queue, sessions, central mailboxes, status problems.](docs/diagrams/data-model.svg)

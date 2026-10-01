@@ -93,6 +93,40 @@ Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
 
+## Step 34 — Flexible student search (words in any order, partial, any case)
+
+**Status: built and tested locally; not yet checked in or deployed.** Both search bars used to
+match the whole typed text as one substring, so "MOHD KHAN" missed "MOHD FARMAN KHAN" and a
+reversed order matched nothing. The typed text is now split on whitespace and every word must
+appear (case-insensitive, partial) in the same searchable text as before: first name, last name,
+email, central email, college and admission ID. So `MOHD KHAN`, `FARMAN MOHD KHAN`,
+`farman mohd khan` and `farma moh kha` all find MOHD FARMAN KHAN.
+
+- New `backend/src/searchTerms.ts` (`searchPatterns`, `searchClause`) is used by the three
+  queries: `findMatchingStudentEmails` and `findSearchMatches` in `thread.ts` (console list and
+  the automatic mailbox check) and `searchAdminStudents` in `studentsAdmin.ts` (Students dialog).
+- At most 10 words are used (`MAX_SEARCH_WORDS`): 8,000 words took 12 s on the dev database,
+  while real searches have 5-6. Blank text still builds a valid query.
+- The Students dialog search now escapes `%` and `_` like the console search (it did not before).
+- **No database change:** no migration, no schema change, read-only queries only. The
+  `idx_students_search_trgm` index expression is unchanged. Frontend untouched, no rebuild.
+- Tests: `tests/nameSearch.db.test.mjs` (28 real-database tests: the example forms, reversed and
+  mixed-case order, extra spaces, single word, email and admission-ID search, literal `%`/`_`,
+  no match, dialog counts, console list, mixed name + email or admission ID, the word cap, blank text). Whole backend suite **124 of 124**; backend and frontend
+  type checks and the frontend build pass.
+- Also tried the real functions read-only against the local dev database (2,281 students):
+  full, reversed, upper-case and abbreviated names all found the same student in both searches.
+- Deploy: `git pull --ff-only` and restart `student-mail.service`; nothing else. Rollback:
+  `git revert` and restart. Behavior note: a word can match anywhere in the combined text,
+  including the email, as a single word always could.
+- **Future step (not built): search that tolerates mistyped names** ("farmn" finding
+  "farman"). No new extension is needed: `pg_trgm` is already installed and provides
+  `similarity()` and `word_similarity()`. Neither `pg_search` nor built-in `tsvector` full-text
+  search is wanted: `tsvector` matches whole words or word prefixes, not the middle of a word, and
+  `pg_search` is a separate install on prod. Open design points: a similarity threshold, ranking
+  closest matches first, and keeping the exact-word match as the first choice so a normal search
+  never gets noisier results. Raised by the user 2026-10-01; do it later, after Step 34 is live.
+
 ## Step 31d — Opening a thread reads one student, in one snapshot
 
 **Status: DEPLOYED 2026-09-29 22:57 UTC** at `10142ca` (user authorized). Fresh backup first (server
@@ -2554,6 +2588,8 @@ instead of minutes, one login per student instead of one every 2 min).
 
 ## Not yet built / open items
 
+- **Search that tolerates mistyped names** - planned after Step 34; see the future-step note
+  under "Step 34 — Flexible student search".
 - **`sync.ts`'s IMAP fetch is sequence-number-based, not UID-based - fix
   before scaling up.** It always fetches the last 50 messages by sequence
   number (`mailboxExists - 49` to `*`) every sync run, relying on `ON

@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { db } from "./db.js";
+import { searchPatterns, searchClause } from "./searchTerms.js";
 import { classifyEdugate, edugateTitle } from "../../shared/edugate.js";
 
 interface MessageRow {
@@ -271,12 +272,10 @@ async function fetchMessagesForStudentEmails(
     return result.rows;
 }
 
-// LIKE/ILIKE treats % and _ as wildcards even in user-typed text (e.g. an
-// admission ID like "A_102") - escape them (and the escape character itself)
-// so a search term is matched literally.
-function escapeLikePattern(value: string): string {
-    return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
+// The text a search looks in; same expression as idx_students_search_trgm.
+const SEARCH_TEXT = `(coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
+               coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
+               coalesce(college,'') || ' ' || coalesce(admission_id,''))`;
 
 // Resolves a name/email search to matching students' emails, scoped to the
 // college (same scope fetchAllMessages enforces via its student-visibility
@@ -294,17 +293,16 @@ async function findMatchingStudentEmails(
     search: string,
     collegeId: string
 ): Promise<string[]> {
+    const patterns = searchPatterns(search);
     const result = await db.query<{ email: string }>(
         `
         SELECT email
         FROM students
         WHERE deleted_at IS NULL
           AND college_id = $1
-          AND (coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
-               coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
-               coalesce(college,'') || ' ' || coalesce(admission_id,'')) ILIKE $2
+          AND ${searchClause(SEARCH_TEXT, 2, patterns.length)}
         `,
-        [collegeId, `%${escapeLikePattern(search)}%`]
+        [collegeId, ...patterns]
     );
 
     return result.rows.map((r) => r.email);
@@ -326,6 +324,7 @@ export async function findSearchMatches(
     collegeId: string,
     max: number
 ): Promise<{ students: SearchMatchedStudent[]; tooMany: boolean }> {
+    const patterns = searchPatterns(search);
     const result = await db.query<{
         id: string;
         email: string;
@@ -339,13 +338,11 @@ export async function findSearchMatches(
         FROM students
         WHERE deleted_at IS NULL
           AND college_id = $1
-          AND (coalesce(first_name,'') || ' ' || coalesce(last_name,'') || ' ' ||
-               coalesce(email,'') || ' ' || coalesce(central_email,'') || ' ' ||
-               coalesce(college,'') || ' ' || coalesce(admission_id,'')) ILIKE $2
+          AND ${searchClause(SEARCH_TEXT, 2, patterns.length)}
         ORDER BY id
-        LIMIT $3
+        LIMIT $${2 + patterns.length}
         `,
-        [collegeId, `%${escapeLikePattern(search)}%`, max + 1]
+        [collegeId, ...patterns, max + 1]
     );
 
     if (result.rows.length > max) {

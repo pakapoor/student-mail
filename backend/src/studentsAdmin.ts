@@ -1,4 +1,5 @@
 import { db } from "./db.js";
+import { searchPatterns, searchClause } from "./searchTerms.js";
 
 // Admin roster (Students dialog): read-only, scoped to the logged-in
 // operator's own central mailbox and showing every college, with an optional
@@ -134,11 +135,17 @@ export async function searchAdminStudents(opts: {
     const searchParams: unknown[] = [opts.centralEmail];
 
     if (search) {
-        searchParams.push(`%${search}%`);
+        const patterns = searchPatterns(search);
+        const firstParam = searchParams.length + 1;
+        searchParams.push(...patterns);
         searchConds.push(`
-            (coalesce(st.first_name,'') || ' ' || coalesce(st.last_name,'') || ' ' ||
+            ${searchClause(
+                `(coalesce(st.first_name,'') || ' ' || coalesce(st.last_name,'') || ' ' ||
              coalesce(st.email,'') || ' ' || coalesce(st.central_email,'') || ' ' ||
-             coalesce(st.college,'') || ' ' || coalesce(st.admission_id,'')) ILIKE $${searchParams.length}
+             coalesce(st.college,'') || ' ' || coalesce(st.admission_id,''))`,
+                firstParam,
+                patterns.length
+            )}
         `);
     }
 
