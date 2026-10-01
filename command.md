@@ -1,3 +1,7 @@
+> **Historical (2026-09-21).** This is the original AWS setup log. It says there is no SSH key and
+> that access is only through EC2 Instance Connect; since then plain `ssh ubuntu@52.86.63.127`
+> works from the dev machine. For the current runbook see "Operating prod" in `PROJECT.md`.
+
 # AWS Deployment Handoff — Student Mail Console
 
 Continuing an in-progress AWS deployment against a real deadline. Read this

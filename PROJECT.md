@@ -5,6 +5,75 @@ up cold, mid-stream. If you're an AI continuing this work, read this whole
 file before touching anything - it captures decisions and constraints that
 aren't visible from the code alone.
 
+## Start here (current state — read this first)
+
+Written 2026-10-01. Update this block whenever a step is deployed.
+
+| Item | State |
+|---|---|
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 35 (`dcf1ca0`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
+| Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
+| Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
+| Next step number | 36. |
+
+### Step index
+
+Newest sections are at the top of this file, the older ones below the "Agreed TODO plan".
+
+| Step | What | State |
+|---|---|---|
+| 0-13 | Plan, colleges and central mailbox, test students, identity fields, login then college picker, college scoping, CSV import, Application No search, latency fix, branding, inbox UI, rich-text reply and spellcheck | done |
+| 14 | AWS deployment (EC2, nginx, Certbot, PostgreSQL on the instance) | live since 2026-09-22; its checkbox in the plan below was never ticked |
+| 15 | Search on the console | done |
+| 16 | Automatic per-student mailbox check on search | built and live; checkbox left open pending the user's UI confirmation |
+| 17 A | Rolling daily sweep of every student's mailbox | done |
+| 18 | Edugate registration status (code, login, rejection), filter buttons | done |
+| 19 | Fix: emails lost when Migadu returns them without content | done |
+| 20 | Hot list: watch a student's mailbox while staff wait for registration | done |
+| 21 | System status page (`/status`) | done |
+| 22-24 | UI polish, Manage students filters, Application No in the list | done |
+| 25-26 | Review fixes and backups, sync reliability | done |
+| 27-29 | Code expiry alerts, recent problems kept across restarts, one code row per student | done |
+| 30 | Students dialog: all colleges, read-only, status link, year on import | done |
+| 31a-d | UID reset fix, lowercase email rule and indexes, cached rejection date, thread open in one snapshot | deployed 2026-09-29 |
+| 32-33 | Stored thread summaries; full test suite, coverage, mutation and load tooling | held back (see above) |
+| 34 | Flexible student search | deployed 2026-10-01 |
+| 35 | Login screen when signed out in another tab | deployed 2026-10-01 |
+
+## Operating prod (runbook)
+
+Read-only investigation is always fine; changing anything on the server needs the owner's approval.
+
+- **Access:** `ssh ubuntu@52.86.63.127` works directly from the dev machine (the browser-based EC2
+  Instance Connect described in `command.md` is the original, older route).
+- **Services:** `student-mail.service` (the backend; `systemctl is-active student-mail`), nginx,
+  PostgreSQL 18. Logs: `sudo journalctl -u student-mail --since "-10min" --no-pager` (add
+  `-p warning` for problems). A stop shows "Failed with result 'exit-code'" with status 143 on every
+  restart; that is the normal stop signal, not a failure.
+- **Database, read-only:** there is no `DATABASE_URL`. On the server, load the app's env file and
+  run psql with it, never printing the password: `cd ~/student-mail/backend && set -a && . ./.env &&
+  set +a && PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"
+  -X -A -c "..."`. Wrap experiments in `BEGIN READ ONLY; ... ROLLBACK;`.
+- **Deploy, backend change:** (1) fresh backup if the database changes (below); (2) apply any new
+  migration as the app role with `ON_ERROR_STOP`; (3) `git pull --ff-only` in `~/student-mail`;
+  (4) `sudo systemctl restart student-mail.service`; (5) verify: service active, "IMAP watcher
+  connected", sync "no new messages", no warnings in the journal. Where a step's notes give a
+  specific order (for example 31c needs the migration before the code), follow the notes.
+- **Deploy, frontend-only change:** `git pull --ff-only`, then `cd frontend && npm run build`. No
+  backend restart: nginx serves `frontend/dist` directly and logins and live-update streams stay up.
+  Verify the page references the new `/assets/index-*.js` bundle.
+- **Backups:** nightly `pg_dump` by cron at 20:30 UTC (`backend/scripts/backup-db.sh`) to
+  `~/backups/nightly`, plus a gpg-encrypted copy in S3. Before a risky deploy take a manual dump
+  into `~/backups`, plus an S3 copy through the script and a local copy on the dev machine
+  (`~/backups`). Dumps contain plaintext mailbox passwords and never go into git.
+- **nginx:** the site file `/etc/nginx/sites-available/student-mail` is NOT in the repository (HTTP/2,
+  gzip, one-year immutable caching of `/assets/`). Dated backups sit beside it. Change it only with
+  `sudo nginx -t` then `sudo systemctl reload nginx`.
+- **Rollback:** `git revert` the commit, pull, restart (backend) or rebuild (frontend). Migrations
+  so far are additive and harmless to older code.
+
 ## Deploy record — Steps 31a, 31b, 31c and nginx tuning (2026-09-29)
 
 **Status: DEPLOYED 2026-09-29 22:39 UTC** at `c14d2de` (31c, which contains 31a and
@@ -309,11 +378,12 @@ additive and harmless to the old code.
 
 ## Agreed TODO plan (2026-09-21)
 
+HISTORICAL (written 2026-09-21; the current state is in "Start here" at the top).
 This section records the user's reviewed target plan, not implemented behavior.
 It supersedes older roadmap assumptions where they conflict. The existing
 implementation and historical notes below remain useful context. Steps 0–5
 have been authorized and completed. Stop for confirmation before Step 6 or any
-later step. Do not treat approval of this plan as blanket implementation or
+later step (that was true on the day; later steps are done, see the step index). Do not treat approval of this plan as blanket implementation or
 deployment authorization. Discuss exact edits before making them.
 
 - [x] **Step 0 — Record the plan here.** Include native spellchecking and
@@ -1708,11 +1778,9 @@ needs real DB auth/secrets.
   hot-reload). When restarting from an agent/tool context in this
   environment, plain `&` + `disown` can get killed by the tool's own timeout
   handling; use `(cmd &)` in a subshell instead, or `setsid`.
-- This repo's git remote (`origin` -> GitHub) has no credentials configured
-  in this sandboxed dev environment - `git push` will fail here
-  (`gh` isn't even installed). Commits can be made locally; pushing needs to
-  happen from a terminal with real GitHub auth (e.g. the user's own VS Code
-  terminal).
+- Commit and push (`git push origin main`) now work from the dev machine, but only when the
+  user says to (see the rules above and `AGENTS.md`). The older note that the sandbox had no
+  GitHub credentials is out of date.
 
 ## Setup (fresh machine)
 
