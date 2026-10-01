@@ -9,6 +9,7 @@ import type {
     ThreadItem,
     ThreadSummary,
 } from "./types";
+import { apiFetch } from "./apiFetch";
 
 // Must match the page's hostname (not just resolve to the same machine) -
 // SameSite=Lax cookies are dropped on cross-site fetches, and browsers treat
@@ -54,7 +55,7 @@ export async function login(email: string, password: string): Promise<Session> {
 }
 
 export async function selectCollege(collegeId: string): Promise<Session> {
-    const res = await fetch(`${API_BASE}/api/auth/college`, {
+    const res = await apiFetch(`${API_BASE}/api/auth/college`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -101,7 +102,7 @@ export async function fetchThreadSummaries(
 ): Promise<ThreadSummaryPage> {
     const searchParam = search?.trim() ? `&search=${encodeURIComponent(search.trim())}` : "";
     const filterParam = filter ? `&filter=${filter}` : "";
-    const res = await fetch(
+    const res = await apiFetch(
         `${API_BASE}/api/threads?status=${status}&limit=${limit}&offset=${offset}${searchParam}${filterParam}`,
         { credentials: "include" }
     );
@@ -130,7 +131,7 @@ export interface MailCheckMatches {
 // The (at most 3) students the search narrows to - each gets its mailbox
 // checked. tooMany means more matched than that; no automatic check then.
 export async function fetchMailCheckMatches(search: string): Promise<MailCheckMatches> {
-    const res = await fetch(
+    const res = await apiFetch(
         `${API_BASE}/api/check-mail/match?search=${encodeURIComponent(search.trim())}`,
         { credentials: "include" }
     );
@@ -146,7 +147,7 @@ export async function fetchMailCheckMatches(search: string): Promise<MailCheckMa
 // console deliberately shows nothing for it; the reason is in the server log.
 export async function checkStudentMail(studentId: number, force: boolean): Promise<MailCheckOutcome> {
     try {
-        const res = await fetch(`${API_BASE}/api/check-mail/${studentId}`, {
+        const res = await apiFetch(`${API_BASE}/api/check-mail/${studentId}`, {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -164,7 +165,7 @@ export async function checkStudentMail(studentId: number, force: boolean): Promi
 }
 
 export async function fetchThread(id: number): Promise<ThreadItem[]> {
-    const res = await fetch(`${API_BASE}/api/messages/${id}/thread`, {
+    const res = await apiFetch(`${API_BASE}/api/messages/${id}/thread`, {
         credentials: "include",
     });
 
@@ -271,7 +272,7 @@ export async function sendReply(
         formData.append("attachments", file);
     }
 
-    const res = await fetch(`${API_BASE}/api/messages/${id}/reply`, {
+    const res = await apiFetch(`${API_BASE}/api/messages/${id}/reply`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -298,7 +299,7 @@ export async function sendFollowUp(
         formData.append("attachments", file);
     }
 
-    const res = await fetch(`${API_BASE}/api/messages/${id}/follow-up`, {
+    const res = await apiFetch(`${API_BASE}/api/messages/${id}/follow-up`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -314,7 +315,7 @@ export async function sendFollowUp(
 }
 
 export async function fetchStudents(): Promise<StudentRow[]> {
-    const res = await fetch(`${API_BASE}/api/students`, {
+    const res = await apiFetch(`${API_BASE}/api/students`, {
         credentials: "include",
     });
 
@@ -326,7 +327,7 @@ export async function fetchStudents(): Promise<StudentRow[]> {
 }
 
 export async function importStudents(csv: string): Promise<ImportResult> {
-    const res = await fetch(`${API_BASE}/api/students/import`, {
+    const res = await apiFetch(`${API_BASE}/api/students/import`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -366,7 +367,7 @@ export async function fetchAdminStudents(
         params.set("cursor", cursor);
     }
 
-    const res = await fetch(`${API_BASE}/api/admin/students?${params}`, {
+    const res = await apiFetch(`${API_BASE}/api/admin/students?${params}`, {
         credentials: "include",
     });
 
@@ -378,7 +379,7 @@ export async function fetchAdminStudents(
 }
 
 export async function markHandled(id: number): Promise<void> {
-    const res = await fetch(`${API_BASE}/api/messages/${id}/mark-handled`, {
+    const res = await apiFetch(`${API_BASE}/api/messages/${id}/mark-handled`, {
         method: "POST",
         credentials: "include",
     });
@@ -406,7 +407,7 @@ export interface CodeAlertsResult {
 }
 
 export async function fetchCodeAlerts(): Promise<CodeAlertsResult> {
-    const res = await fetch(`${API_BASE}/api/codes/alerts`, { credentials: "include" });
+    const res = await apiFetch(`${API_BASE}/api/codes/alerts`, { credentials: "include" });
 
     if (!res.ok) {
         throw new Error(`Could not load code alerts (${res.status})`);
@@ -462,7 +463,7 @@ export interface SystemStatus {
 }
 
 export async function fetchSystemStatus(): Promise<SystemStatus> {
-    const res = await fetch(`${API_BASE}/api/status`, { credentials: "include" });
+    const res = await apiFetch(`${API_BASE}/api/status`, { credentials: "include" });
 
     if (!res.ok) {
         throw new Error(`Could not load status (${res.status})`);

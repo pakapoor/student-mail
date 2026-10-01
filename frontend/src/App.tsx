@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import { fetchCurrentSession } from "./api";
+import { setSessionEndedHandler } from "./apiFetch";
 import Login from "./Login";
 import Console from "./Console";
 import CollegePicker from "./CollegePicker";
@@ -18,6 +19,10 @@ function App() {
             .catch(() => setSessionError(true))
             .finally(() => setCheckingSession(false));
     }, []);
+
+    // Any logged-in call that gets a 401 (e.g. signed out in another tab)
+    // sends the user to the Login screen instead of showing an error.
+    useEffect(() => setSessionEndedHandler(() => setSession(null)), []);
 
     if (checkingSession) {
         return <div className="app-loading">Loading...</div>;

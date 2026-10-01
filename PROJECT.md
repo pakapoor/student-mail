@@ -93,6 +93,54 @@ Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
 
+## Step 35 — Signed out in another tab: show Login, not "(401)" errors
+
+**Status: built and tested locally; not yet checked in or deployed.** Two tabs share one login
+cookie. Signing out in one deletes the session row in PostgreSQL, so the other tab is signed out
+on the server too. Its page did not know: the live-update stream stays connected (only a stream
+that gives up triggers the old signed-out handling in `subscribeToUpdates`), and its next fetch
+failed with a raw "Failed to load threads (401)" error while the console kept looking normal.
+
+- New `frontend/src/apiFetch.ts`: `apiFetch` is `fetch` plus one rule: a 401 calls the registered
+  "session ended" handler, then the response is returned unchanged (callers still see the 401, but
+  by then the app is on the Login screen). `App.tsx` registers a handler that clears the session,
+  so any logged-in call that gets a 401 sends the user to Login with no error banner.
+- 12 call sites in `frontend/src/api.ts` use `apiFetch` (threads, thread, mail check and match,
+  reply, follow-up, students, import, admin students, mark handled, code alerts, system status,
+  select college). Login, the session check (`/api/auth/me`), logout and the colleges list stay on
+  plain `fetch`: login's 401 means "wrong password" and the session check expects a 401.
+- Every 401 in `server.ts` means "no valid session" (`requireAuth`, `/api/auth/me`, a college-select
+  race, and login's wrong password), so a 401 never ends a session by mistake.
+- **No database or backend change; no backend restart.** Frontend rebuild only. Open tabs keep the
+  old code until `useNewVersionAvailable` reloads them (only when no thread is open; the search text
+  is kept). Rollback: `git revert`, rebuild the frontend.
+- Tests: `backend/tests/apiFetch.test.mjs` (6 tests: a 401 is reported and the response still
+  returned; 200-502 do not end the session; several 401s are each handled; no handler is fine;
+  request passed through and network errors still thrown; unregistering a replaced handler keeps
+  the newer one). Whole backend suite **130 of 130**; backend and frontend type checks and the
+  frontend build pass.
+- **Not done (left out on purpose):** a tab that is signed out in the background and makes no
+  request stays on the console screen until its next request gets a 401. Making that instant needs
+  a cross-tab signal (a `localStorage` "signed out" marker the other tabs listen for) or closing
+  the live-update stream on logout. Not needed for the ugly-errors fix; the user may ask later.
+- Not tried in a browser by the assistant; the user checks with two tabs: sign out in one, then
+  search or click in the other and expect the Login screen with no error banner.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Data and database | None | Frontend only. No backend, schema or data change. |
+| Logins and open sessions | None | Sessions are stored in PostgreSQL and the backend is not restarted. |
+| Wrongly sending someone to Login | Very low | The backend only answers 401 when the session is gone, and only logged-in calls use the wrapper. |
+| Login flow | Very low | Login, the session check, logout and the colleges list are unchanged. |
+| Open tabs on deploy | Low | Old tabs keep running the old code until `useNewVersionAvailable` reloads them (no thread open; search text kept). |
+| Staff work in progress | Very low | A tab with a thread open is never auto-reloaded, so copying a code is not interrupted. |
+| Rollback | Very low | `git revert`, rebuild the frontend. Nothing to undo in the database. |
+| Residual gap | Cosmetic | An idle background tab stays stale until its next request. |
+
+Overall risk: **low**.
+
 ## Step 34 — Flexible student search (words in any order, partial, any case)
 
 **Status: DEPLOYED 2026-10-01 08:06 UTC** at `919808c` (user authorized). Checked in and pushed first.
@@ -1630,6 +1678,11 @@ needs real DB auth/secrets.
   Report the commit ID and any sync failure. Ask for confirmation before
   beginning the next step. Documentation updates, check-in, and sync are
   part of the authorized step closeout. Do not mark unfinished steps complete.
+- **Risk analysis for every change.** Each step's section in this file carries a risk analysis
+  table (columns: Area, Risk, Why) and an overall rating, written before check-in and updated if
+  the deploy teaches anything new. Cover at least: data and database, security and access, wrong
+  results or behavior, performance, effect on open sessions and users, deploy and rollback, and
+  any residual gap. Standing instruction from the user, 2026-10-01 (applies from Step 35 on).
 - **Confirm before every edit.** State the plan in plain terms and get
   explicit approval before touching any file - every time, even mid-task,
   even after an earlier general "go ahead". This was set as an explicit
