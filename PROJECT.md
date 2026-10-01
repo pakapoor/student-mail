@@ -95,7 +95,14 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 35 — Signed out in another tab: show Login, not "(401)" errors
 
-**Status: built and tested locally; not yet checked in or deployed.** Two tabs share one login
+**Status: DEPLOYED 2026-10-01** at `dcf1ca0` (user authorized). Frontend only: `git pull --ff-only`
+and `npm run build` in `frontend/` on prod (new bundle `index-Toxloqu_.js`); the backend service was
+NOT restarted (still running since 08:06:57 UTC), so no logins or live-update streams were dropped.
+Verified: the page serves the new bundle, the asset downloads, `/api/threads` without a login still
+answers 401, service and nginx active, 0 warnings in the journal. Open tabs pick the new build up
+through `useNewVersionAvailable`. The assistant did not use a browser; the user checks with two tabs.
+
+Two tabs share one login
 cookie. Signing out in one deletes the session row in PostgreSQL, so the other tab is signed out
 on the server too. Its page did not know: the live-update stream stays connected (only a stream
 that gives up triggers the old signed-out handling in `subscribeToUpdates`), and its next fetch
