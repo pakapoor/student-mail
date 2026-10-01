@@ -95,7 +95,16 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 34 — Flexible student search (words in any order, partial, any case)
 
-**Status: built and tested locally; not yet checked in or deployed.** Both search bars used to
+**Status: DEPLOYED 2026-10-01 08:06 UTC** at `919808c` (user authorized). Checked in and pushed first.
+Deploy was `git pull --ff-only` and a restart of `student-mail.service`; no backup, because there is no
+database change. Verified: service active, IMAP watcher reconnected, the open consoles' live-update
+streams reconnected within about 2 s (sessions live in PostgreSQL, so nobody was logged out), sync
+normal, 0 errors after the restart. The old process's stop line "Failed with result 'exit-code'"
+(status 143, the normal stop signal) also appears on earlier deploys. The new query shape was run
+read-only on prod: "ali kha" and "kha ali" both returned the same 7 students. The assistant did
+not use the search boxes in a browser; the user checks them.
+
+Built and tested locally first. Both search bars used to
 match the whole typed text as one substring, so "MOHD KHAN" missed "MOHD FARMAN KHAN" and a
 reversed order matched nothing. The typed text is now split on whitespace and every word must
 appear (case-insensitive, partial) in the same searchable text as before: first name, last name,
