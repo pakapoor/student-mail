@@ -11,8 +11,8 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 41 (`bd5d0d3`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 44 (`f5a8296`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 42 Add students hardening (no reload while adding, plain errors, audit log, adopt a lost-reply mailbox), 43 Migadu call times on the status page (migration 017), 44 used Application No flagged before adding, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
@@ -47,9 +47,9 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | deployed 2026-10-08 |
 | 40 | Add students: a repeated Application No is flagged in the box | deployed 2026-10-08 |
 | 41 | Students dialogs no longer close when the mouse leaves the card; clearer Add students hint | deployed 2026-10-08 |
-| 42 | Add students: no reload while adding, plain error messages, audit log, adopt a lost-reply mailbox | checked in 2026-10-08 |
-| 43 | Migadu call times: audit log and a graph on the status page (migration 017) | checked in 2026-10-08 |
-| 44 | Add students: an Application No already used in the college is flagged before adding | checked in 2026-10-08 |
+| 42 | Add students: no reload while adding, plain error messages, audit log, adopt a lost-reply mailbox | deployed 2026-10-08 |
+| 43 | Migadu call times: audit log and a graph on the status page (migration 017) | deployed 2026-10-08 |
+| 44 | Add students: an Application No already used in the college is flagged before adding | deployed 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -173,7 +173,7 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 44 — Add students: an Application No already used in the college is flagged before adding
 
-**Status: CHECKED IN 2026-10-08, deploy record follows.** Before this, a number already used by a
+**Status: DEPLOYED 2026-10-08 08:44 UTC** at `f5a8296` (see the Step 43 record for the order followed). Before this, a number already used by a
 student of the college was only found after pressing Add (the row came back "Skipped, already used by
 NAME"), and in a paste of ten some lines could be added and others skipped. Now the box asks the server
 about the whole paste in **one request**, at two moments: when the clerk **leaves the box** (so a clash
@@ -219,7 +219,18 @@ Overall risk: **very low**.
 
 ## Step 43 — Migadu call times: audit log and a graph on the status page
 
-**Status: CHECKED IN 2026-10-08, deploy record follows.** The owner wants to watch how long the
+**Status: DEPLOYED 2026-10-08 08:44 UTC** at `f5a8296` together with Steps 42, 43 and 44 (user authorized, in working hours
+instead of the evening first agreed; about 2 consoles were open and reconnected at once). Order followed:
+(1) fresh backup in three places (~08:43 UTC): server `~/backups/nightly/student_mail-20261008T084347Z.dump`,
+the encrypted copy in S3 (via `backup-db.sh`), and local `~/backups/student_mail-20261008T084347Z.dump`;
+(2) `git pull --ff-only`; (3) migration `017_migadu_calls.sql` as the app role with `ON_ERROR_STOP` (table
+and index created; students 2,300 and messages 1,820 unchanged); (4) `npm run build` in `frontend/` (new
+bundle `index-CU9N6rDH.js`); (5) restart of `student-mail.service`. Verified: service and nginx active, the page
+serves the new bundle, `/api/threads`, `/api/status`, `/api/students/auto-add` and `/api/students/check-numbers`
+all answer 401 without a login (so the new routes exist), the IMAP sync passes show "no new messages", the only
+journal warning is the normal stop (status 143), `migadu_calls` starts empty. The assistant did not add a
+student on prod, so no mailbox was created and the new status card shows "No calls yet" until staff add the
+first student; that first real add is the live test. The owner wants to watch how long the
 calls to Migadu take and, after a week or so, set the timeout from the real slowest calls (the 15 s and
 the later 20 s were not derived from data). **Needs migration `017_migadu_calls.sql`** (additive: one new
 table and index, safe to re-run, harmless to the old code) run as the app role **before** the new backend
@@ -270,7 +281,7 @@ Overall risk: **low**.
 
 ## Step 42 — Add students: no reload while adding, plain error messages, audit log, adopt a lost-reply mailbox
 
-**Status: CHECKED IN 2026-10-08, deploy record follows.** Found by reading back through Steps
+**Status: DEPLOYED 2026-10-08 08:44 UTC** at `f5a8296` (see the Step 43 record for the order followed). Found by reading back through Steps
 37-41 (owner chose items 1, 2, 6 and the audit log; the daily limit on new mailboxes was proposed and
 declined; a limit on the number of digits of an Application No is a business rule for the owner, not
 built; a Migadu alias clash for a name like "Postmaster" was judged too unlikely; the owner also asked
