@@ -371,6 +371,7 @@ function Console({ college, onLoggedOut }: Props) {
             {studentsDialog && (
                 <ManageStudents
                     mode={studentsDialog}
+                    collegeId={String(college.id)}
                     collegeName={college.name}
                     onClose={() => setStudentsDialog(null)}
                     onImported={() => {

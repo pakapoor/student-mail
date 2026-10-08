@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 45. |
+| Next step number | 46. |
 
 ### Step index
 
@@ -50,6 +50,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 42 | Add students: no reload while adding, plain error messages, audit log, adopt a lost-reply mailbox | deployed 2026-10-08 |
 | 43 | Migadu call times: audit log and a graph on the status page (migration 017) | deployed 2026-10-08 |
 | 44 | Add students: an Application No already used in the college is flagged before adding | deployed 2026-10-08 |
+| 45 | Search students opens on the college chosen at login | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -170,6 +171,29 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 45 — Search students opens on the college chosen at login
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** Frontend only. The College filter of the
+Search students dialog used to start on **All** (every college); it now starts on the college the operator
+chose at login (for example KSMA CENTRAL), so the list and the status counts are that college's. The **All**
+button and the other colleges' buttons still work. `Console.tsx` passes `collegeId`, `ManageStudents.tsx`
+uses it as the filter's starting value. The Add students dialog is not affected.
+
+- No backend, API or schema change; no new test (a one-value initial state; the frontend has no component
+  test setup). Frontend type check and build pass; backend suite unchanged (242 of 242).
+- Deploy: `git pull --ff-only` and `npm run build` in `frontend/`; no backend restart. Rollback: `git revert`,
+  rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Finding a student of another college | Low | The list opens on the logged-in college; the clerk presses All or another college to see the rest. The search box still searches within the chosen college filter. |
+| Data and backend | None | Frontend only; the same API call with a college filter that the buttons already used. |
+| Rollback | Very low | `git revert`, rebuild the frontend. |
+
+Overall risk: **very low**.
 
 ## Step 44 — Add students: an Application No already used in the college is flagged before adding
 

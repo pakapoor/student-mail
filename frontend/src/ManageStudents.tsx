@@ -25,6 +25,8 @@ interface AddRow {
 
 interface Props {
     mode: StudentsMode;
+    // The college chosen at login: its id starts as the College filter of Search students.
+    collegeId: string;
     collegeName: string;
     onClose: () => void;
     onImported: () => void;
@@ -184,7 +186,7 @@ function displayName(s: AdminStudentRow): string {
     return combined || s.name || "(no name)";
 }
 
-export default function ManageStudents({ mode, collegeName, onClose, onImported }: Props) {
+export default function ManageStudents({ mode, collegeId, collegeName, onClose, onImported }: Props) {
     // Import section - unrelated to the roster below, kept from the original
     // per-mailbox modal. It imports into the college picked at login.
     const [ownStudents, setOwnStudents] = useState<StudentRow[]>([]);
@@ -208,7 +210,8 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
     const [search, setSearch] = useState("");
     // College button pressed (null = all colleges), and the colleges to show.
     const [colleges, setColleges] = useState<College[]>([]);
-    const [collegeFilter, setCollegeFilter] = useState<string | null>(null);
+    // Starts on the college chosen at login (the All button still shows every college).
+    const [collegeFilter, setCollegeFilter] = useState<string | null>(collegeId);
     // Filter button pressed (null = All), and the per-button counts that
     // come with each first page for the current search and college.
     const [statusFilter, setStatusFilter] = useState<RosterFilter | null>(null);
