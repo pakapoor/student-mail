@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 46. |
+| Next step number | 47. |
 
 ### Step index
 
@@ -51,6 +51,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 43 | Migadu call times: audit log and a graph on the status page (migration 017) | deployed 2026-10-08 |
 | 44 | Add students: an Application No already used in the college is flagged before adding | deployed 2026-10-08 |
 | 45 | Search students opens on the college chosen at login | deployed 2026-10-08 |
+| 46 | Search students: less clutter, one small All colleges button | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -171,6 +172,34 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 46 — Search students: less clutter (one small "All colleges" button)
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** Frontend only. After Step 45 the dialog
+opens on the login college, so the row of four college buttons (All, KSMA CENTRAL, IHSM CENTRAL, IHSM ELITE)
+mostly took up room. It is gone. The title now names the college ("Search students · KSMA CENTRAL"), and a
+**small button beside the search box** switches between that college and every college: "All colleges
+2287" when looking at one college, "Only KSMA CENTRAL 1276" when looking at all (the title then says "all
+colleges"). The Status buttons lost their visible "Status" label (kept for screen readers) and the dialog's
+chips are slightly more compact, so the five fit on one line at the dialog's usual width and "Rejected" no
+longer drops to a second line. `ManageStudents.tsx` (the `CollegeButtons` component and the colleges list
+fetch are removed) and `App.css`.
+
+- No backend, API or schema change; no new test (layout and one button; the frontend has no component test
+  setup). Frontend type check and build pass; backend suite unchanged (242 of 242).
+- Deploy: `git pull --ff-only` and `npm run build` in `frontend/`; no backend restart. Rollback: `git revert`,
+  rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Finding a student of another college | Low | One more click than before (the All colleges button) instead of a button row; the button shows the all-college total. |
+| Data and backend | None | Frontend only; the same API call with or without the college filter as before. |
+| Narrow screens | Low | The search line wraps (button below the box) under 600 px. |
+| Rollback | Very low | `git revert`, rebuild the frontend. |
+
+Overall risk: **very low**.
 
 ## Step 45 — Search students opens on the college chosen at login
 

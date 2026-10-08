@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shortDateTime } from "./format";
 import { applicationNumbers, checkStudentLines, type TakenNumber } from "./studentLines";
-import { autoAddStudents, checkApplicationNumbers, fetchAdminStudents, fetchColleges, fetchStudents } from "./api";
+import { autoAddStudents, checkApplicationNumbers, fetchAdminStudents, fetchStudents } from "./api";
 import type {
     AdminStudentPage,
     AdminStudentRow,
-    College,
     RosterFilter,
     StudentRow,
 } from "./types";
@@ -74,52 +73,6 @@ function RegistrationStatus({ s }: { s: AdminStudentRow }) {
 
 // College buttons over the roster (Step 30): All colleges (default) or one.
 // Counts are for the current search and ignore the pressed status button.
-function CollegeButtons({
-    colleges,
-    college,
-    counts,
-    onChange,
-}: {
-    colleges: College[];
-    college: string | null;
-    counts: AdminStudentPage["collegeCounts"] | null;
-    onChange: (college: string | null) => void;
-}) {
-    return (
-        <div className="filter-row">
-            <span className="filter-label" id="college-filter-label">College</span>
-            <div className="filter-buttons" role="group" aria-labelledby="college-filter-label">
-                <button
-                    type="button"
-                    className={college === null ? "filter-chip college active" : "filter-chip college"}
-                    aria-pressed={college === null}
-                    onClick={() => onChange(null)}
-                >
-                    All
-                    {counts && <span className="filter-count">{counts.all ?? 0}</span>}
-                </button>
-
-                {colleges.map((c) => {
-                    const active = college === c.id;
-
-                    return (
-                        <button
-                            key={c.id}
-                            type="button"
-                            className={active ? "filter-chip college active" : "filter-chip college"}
-                            aria-pressed={active}
-                            onClick={() => onChange(active ? null : c.id)}
-                        >
-                            {c.name}
-                            {counts && <span className="filter-count">{counts[c.id] ?? 0}</span>}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
 // Filter buttons over the roster - same look and behaviour as the console's
 // FilterButtons (All, ✕ on the pressed button, click again to clear).
 const ROSTER_BUTTONS: { filter: RosterFilter; label: string; dot: string }[] = [
@@ -140,8 +93,7 @@ function RosterFilterButtons({
 }) {
     return (
         <div className="filter-row">
-            <span className="filter-label" id="status-filter-label">Status</span>
-            <div className="filter-buttons" role="group" aria-labelledby="status-filter-label">
+            <div className="filter-buttons" role="group" aria-label="Status">
                 <button
                     type="button"
                     className={filter === null ? "filter-chip all active" : "filter-chip all"}
@@ -209,7 +161,6 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
     const rosterTab: RosterTab = mode === "add" ? "add" : "students";
     const [search, setSearch] = useState("");
     // College button pressed (null = all colleges), and the colleges to show.
-    const [colleges, setColleges] = useState<College[]>([]);
     // Starts on the college chosen at login (the All button still shows every college).
     const [collegeFilter, setCollegeFilter] = useState<string | null>(collegeId);
     // Filter button pressed (null = All), and the per-button counts that
@@ -249,9 +200,6 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
     useEffect(() => {
         fetchStudents()
             .then(setOwnStudents)
-            .catch(() => {});
-        fetchColleges()
-            .then(setColleges)
             .catch(() => {});
     }, []);
 
@@ -486,7 +434,9 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="modal-header">
-                    <h2 id="manage-students-title">{mode === "add" ? "Add students" : "Search students"}</h2>
+                    <h2 id="manage-students-title">
+                        {mode === "add" ? "Add students" : `Search students · ${collegeFilter === null ? "all colleges" : collegeName}`}
+                    </h2>
                     <button className="modal-close" onClick={onClose} aria-label="Close">
                         &times;
                     </button>
@@ -619,21 +569,29 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
 
                 {rosterTab === "students" && (
                 <div className="roster-section">
-                    <input
-                        className="admin-search"
-                        type="text"
-                        aria-label="Search student roster"
-                        placeholder="Search name, email, or Application No…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
+                    <div className="roster-searchbar">
+                        <input
+                            className="admin-search"
+                            type="text"
+                            aria-label="Search student roster"
+                            placeholder="Search name, email, or Application No…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        {/* The list opens on the college chosen at login; this small button
+                            switches to every college and back. */}
+                        <button
+                            type="button"
+                            className="all-colleges-button"
+                            aria-pressed={collegeFilter === null}
+                            onClick={() => setCollegeFilter(collegeFilter === null ? collegeId : null)}
+                        >
+                            {collegeFilter === null
+                                ? `Only ${collegeName}${collegeCounts ? ` ${collegeCounts[collegeId] ?? 0}` : ""}`
+                                : `All colleges${collegeCounts ? ` ${collegeCounts.all ?? 0}` : ""}`}
+                        </button>
+                    </div>
 
-                    <CollegeButtons
-                        colleges={colleges}
-                        college={collegeFilter}
-                        counts={collegeCounts}
-                        onChange={setCollegeFilter}
-                    />
                     <RosterFilterButtons filter={statusFilter} counts={counts} onChange={setStatusFilter} />
 
                     {rosterError && <p className="error" role="alert">{rosterError}</p>}

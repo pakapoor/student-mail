@@ -2254,3 +2254,14 @@ a.logout-button { display: inline-block; text-decoration: none; }
 .migadu-median { fill: var(--accent); }
 .migadu-cap { fill: var(--warn); }
 .migadu-cap.bad { fill: var(--bad); }
+
+/* Search students: one search line with a small All colleges button, and compact status chips (Step 46) */
+.roster-searchbar { display: flex; gap: 10px; align-items: center; }
+.roster-searchbar .admin-search { flex: 1; min-width: 0; }
+.all-colleges-button { flex: none; font: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); cursor: pointer; white-space: nowrap; }
+.all-colleges-button:hover { border-color: var(--accent); color: var(--accent); }
+.all-colleges-button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.all-colleges-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.roster-section .filter-row { margin-top: 10px; }
+.roster-section .filter-chip { padding: 5px 12px; font-size: 13px; }
+@media (max-width: 600px) { .roster-searchbar { flex-wrap: wrap; } .roster-searchbar .admin-search { flex-basis: 100%; } }
