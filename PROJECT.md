@@ -11,8 +11,8 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 45 (`a286efc`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 42 Add students hardening (no reload while adding, plain errors, audit log, adopt a lost-reply mailbox), 43 Migadu call times on the status page (migration 017), 44 used Application No flagged before adding, 45 Search students opens on the login college, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 46 (`4c14c0c`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 42 Add students hardening (no reload while adding, plain errors, audit log, adopt a lost-reply mailbox), 43 Migadu call times on the status page (migration 017), 44 used Application No flagged before adding, 45 Search students opens on the login college, 46 Search students with less clutter (one small All colleges button), 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
@@ -51,7 +51,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 43 | Migadu call times: audit log and a graph on the status page (migration 017) | deployed 2026-10-08 |
 | 44 | Add students: an Application No already used in the college is flagged before adding | deployed 2026-10-08 |
 | 45 | Search students opens on the college chosen at login | deployed 2026-10-08 |
-| 46 | Search students: less clutter, one small All colleges button | checked in 2026-10-08 |
+| 46 | Search students: less clutter, one small All colleges button | deployed 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -175,7 +175,11 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 46 — Search students: less clutter (one small "All colleges" button)
 
-**Status: CHECKED IN 2026-10-08, deploy record follows.** Frontend only. After Step 45 the dialog
+**Status: DEPLOYED 2026-10-08** at `4c14c0c` (user authorized). Frontend only: `git pull --ff-only` and
+`npm run build` in `frontend/` on prod (new bundle `index-DYL5kWQ-.js`); the backend service was NOT restarted
+(still running since 08:44:22 UTC), so no logins or live-update streams were dropped. Verified: the page
+serves the new bundle, `/api/threads` without a login answers 401, service and nginx active. The owner had
+checked the UI locally first. Change: After Step 45 the dialog
 opens on the login college, so the row of four college buttons (All, KSMA CENTRAL, IHSM CENTRAL, IHSM ELITE)
 mostly took up room. It is gone. The title now names the college ("Search students · KSMA CENTRAL"), and a
 **small button beside the search box** switches between that college and every college: "All colleges
