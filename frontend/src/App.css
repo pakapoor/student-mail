@@ -2257,11 +2257,16 @@ a.logout-button { display: inline-block; text-decoration: none; }
 
 /* Search students: one search line with a small All colleges button, and compact status chips (Step 46) */
 .roster-searchbar { display: flex; gap: 10px; align-items: center; }
-.roster-searchbar .admin-search { flex: 1; min-width: 0; }
+.roster-searchbar .admin-search-wrap { flex: 1; min-width: 0; }
 .all-colleges-button { flex: none; font: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); cursor: pointer; white-space: nowrap; }
 .all-colleges-button:hover { border-color: var(--accent); color: var(--accent); }
 .all-colleges-button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .all-colleges-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .roster-section .filter-row { margin-top: 10px; }
 .roster-section .filter-chip { padding: 5px 12px; font-size: 13px; }
-@media (max-width: 600px) { .roster-searchbar { flex-wrap: wrap; } .roster-searchbar .admin-search { flex-basis: 100%; } }
+@media (max-width: 600px) { .roster-searchbar { flex-wrap: wrap; } .roster-searchbar .admin-search-wrap { flex-basis: 100%; } }
+.admin-search-wrap { position: relative; flex: 1; min-width: 0; }
+.admin-search-wrap .admin-search { width: 100%; box-sizing: border-box; padding-right: 38px; }
+.admin-search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); font-size: 14px; line-height: 1; cursor: pointer; }
+.admin-search-clear:hover { background: var(--border-soft); color: var(--text); }
+.admin-search-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

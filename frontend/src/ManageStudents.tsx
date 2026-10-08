@@ -169,6 +169,9 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
     const [counts, setCounts] = useState<AdminStudentPage["counts"] | null>(null);
     const [collegeCounts, setCollegeCounts] = useState<AdminStudentPage["collegeCounts"] | null>(null);
     const [debouncedSearch, setDebouncedSearch] = useState("");
+    // Typing in the search box searches EVERY college; the college button only
+    // narrows the list while the box is empty.
+    const effectiveCollege = debouncedSearch ? null : collegeFilter;
     const [rows, setRows] = useState<AdminStudentRow[]>([]);
     const [cursor, setCursor] = useState<string | null>(null);
     const [rosterLoading, setRosterLoading] = useState(true);
@@ -235,8 +238,8 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
             return;
         }
 
-        loadRoster(debouncedSearch, statusFilter, collegeFilter);
-    }, [rosterTab, debouncedSearch, statusFilter, collegeFilter, loadRoster]);
+        loadRoster(debouncedSearch, statusFilter, effectiveCollege);
+    }, [rosterTab, debouncedSearch, statusFilter, effectiveCollege, loadRoster]);
 
     const loadMore = useCallback(() => {
         if (!cursor || loadingMore) {
@@ -245,7 +248,7 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
 
         setLoadingMore(true);
 
-        fetchAdminStudents(debouncedSearch, cursor, statusFilter, collegeFilter)
+        fetchAdminStudents(debouncedSearch, cursor, statusFilter, effectiveCollege)
             .then((page) => {
                 setRows((prev) => [...prev, ...page.students]);
                 setCursor(page.nextCursor);
@@ -254,7 +257,7 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                 setRosterError(err instanceof Error ? err.message : "Failed to load more")
             )
             .finally(() => setLoadingMore(false));
-    }, [cursor, loadingMore, debouncedSearch, statusFilter, collegeFilter]);
+    }, [cursor, loadingMore, debouncedSearch, statusFilter, effectiveCollege]);
 
     function handleScroll() {
         const el = listRef.current;
@@ -333,7 +336,7 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
         setCsv(failed.map((f) => f.text).join("\n"));
         setSubmitting(false);
         fetchStudents().then(setOwnStudents).catch(() => {});
-        loadRoster(debouncedSearch, statusFilter, collegeFilter);
+        loadRoster(debouncedSearch, statusFilter, effectiveCollege);
         onImported();
     }
 
@@ -435,7 +438,7 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
             >
                 <div className="modal-header">
                     <h2 id="manage-students-title">
-                        {mode === "add" ? "Add students" : `Search students · ${collegeFilter === null ? "all colleges" : collegeName}`}
+                        {mode === "add" ? "Add students" : `Search students · ${effectiveCollege === null ? "all colleges" : collegeName}`}
                     </h2>
                     <button className="modal-close" onClick={onClose} aria-label="Close">
                         &times;
@@ -570,26 +573,37 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                 {rosterTab === "students" && (
                 <div className="roster-section">
                     <div className="roster-searchbar">
-                        <input
-                            className="admin-search"
-                            type="text"
-                            aria-label="Search student roster"
-                            placeholder="Search name, email, or Application No…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
+                        <div className="admin-search-wrap">
+                            <input
+                                className="admin-search"
+                                type="text"
+                                aria-label="Search student roster"
+                                placeholder="Search name, email, or Application No…"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                            {/* Comes out of the search: clears the text, so the list goes back to the chosen college. */}
+                            {search.length > 0 && (
+                                <button type="button" className="admin-search-clear" aria-label="Clear search" onClick={() => setSearch("")}>
+                                    ✕
+                                </button>
+                            )}
+                        </div>
                         {/* The list opens on the college chosen at login; this small button
-                            switches to every college and back. */}
-                        <button
-                            type="button"
-                            className="all-colleges-button"
-                            aria-pressed={collegeFilter === null}
-                            onClick={() => setCollegeFilter(collegeFilter === null ? collegeId : null)}
-                        >
-                            {collegeFilter === null
-                                ? `Only ${collegeName}${collegeCounts ? ` ${collegeCounts[collegeId] ?? 0}` : ""}`
-                                : `All colleges${collegeCounts ? ` ${collegeCounts.all ?? 0}` : ""}`}
-                        </button>
+                            switches to every college and back. It is hidden while something is
+                            typed, because a search always looks in every college. */}
+                        {!debouncedSearch && (
+                            <button
+                                type="button"
+                                className="all-colleges-button"
+                                aria-pressed={collegeFilter === null}
+                                onClick={() => setCollegeFilter(collegeFilter === null ? collegeId : null)}
+                            >
+                                {collegeFilter === null
+                                    ? `Only ${collegeName}${collegeCounts ? ` ${collegeCounts[collegeId] ?? 0}` : ""}`
+                                    : `All colleges${collegeCounts ? ` ${collegeCounts.all ?? 0}` : ""}`}
+                            </button>
+                        )}
                     </div>
 
                     <RosterFilterButtons filter={statusFilter} counts={counts} onChange={setStatusFilter} />

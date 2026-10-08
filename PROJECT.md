@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 47. |
+| Next step number | 48. |
 
 ### Step index
 
@@ -52,6 +52,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 44 | Add students: an Application No already used in the college is flagged before adding | deployed 2026-10-08 |
 | 45 | Search students opens on the college chosen at login | deployed 2026-10-08 |
 | 46 | Search students: less clutter, one small All colleges button | deployed 2026-10-08 |
+| 47 | Search students: a search always looks in every college, with a clear (✕) button | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -172,6 +173,35 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 47 — Search students: a search always looks in every college
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** Frontend only (`ManageStudents.tsx`, `App.css`). A slip
+from Step 45: once the dialog opened on the login college, typing a name or Application No in the search box
+only searched that college, whereas searching has always covered every college (a student can belong to
+another college, or the clerk may not know which). Now whatever is typed searches **all colleges**; the
+college setting (the login college by default, or the small button) only narrows the list while the
+box is **empty**. While something is typed the small button is hidden and the title says "all colleges"; when
+the box is cleared the list returns to the chosen college. The status chips and counts follow the same rule
+(all colleges while searching). The College column in the table shows which college each result belongs to.
+
+- **Coming out of a search:** a small ✕ inside the search box (shown while there is text; "Clear search" for
+  screen readers) clears the text and the list goes back to the chosen college. Escape is not used for this,
+  because Escape closes the dialog.
+- No backend, API or schema change; no new test (one derived value in the screen; the frontend has no
+  component test setup). Frontend type check and build pass; backend suite unchanged (242 of 242).
+- Deploy: `git pull --ff-only` and `npm run build` in `frontend/`; no backend restart. Rollback: `git revert`,
+  rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Results from other colleges | Low | Intended: a search covers every college and the College column says which; the list without a search stays on the login college. |
+| Data and backend | None | Frontend only; the same API call with the college filter left out while searching. |
+| Rollback | Very low | `git revert`, rebuild the frontend. |
+
+Overall risk: **very low**.
 
 ## Step 46 — Search students: less clutter (one small "All colleges" button)
 
