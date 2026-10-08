@@ -384,7 +384,7 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                         <p className="hint-text" id="import-help">Paste one student per line: name, then Application No. You can include the header.</p>
                         <div className="import-example"><code>Student Name,Application No</code></div>
                         <p className="hint-text">
-                            Set automatically: the email (first word.last word@myemailinfo.com, with a number added after the name if taken), the password <code>password</code> and the current year. Up to 10 students at a time.
+                            Set automatically: the email (first word.last word@myemailinfo.com, with a number added after the name if taken) and the current year. Up to <strong>10 students at a time</strong>.
                         </p>
 
                         <textarea
