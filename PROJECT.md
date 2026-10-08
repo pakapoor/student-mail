@@ -11,8 +11,8 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 35 (`dcf1ca0`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 36 (`e8f1f60`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
@@ -41,7 +41,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 32-33 | Stored thread summaries; full test suite, coverage, mutation and load tooling | held back (see above) |
 | 34 | Flexible student search | deployed 2026-10-01 |
 | 35 | Login screen when signed out in another tab | deployed 2026-10-01 |
-| 36 | Reason line on rejected rows in the list | checked in 2026-10-08 |
+| 36 | Reason line on rejected rows in the list | deployed 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -165,8 +165,13 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 36 — Reason line on rejected rows in the message list
 
-**Status: CHECKED IN 2026-10-08** (user approved the mock, then said check in and deploy). Deploy record
-is added below once it is done.
+**Status: DEPLOYED 2026-10-08 04:04 UTC** at `e8f1f60` (user authorized). Checked in and pushed first.
+Deploy was `git pull --ff-only`, `npm run build` in `frontend/` (new bundle `index-CUEqY9xv.js`), then a
+restart of `student-mail.service`; no backup, because there is no database change. Verified: service and
+nginx active, the page serves the new bundle, `/api/threads` without a login still answers 401, the open
+consoles' live-update streams reconnected right away (sessions are in PostgreSQL, nobody logged out),
+sync passes "no new messages", the only journal warning is the normal stop (status 143). The assistant did
+not use a browser; the user checks that the Reason line shows on rejected rows.
 
 Rejected threads now show one more line in the list: `Reason: <the reviewer's note>`, muted, one line,
 shortened with an ellipsis (full text on hover). It appears only when the rejection email has a real note;
