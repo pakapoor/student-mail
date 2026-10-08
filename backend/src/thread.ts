@@ -669,6 +669,23 @@ export interface ThreadSummary {
     student_name: string | null;
     // Edugate application number from the roster, or null.
     student_app_no: string | null;
+    // Rejected threads only: the reviewer's note from the newest rejection
+    // email, or null when there is none (or the badge is not "rejected").
+    reject_reason: string | null;
+}
+
+// The note of the newest recognised rejection email, for the list row.
+function rejectReason(groupMessages: MessageRow[]): string | null {
+    const newestFirst = [...groupMessages].sort((a, b) => sentTime(b) - sentTime(a));
+    const latest = newestFirst.find((m) => m.edugate_kind === "rejected");
+
+    if (!latest) {
+        return null;
+    }
+
+    const info = classifyEdugate(latest.sender_email, latest.body_text, latest.student_email);
+
+    return info?.kind === "rejected" ? info.note : null;
 }
 
 function threadBadge(
@@ -840,6 +857,7 @@ export async function fetchThreadSummaries(
                 pendingCount > 0
                     ? new Date(latest.received_at).getTime()
                     : Math.max(resolvedAt, autoClosedAt);
+            const badge = threadBadge(groupMessages, pendingCount);
 
             return {
                 threadId: representative.id,
@@ -852,7 +870,8 @@ export async function fetchThreadSummaries(
                 pending_count: pendingCount,
                 preview: makePreview(representative.body_text, representative.body_html),
                 registered: groupMessages.some((m) => m.edugate_kind === "login"),
-                ...threadBadge(groupMessages, pendingCount),
+                ...badge,
+                reject_reason: badge.badge === "rejected" ? rejectReason(groupMessages) : null,
                 latestAt: new Date(latest.received_at).getTime(),
                 sortAt,
                 codesOnly: groupMessages.every((m) => m.edugate_kind === "code"),

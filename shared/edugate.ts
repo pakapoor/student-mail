@@ -51,7 +51,7 @@ const REJECTED =
 // box (the user's choice); it stays visible in the email itself. Matched
 // after joining lines (the stored text wraps it), wherever it appears - it
 // can be followed by more text, e.g. "Thank you for your cooperation!".
-const WHATSAPP = / ?If you have any questions, please contact us via WhatsApp at: ?\+?[\d ()-]+\d\.?/g;
+const WHATSAPP = / ?If you have any questions, please contact us via WhatsApp at:? ?\+?[\d ()-]+\d\.?/g;
 // A sentence that tells the student what to do.
 const INSTRUCTION = /(?:^|[.!?] )(?:Please|Upload)\b/;
 

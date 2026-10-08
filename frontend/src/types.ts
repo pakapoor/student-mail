@@ -29,6 +29,8 @@ export interface ThreadSummary {
     student_app_no: string | null;
     // English title for recognised Edugate emails, else the subject.
     title: string | null;
+    // Rejected threads only: the reviewer's note, else null.
+    reject_reason: string | null;
 }
 
 // "all" = the tab-less list (Step 18 phase 2); the others are kept for

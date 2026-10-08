@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 36. |
+| Next step number | 37. |
 
 ### Step index
 
@@ -41,6 +41,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 32-33 | Stored thread summaries; full test suite, coverage, mutation and load tooling | held back (see above) |
 | 34 | Flexible student search | deployed 2026-10-01 |
 | 35 | Login screen when signed out in another tab | deployed 2026-10-01 |
+| 36 | Reason line on rejected rows in the list | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -161,6 +162,45 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 36 — Reason line on rejected rows in the message list
+
+**Status: CHECKED IN 2026-10-08** (user approved the mock, then said check in and deploy). Deploy record
+is added below once it is done.
+
+Rejected threads now show one more line in the list: `Reason: <the reviewer's note>`, muted, one line,
+shortened with an ellipsis (full text on hover). It appears only when the rejection email has a real note;
+a note that is only a placeholder (like "1") shows nothing, and other badges are unchanged. The opened
+thread already showed the same text in its Reason box.
+
+- `backend/src/thread.ts`: `ThreadSummary.reject_reason`, filled by `rejectReason()` from the newest
+  rejection email in the thread (the same `classifyEdugate` the thread view uses). Null unless the badge is
+  `rejected`. No schema change: the note is parsed from the stored body each time the list loads.
+- `frontend/src/types.ts`, `MessageList.tsx`, `App.css`: the field, the line, and its style.
+- `shared/edugate.ts`: the rule that cuts Edugate's WhatsApp contact sentence from a note expected
+  `WhatsApp at:` with a colon, but real emails also write `WhatsApp at +996 ...` without it, so that
+  sentence still showed (seen on application 30560). The colon is now optional. This also cleans the
+  Reason box in the opened thread.
+- Tests: `backend/tests/rejectReason.test.mjs` (3 tests: sentence cut with and without the colon; a note with
+  no letters gives no reason). Whole backend suite **133 of 133**; backend and frontend type checks and the
+  frontend build pass. Not tried in a browser by the assistant; the user checked it locally.
+- Deploy needs a backend restart (new field in the list response) plus a frontend rebuild. Sessions are in
+  PostgreSQL, so nobody is logged out; the live-update stream reconnects by itself. Rollback: `git revert`,
+  restart the backend, rebuild the frontend.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Data and database | None | No schema, migration or stored-data change; the note is read from existing bodies. |
+| List response | Very low | One new field on each list row. Old open tabs ignore it until they reload onto the new build. |
+| Parser change | Low | The WhatsApp rule only got a looser match. A wrong match could cut a few words of a note, and the full email is untouched. |
+| List speed | Very low | One extra parse of the rejection email per rejected thread, using the parser the list already runs for titles. |
+| Logins and live updates | Very low | Backend restart drops the live stream for a moment; the console reconnects, no one is logged out. |
+| Staff work in progress | Very low | Open tabs reload onto the new build only when no thread is open. |
+| Rollback | Very low | `git revert`, restart, rebuild. Nothing to undo in the database. |
+
+Overall risk: **low**.
 
 ## Step 35 — Signed out in another tab: show Login, not "(401)" errors
 

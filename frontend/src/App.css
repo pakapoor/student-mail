@@ -1980,6 +1980,9 @@ select,
 .message-row-top .student-line .student-email { flex: 1 1 0; line-height: 1.4; }
 .message-row-line { margin-top: 4px; gap: 12px; }
 .message-preview { margin: 5px 0 0; }
+/* Rejected rows: the reviewer's note, one line, shortened with … */
+.reject-reason { margin: 5px 0 0; font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reject-reason strong { font-weight: 600; }
 .message-count { margin-top: 6px; }
 .waiting-registration { margin-top: 6px; }
 .logout-button.quiet { background: transparent; border-color: transparent; color: var(--text-muted); }

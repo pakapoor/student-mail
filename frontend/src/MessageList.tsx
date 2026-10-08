@@ -123,6 +123,11 @@ export default function MessageList({ threads, selectedId, onSelect, emptyText }
                         </span>
                         <span className="received-at">{shortDateTime(thread.received_at)}</span>
                     </div>
+                    {thread.badge === "rejected" && thread.reject_reason && (
+                        <div className="reject-reason" title={thread.reject_reason}>
+                            <strong>Reason:</strong> {thread.reject_reason}
+                        </div>
+                    )}
                     {/* Edugate emails always open with the same boilerplate,
                         so their preview adds nothing; other emails (a
                         student's question) keep one line of it. */}
