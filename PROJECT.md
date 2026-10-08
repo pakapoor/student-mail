@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 40. |
+| Next step number | 41. |
 
 ### Step index
 
@@ -45,6 +45,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 37 | Add students from name + Application No, mailbox created automatically | deployed 2026-10-08 |
 | 38 | Add students: simpler hint text | deployed 2026-10-08 |
 | 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | deployed 2026-10-08 |
+| 40 | Add students: a repeated Application No is flagged in the box | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -165,6 +166,41 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 40 — Add students: a repeated Application No is flagged in the box
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** Frontend only (`frontend/src/studentLines.ts`).
+Before this, a number repeated inside one paste was only caught after pressing Add (the server skipped
+the second line as "Skipped"). Now the box flags the **later** line in red, as the clerk types, with the
+Add button off: "The Application No 10012345 is already on line 1 (John Roe). Fix one of them." With three
+lines sharing a number, lines 2 and 3 are flagged, both pointing at line 1. Numbers are compared as numbers
+(`007` and `7` count as the same). A line already flagged for something else shows that error first, and
+its number still counts for later lines. Line numbers count blank lines and the header, like the box.
+
+- Not covered: a number already used by a student in the database. The box cannot know that; it still
+  shows as Skipped after pressing Add, naming the student who has it. Catching it in the box would need a
+  server look-up (a check step or a call as the clerk types), left for later.
+- The server is unchanged and still skips a repeat within a paste as a safety net (it compares the text,
+  so `007` and `7` are different there; the box blocks that case first).
+- Tests: `backend/tests/studentLines.test.mjs` is now 21 tests (6 new: later line only with the earlier
+  line named, three lines, 007 vs 7 and different numbers, blank lines and header, another error first and
+  the number still reserved, fixing clears it). Whole backend suite **197 of 197**; backend and frontend
+  type checks and the frontend build pass. The red display itself is not covered by an automated test (no
+  frontend component test setup); it uses the same list as the other box errors.
+- Deploy: `git pull --ff-only` and `npm run build` in `frontend/`; no backend restart. Rollback:
+  `git revert`, rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Wrongly blocking a good paste | Low | Only an exact repeat of the same whole number inside one paste is flagged; the clerk fixes or removes one line. `007` vs `7` is treated as a repeat on purpose. |
+| Data and backend | None | Frontend only; no API, schema or restart. |
+| Duplicates against the database | Unchanged | Still caught by the server after pressing Add (Skipped, with the owner's name). |
+| Open tabs on deploy | Low | Tabs with no thread open reload onto the new build; a tab with a thread open keeps the old check until closed. |
+| Rollback | Very low | `git revert`, rebuild the frontend. |
+
+Overall risk: **very low**.
 
 ## Step 39 — Search students and Add students as two buttons, two dialogs; clerk-friendly input
 

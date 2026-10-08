@@ -135,3 +135,39 @@ test('exactly one comma: none, two or more are flagged, a name and a number must
     assert.deepEqual(messages('Jane Doe,'), ['1:The Application No is missing']);
     assert.deepEqual(messages('5,Jane Doe').length, 1, 'number before the comma is refused');
 });
+
+test('a repeated Application No is flagged on the later line only, naming the earlier line', () => {
+    const check = checkStudentLines('John Roe,10012345\nJane Doe,10012345');
+    assert.deepEqual(check.errors.map((e) => [e.line, e.text]), [[2, 'Jane Doe,10012345']]);
+    assert.equal(check.errors[0].message, 'The Application No 10012345 is already on line 1 (John Roe). Fix one of them.');
+    assert.deepEqual(check.lines, [], 'nothing can be added until it is fixed');
+});
+
+test('three lines with the same number: the second and third are flagged, both pointing at the first', () => {
+    const errors = checkStudentLines('A One,5\nB Two,5\nC Three,5').errors;
+    assert.deepEqual(errors.map((e) => e.line), [2, 3]);
+    assert.ok(errors.every((e) => /already on line 1 \(A One\)/.test(e.message)));
+});
+
+test('007 and 7 count as the same number; different numbers do not clash', () => {
+    assert.deepEqual(checkStudentLines('A One,007\nB Two,7').errors.map((e) => e.line), [2]);
+    assert.deepEqual(checkStudentLines('A One,7\nB Two,70\nC Three,17').errors, []);
+});
+
+test('the repeat is counted across blank lines and a header, with the right line numbers', () => {
+    const errors = checkStudentLines('Student Name,Application No\n\nA One,9\n\nB Two,9').errors;
+    assert.deepEqual(errors.map((e) => e.line), [5]);
+    assert.match(errors[0].message, /already on line 3 \(A One\)/);
+});
+
+test('a line already flagged for something else is flagged for that, and its number still counts for later lines', () => {
+    const errors = checkStudentLines("A One,5\nB T0,5\nC Three,5").errors;
+    assert.deepEqual(errors.map((e) => [e.line, e.message.slice(0, 12)]), [[2, 'The name can'], [3, 'The Applicat']]);
+    const early = checkStudentLines("B T0,5\nC Three,5").errors;
+    assert.deepEqual(early.map((e) => e.line), [1, 2], 'a bad-name line 1 still reserves its number');
+});
+
+test('fixing the repeat clears the flag and lets the box go ahead', () => {
+    assert.equal(checkStudentLines('A One,5\nB Two,5').lines.length, 0);
+    assert.equal(checkStudentLines('A One,5\nB Two,6').lines.length, 2);
+});

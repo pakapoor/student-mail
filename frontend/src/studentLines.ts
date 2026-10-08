@@ -65,10 +65,15 @@ export function checkStudentLines(text: string): LineCheck {
         });
     }
 
+    // Application Nos already seen in this box (compared as numbers, so 007 and 7
+    // are the same), with the line and name they first appeared on.
+    const seen = new Map<string, { line: number; name: string }>();
+
     for (const { content, number } of dataLines) {
         const fields = splitFields(content);
         const name = (fields[0] ?? "").trim();
         const admissionId = (fields[1] ?? "").trim();
+        const errorsBefore = errors.length;
 
         if (fields.length < 2) {
             errors.push({ line: number, message: "Put a comma between the name and the Application No, like Jane Doe,10012345", text: content.trim() });
@@ -82,6 +87,24 @@ export function checkStudentLines(text: string): LineCheck {
             errors.push({ line: number, message: "The Application No is missing", text: content.trim() });
         } else if (!/^\d+$/.test(admissionId) || !/[1-9]/.test(admissionId)) {
             errors.push({ line: number, message: `The Application No must be a whole number, digits only (got "${admissionId}")`, text: content.trim() });
+        }
+
+        // A valid number: the later line that repeats it is the one flagged (a
+        // line already flagged for something else is flagged for that first).
+        // A line's number counts as seen even when its name is wrong.
+        if (fields.length === 2 && /^\d+$/.test(admissionId) && /[1-9]/.test(admissionId)) {
+            const key = admissionId.replace(/^0+/, "");
+            const earlier = seen.get(key);
+
+            if (!earlier) {
+                seen.set(key, { line: number, name });
+            } else if (errors.length === errorsBefore) {
+                errors.push({
+                    line: number,
+                    message: `The Application No ${admissionId} is already on line ${earlier.line}${earlier.name ? ` (${earlier.name})` : ""}. Fix one of them.`,
+                    text: content.trim(),
+                });
+            }
         }
     }
 
