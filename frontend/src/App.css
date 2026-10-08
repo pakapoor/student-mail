@@ -743,6 +743,13 @@
 }
 
 /* Add students result (name + Application No flow): counts, then one row per line. */
+.line-errors { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--bad); background: var(--bad-soft); border-radius: 8px; color: var(--bad); font-size: 13px; }
+.line-errors p { margin: 0 0 4px; font-weight: 700; }
+.line-errors ul { margin: 0; padding-left: 18px; }
+.line-errors li { margin-bottom: 6px; }
+.line-errors-text { display: block; font-family: ui-monospace, monospace; font-weight: 700; word-break: break-word; }
+.line-errors-why { display: block; }
+.import-section textarea[aria-invalid="true"] { border-color: var(--bad); }
 .autoadd-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
 .autoadd-pill { padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 13px; }
 .autoadd-pill.ok { background: var(--ok-soft); color: var(--ok); }
@@ -756,6 +763,10 @@
 .autoadd-name { font-weight: 600; }
 .autoadd-email { font-family: ui-monospace, monospace; word-break: break-all; }
 .autoadd-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; }
+.autoadd-tag.waiting { background: var(--border-soft); color: var(--text-muted); }
+.autoadd-tag.trying,
+.autoadd-tag.retrying { background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; }
+.autoadd-pill.busy { background: var(--accent-soft); color: var(--accent); }
 .autoadd-tag.added { background: var(--ok-soft); color: var(--ok); }
 .autoadd-tag.skipped { background: var(--warn-soft); color: var(--warn); }
 .autoadd-tag.failed { background: var(--bad-soft); color: var(--bad); }
@@ -2094,8 +2105,6 @@ select,
 
 /* Manage students view switcher: the console's filter pills (FilterButtons),
    solid blue when selected. */
-.view-switch { margin: 0 0 18px; }
-.view-switch .filter-chip.active { background: var(--accent); }
 
 /* Incoming HTML email in a sandboxed frame (EmailFrame.tsx). The frame is
    sized to its content; the clamp/"Show full message" works on the wrapper. */

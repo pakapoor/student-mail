@@ -16,7 +16,7 @@ import { playChime } from "./chime";
 import FilterButtons from "./FilterButtons";
 import { saveSearchForReload, takeSearchSavedForReload, useNewVersionAvailable } from "./versionCheck";
 import ThreadView from "./ThreadView";
-import ManageStudents from "./ManageStudents";
+import ManageStudents, { type StudentsMode } from "./ManageStudents";
 import CodeAlerts from "./CodeAlerts";
 import { collegeLogo, ISM_EDUTECH_LOGO } from "./branding";
 import type { College, StatusFilter, ThreadItem, ThreadSummary } from "./types";
@@ -73,7 +73,8 @@ function Console({ college, onLoggedOut }: Props) {
     const [loadedThreadId, setLoadedThreadId] = useState<number | null>(null);
     const [threadError, setThreadError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [showManageStudents, setShowManageStudents] = useState(false);
+    // Which students dialog is open: Search students and Add students are two buttons, two dialogs.
+    const [studentsDialog, setStudentsDialog] = useState<StudentsMode | null>(null);
     // Bumped on every live update so the code alert rows refresh at once.
     const [alertsRefreshKey, setAlertsRefreshKey] = useState(0);
 
@@ -232,7 +233,7 @@ function Console({ college, onLoggedOut }: Props) {
         fetchStudents()
             .then((students) => {
                 if (students.length === 0) {
-                    setShowManageStudents(true);
+                    setStudentsDialog("add");
                 }
             })
             .catch(() => {});
@@ -342,9 +343,15 @@ function Console({ college, onLoggedOut }: Props) {
                 <div className="session-bar">
                     <button
                         className="logout-button"
-                        onClick={() => setShowManageStudents(true)}
+                        onClick={() => setStudentsDialog("search")}
                     >
-                        Find/Add Students
+                        Search students
+                    </button>
+                    <button
+                        className="logout-button"
+                        onClick={() => setStudentsDialog("add")}
+                    >
+                        Add students
                     </button>
                     <a
                         className="logout-button"
@@ -360,10 +367,11 @@ function Console({ college, onLoggedOut }: Props) {
                 </div>
             </header>
 
-            {showManageStudents && (
+            {studentsDialog && (
                 <ManageStudents
+                    mode={studentsDialog}
                     collegeName={college.name}
-                    onClose={() => setShowManageStudents(false)}
+                    onClose={() => setStudentsDialog(null)}
                     onImported={() => {
                         loadMessages(status, debouncedSearch, filter);
                     }}

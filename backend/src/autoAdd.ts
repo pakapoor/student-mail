@@ -1,7 +1,7 @@
 import { db } from "./db.js";
 import { emailBase, emailCandidates } from "./studentEmail.js";
 import { migaduMailboxApi, type MailboxApi } from "./migadu.js";
-import { parseCsvLine, splitName } from "./students.js";
+import { splitName } from "./students.js";
 
 // "Add students" with two inputs per line: Student Name,Application No.
 // For each line the server works out the email address (studentEmail.ts),
@@ -17,6 +17,9 @@ export interface AutoAddRow {
     line: number;
     name: string;
     admissionId: string;
+    // The line exactly as it was pasted (trimmed), so a failed line can be put
+    // back in the box for the clerk to fix.
+    source: string;
     email: string | null;
     status: AutoAddStatus;
     // Why a line was skipped or failed; a note on an added line (e.g. a number
@@ -33,7 +36,24 @@ export interface AutoAddResult {
 
 export class AutoAddInputError extends Error {}
 
+// The users are clerks: a line is exactly "name,Application No" with one comma
+// between them (spaces around the comma, before the name or after the number are
+// fine; Windows, Unix or old Mac line endings all work). A space or a tab instead of
+// the comma is flagged, never guessed at - a wrong guess would create a
+// real mailbox for the wrong name.
 const EXPECTED_HEADER = "student name,application no";
+
+// One line split at its commas, each part trimmed. No quote handling: a line
+// has exactly one comma. Same as the box (frontend/src/studentLines.ts).
+function splitFields(line: string): string[] {
+    return line.split(",").map((field) => field.trim());
+}
+// A name is words made only of letters (A-Z, a-z) separated by spaces - first,
+// middle and last names alike; every real student on file already looks like this.
+// Same rule as the box (frontend/src/studentLines.ts).
+const NAME_PATTERN = /^[A-Za-z]+( [A-Za-z]+)*$/;
+const NAME_MESSAGE = "The name can only have letters (A to Z) and spaces - no numbers, dots, hyphens or other symbols";
+const COMMA_RULE = "Put a comma between the name and the Application No, like Jane Doe,10012345";
 const DEFAULT_PASSWORD = "password";
 // Each line is a few calls to Migadu (measured ~0.8 s per line, one after
 // another on purpose - Migadu publishes no rate limits); this keeps one request
@@ -50,12 +70,12 @@ export async function autoAddStudents(
     mailboxes: MailboxApi = migaduMailboxApi()
 ): Promise<AutoAddResult> {
     const nonEmpty = csvText
-        .split(/\r?\n/)
+        .split(/\r\n|\n|\r/)
         .map((line, index) => ({ line, number: index + 1 }))
         .filter(({ line }) => line.trim().length > 0);
 
     const first = nonEmpty[0];
-    const hasHeader = first ? parseCsvLine(first.line).join(",").toLowerCase() === EXPECTED_HEADER : false;
+    const hasHeader = first ? splitFields(first.line).join(",").toLowerCase() === EXPECTED_HEADER : false;
     const dataRows = hasHeader ? nonEmpty.slice(1) : nonEmpty;
 
     if (dataRows.length === 0) {
@@ -72,19 +92,42 @@ export async function autoAddStudents(
     const usedEmails = new Set<string>();
 
     for (const { line, number } of dataRows) {
-        const [nameRaw, admissionRaw] = parseCsvLine(line);
-        const name = (nameRaw ?? "").replace(/\s+/g, " ").trim();
-        const admissionId = (admissionRaw ?? "").trim();
-        const row: AutoAddRow = { line: number, name, admissionId, email: null, status: "failed", reason: null };
+        const fields = splitFields(line);
+        const name = (fields[0] ?? "").replace(/\s+/g, " ").trim();
+        const admissionId = (fields[1] ?? "").trim();
+        const row: AutoAddRow = { line: number, name, admissionId, source: line.trim(), email: null, status: "failed", reason: null };
         rows.push(row);
+
+        if (fields.length < 2) {
+            row.reason = COMMA_RULE;
+            continue;
+        }
+
+        if (fields.length > 2) {
+            row.reason = "Use only one comma, between the name and the Application No";
+            continue;
+        }
 
         if (!name) {
             row.reason = "Missing student name";
             continue;
         }
 
+        if (!NAME_PATTERN.test(name)) {
+            row.reason = NAME_MESSAGE;
+            continue;
+        }
+
         if (!admissionId) {
             row.reason = "Missing Application No";
+            continue;
+        }
+
+        // An Application No is a whole positive number (every existing one is):
+        // digits only, not all zeros. Anything else is a typo or a misplaced
+        // word - never create a mailbox from it.
+        if (!/^\d+$/.test(admissionId) || !/[1-9]/.test(admissionId)) {
+            row.reason = `Application No must be a whole number, digits only (got "${admissionId}")`;
             continue;
         }
 
@@ -117,17 +160,17 @@ export async function autoAddStudents(
                 continue;
             }
 
-            const localPart = await freeLocalPart(base, mailboxes, usedEmails);
+            const created = await createMailbox(base, name, mailboxes, usedEmails);
 
-            if (!localPart) {
+            if (!created) {
                 row.reason = `No free address found for ${base} (tried ${MAX_CANDIDATES})`;
                 continue;
             }
 
+            const { localPart, migaduOnly } = created;
+
             const email = `${localPart}@${mailboxes.domain}`;
             row.email = email;
-
-            await mailboxes.create(localPart, name, DEFAULT_PASSWORD);
             usedEmails.add(localPart);
 
             try {
@@ -151,7 +194,14 @@ export async function autoAddStudents(
             }
 
             row.status = "added";
-            row.reason = localPart === base ? null : `${base} was taken, so a number was added after the name`;
+            // An address that is in Migadu but not in our student list was made by
+            // hand earlier - it may even be this student's own mailbox, so say so.
+            row.reason =
+                localPart === base
+                    ? null
+                    : migaduOnly.length > 0
+                      ? `${migaduOnly[0]} already exists in Migadu but is not in our student list, so a number was added after the name. If that is this student's own mailbox, tell the owner.`
+                      : `${base} was taken, so a number was added after the name`;
         } catch (error) {
             console.error("Auto-add failed for a line", { line: number }, error);
             row.email = null;
@@ -167,9 +217,22 @@ export async function autoAddStudents(
     };
 }
 
-// First of base, base1, base2 ... that is free in this import, in our
-// students table and in Migadu. null when none of the candidates is free.
-async function freeLocalPart(base: string, mailboxes: MailboxApi, usedInThisImport: Set<string>): Promise<string | null> {
+// Creates the mailbox on the first of base, base1, base2 ... that is free in this
+// import, in our students table and in Migadu, and returns its local part plus
+// the addresses skipped because they exist in Migadu only (made by hand earlier,
+// not in our students table); null when none of the candidates works.
+// One create per line, no retry here: the console retries a failed line ONCE
+// after all lines have been tried, as a new request, and that request looks the
+// addresses up again - so an address that was taken in the meantime (Migadu
+// answers it with a plain 400 "bad request") simply gets the next number.
+async function createMailbox(
+    base: string,
+    name: string,
+    mailboxes: MailboxApi,
+    usedInThisImport: Set<string>
+): Promise<{ localPart: string; migaduOnly: string[] } | null> {
+    const migaduOnly: string[] = [];
+
     for (const candidate of emailCandidates(base, MAX_CANDIDATES)) {
         if (usedInThisImport.has(candidate)) {
             continue;
@@ -182,10 +245,12 @@ async function freeLocalPart(base: string, mailboxes: MailboxApi, usedInThisImpo
         }
 
         if (await mailboxes.exists(candidate)) {
+            migaduOnly.push(candidate);
             continue;
         }
 
-        return candidate;
+        await mailboxes.create(candidate, name, DEFAULT_PASSWORD);
+        return { localPart: candidate, migaduOnly };
     }
 
     return null;

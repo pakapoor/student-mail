@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 39. |
+| Next step number | 40. |
 
 ### Step index
 
@@ -44,6 +44,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 36 | Reason line on rejected rows in the list | deployed 2026-10-08 |
 | 37 | Add students from name + Application No, mailbox created automatically | deployed 2026-10-08 |
 | 38 | Add students: simpler hint text | deployed 2026-10-08 |
+| 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -165,6 +166,98 @@ Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
 
+## Step 39 — Search students and Add students as two buttons, two dialogs; clerk-friendly input
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** The single "Find/Add
+Students" button in the console header became two buttons, **Search students** and **Add students**. Each
+opens its own dialog (the same `ManageStudents` component, now taking `mode: "search" | "add"`), titled
+"Search students" or "Add students", and the tab switch inside the dialog is gone. The roster and the add
+flow behave exactly as before; only the way in changed.
+
+- `frontend/src/Console.tsx`: one state (`studentsDialog`: null, "search" or "add") replaces the on/off flag;
+  two header buttons. When a college has no students the console still opens a student dialog on its own
+  at first load, now the **Add** one (the owner said such a college will not really happen).
+- `frontend/src/ManageStudents.tsx`: `mode` prop, `rosterTab` derived from it, tab buttons removed, dialog
+  title follows the mode. In Add mode the roster is not loaded (as before when the Add tab was open).
+- `frontend/src/App.css`: the unused `.view-switch` rules removed.
+- **Clerk-friendly input** (same step, the users are clerks): the Add students hint says "Type one student
+  per line: the name, then a **comma**, then the Application No. The comma is required." with the example
+  `Jane Doe,10012345`. The comma is **required**: a space or a tab instead of it is flagged, never guessed
+  at (a wrong guess would create a real mailbox for the wrong name); spaces around the comma and a quoted
+  name containing a comma are fine; the header line is optional. The Application No must be a **whole
+  positive number, digits only** (no letters, decimals, signs, spaces or all zeros; leading zeros are fine,
+  every existing one is 5 to 8 digits). A line like `KHAN, ALI 32299` (surname, comma, first name) is
+  refused, not turned into a mailbox for the wrong name.
+- **Line format, exactly** (box and server alike): one line per student, **exactly one comma**, with the name
+  before it and the whole-number Application No after it. The name can be **any number of words** (four or
+  five are fine, e.g. `Bankim chandar das chatterjee`); the address uses the first and last word. Spaces
+  before the name, before or after the comma, and after the number are ignored (including non-breaking
+  spaces), and lines may end Windows-style (CRLF), Unix-style (LF) or old Mac style (CR), mixed or not.
+  There is no quote handling: `"Khan, Ali",20` has two commas and is refused.
+- **Name rule**: a name is words of **letters only (A-Z, a-z) separated by spaces**, for first, middle and
+  last names alike (upper or lower case); digits, dots, hyphens, apostrophes, accents and other symbols
+  are refused, in the box and on the server. Checked against prod on 2026-10-08 before adding it: all 2,267
+  real students already have names that are letters and single spaces (94 are a single word), so no real
+  name is blocked. If a genuine name ever needs a hyphen or an accent, the pattern in
+  `studentLines.ts` and `autoAdd.ts` has to change in both places.
+- **Checked in the box before sending** (`frontend/src/studentLines.ts`, same rules as the server): as the
+  clerk types, every bad line is listed in red under the box with its line number, the text as typed and
+  what is wrong (no comma, more than one comma, name or number missing, name with anything but letters and spaces, number not a whole positive number,
+  more than 10 lines), the box gets a red border, and **the Add button stays off until every line is
+  right** (one bad line among ten is enough). The server still re-checks everything.
+- **Live results with one retry at the end** (same step): pressing Add moves the lines out of the box into a
+  result table straight away, one row per student showing only the **name and Application No** (no email
+  yet). Lines are sent **one at a time, in order** (one request per line to `POST /api/students/auto-add`,
+  so each request takes about a second and none can approach nginx's 60 s limit). Each row is **Waiting**,
+  then **Trying to add...** (spinner), then **Added** (the email appears only now), **Skipped** or
+  **Failed** with the reason, updated as each answer arrives. When every line has been tried once, the
+  lines that **failed get exactly one automatic retry**, shown as **Retrying...** and then updated to Added
+  or Failed. A retry is a new request, so it looks the addresses up again: an address that was taken in
+  the meantime gets the next number (the `x.y1` "new email id"); a line that failed for another reason
+  tries the same address again. There is no other retry (the server makes one create per line) and no
+  Retry button; lines still failing after the retry go back into the box with a note, to fix and add
+  again. Closing the dialog stops the remaining lines from being sent. **Copy data** copies the added rows as a CSV
+  (header `Student Name,College,Application No,Email`, then one comma-separated line per student, with the
+  college the operator is logged into; no password).
+- **Taken addresses** (same step): before creating, an address is looked up in Migadu itself (so mailboxes
+  made by hand earlier, not in our `students` table, are found), in our table, and among the lines of the
+  paste; the first free one of `x.y`, `x.y1`, `x.y2` ... is used. Migadu answers a create for an address that
+  exists with a plain `400 "bad request"` (checked 2026-10-08), the same as other bad requests, so the
+  reason cannot be told apart; the one automatic retry above covers it. Known gap: if a create timed out
+  after Migadu had actually made the mailbox, the retry makes a second one (`x.y1`) and the first
+  (`x.y`) is left over. When the skipped address exists in Migadu but not in our list, the row says so
+  ("... already exists in Migadu but is not in our student list ... If that is this student's own mailbox,
+  tell the owner"), because a clerk may be adding someone whose mailbox was made by hand.
+- The result panel no longer says anything about the mailbox password (clerks should not see it); the hint
+  does not mention it either. The password itself is unchanged (`password`).
+- Tests: `backend/tests/autoAdd.test.mjs` grew from 18 to 34 tests (comma forms, space and tab flagged, more
+  than one comma, surname-comma lines, letters / decimals / signs / zero refused, leading zeros accepted,
+  header, `source` kept, taken addresses in Migadu only / in our table only, one create per request, and a
+  second request for the same line takes the next number). New `backend/tests/studentLines.test.mjs` (15 tests: empty box, good lines, space
+  and tab flagged with line numbers, each kind of error, the limit, the line text, one bad line among ten,
+  and a parity test that the box and the server agree on which lines are wrong). Whole backend suite
+  **191 of 191**; backend and frontend type checks and the frontend build pass. Not tried in a browser by
+  the assistant; the owner checks both buttons, the red error list and the live result rows (the row
+  updates and the retry pass have no automated test: the frontend has no component test setup).
+- Deploy: `git pull --ff-only`, `npm run build` in `frontend/`, and a **backend restart** (the line parsing
+  is backend code; sessions are in PostgreSQL so nobody is logged out). Rollback: `git revert`, restart,
+  rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Behaviour | Low | Same component and same flows; the entry point and dialog title changed, and a line is now also accepted with a space or tab between name and number. |
+| Wrong mailbox from sloppy input | Lower than before | The comma is required and the Application No must be a whole positive number, so a space-separated line, a surname-comma line or a misplaced word is refused instead of creating a mailbox. The box flags it in red and keeps Add off before anything is sent, and the server re-checks. |
+| Box and server rules drifting apart | Low | The same rules live in two places (`studentLines.ts`, `autoAdd.ts`); a parity test fails if they disagree. The server is the authority. |
+| Staff habits | Low | The old "Find/Add Students" button is gone; staff look for one of two clearly named buttons. |
+| Header space | Low | One more button in the header bar; it wraps on narrow windows like the others. |
+| Data and backend | Low | No schema or API change; one backend file changed (line parsing), so the backend restarts on deploy and logins and live updates reconnect. |
+| Open tabs on deploy | Low | Tabs with no thread open reload onto the new build; a tab with a thread open keeps the old header until closed. |
+| Rollback | Very low | `git revert`, rebuild the frontend. |
+
+Overall risk: **low**.
+
 ## Step 38 — Add students: simpler hint text
 
 **Status: DEPLOYED 2026-10-08** at `120e215` (user authorized). Frontend only: `git pull --ff-only` and
@@ -216,7 +309,7 @@ route and `importStudents` are left in place, now unused by the UI).
   4.1 s; lines are deliberately handled one after another because Migadu publishes no rate limits). `students.ts`: `parseCsvLine` and `splitName`
   exported. `server.ts`: `POST /api/students/auto-add`.
 - Frontend: Add students tab takes two columns and shows counts plus a table (added / skipped / failed with
-  the reason, the email created, Copy new emails); failed lines stay in the box for a retry.
+  the reason, the email created, Copy data); failed lines stay in the box for a retry.
   `types.ts`, `api.ts`, `ManageStudents.tsx`, `App.css`.
 - Assumptions made without an answer from the owner: any logged-in staff member can use it; a duplicate
   Application No is skipped (not an error); lines are handled one after another.
@@ -236,7 +329,7 @@ route and `importStudents` are left in place, now unused by the UI).
   after taken names in Migadu or in our table, skipped Application Nos, per-line failures that do not stop
   the next line, mailbox removed again when saving fails (and a failed removal still reports the failure),
   all 50 candidate addresses taken, header optional in any case, CRLF and quoted names, tidied spaces,
-  a name with no letters, counts add up, 10-line limit) and `backend/tests/migadu.test.mjs` (9 tests, fake
+  names with symbols refused, counts add up, 10-line limit) and `backend/tests/migadu.test.mjs` (9 tests, fake
   fetch: missing credentials, default and custom domain, 200/404/other on lookup, Basic auth and URL,
   create body, refusal message without credentials, no-JSON answer, delete incl. 404, URL encoding).
   Whole backend suite **160 of 160** (none skipped, database tests included); backend and frontend type
@@ -253,6 +346,7 @@ route and `importStudents` are left in place, now unused by the UI).
 | Weak password | Medium | `password` is the mailbox password for every new student, reachable over IMAP (the owner's rule). |
 | Data and database | Low | Same INSERT the old import used; no schema change. Duplicates are skipped by Application No and address. |
 | Concurrency | Low | Two staff adding the same name at once could pick the same address; the second Migadu create fails and that line is reported failed. |
+| Retry after an interrupted request | Medium | A failed line gets one automatic retry at the end of the results (a new request that looks the addresses up again). If a call timed out after Migadu had already created the mailbox, the retry makes `x.y1` and leaves an orphan `x.y`. A safeguard (look the address up before retrying) is possible but not built. |
 | Slow requests | Low | Up to 10 lines at about 0.8 s each (about 8 s); nginx cuts a request at 60 s, so there is room even if Migadu is several times slower. Not parallelised on purpose: no published Migadu rate limits and a flag on the only account would be costly. |
 | Existing import | Very low | Old import route and function untouched, now unused by the UI. |
 | Rollback | Low | `git revert`, restart, rebuild; created mailboxes remain. |

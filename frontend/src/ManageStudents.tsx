@@ -1,16 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shortDateTime } from "./format";
+import { checkStudentLines } from "./studentLines";
 import { autoAddStudents, fetchAdminStudents, fetchColleges, fetchStudents } from "./api";
 import type {
     AdminStudentPage,
     AdminStudentRow,
-    AutoAddResult,
     College,
     RosterFilter,
     StudentRow,
 } from "./types";
 
+export type StudentsMode = "search" | "add";
+
+// One line of the Add students result. The email only exists once the student
+// has really been added; until then the row shows just the name and Application No.
+interface AddRow {
+    text: string;
+    name: string;
+    admissionId: string;
+    status: "waiting" | "trying" | "retrying" | "added" | "skipped" | "failed";
+    email: string | null;
+    reason: string | null;
+}
+
 interface Props {
+    mode: StudentsMode;
     collegeName: string;
     onClose: () => void;
     onImported: () => void;
@@ -170,18 +184,22 @@ function displayName(s: AdminStudentRow): string {
     return combined || s.name || "(no name)";
 }
 
-export default function ManageStudents({ collegeName, onClose, onImported }: Props) {
+export default function ManageStudents({ mode, collegeName, onClose, onImported }: Props) {
     // Import section - unrelated to the roster below, kept from the original
     // per-mailbox modal. It imports into the college picked at login.
     const [ownStudents, setOwnStudents] = useState<StudentRow[]>([]);
     const [csv, setCsv] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
-    const [result, setResult] = useState<AutoAddResult | null>(null);
+    const [addRows, setAddRows] = useState<AddRow[] | null>(null);
+    const mounted = useRef(true);
     const [copied, setCopied] = useState(false);
+    // Mistakes in the box are shown as the clerk types; Add stays off until none are left.
+    const lineCheck = useMemo(() => checkStudentLines(csv), [csv]);
 
     // Read-only roster of this operator's mailbox, every college (Step 30).
-    const [rosterTab, setRosterTab] = useState<RosterTab>("students");
+    // Search and Add are two separate dialogs (two buttons in the console header).
+    const rosterTab: RosterTab = mode === "add" ? "add" : "students";
     const [search, setSearch] = useState("");
     // College button pressed (null = all colleges), and the colleges to show.
     const [colleges, setColleges] = useState<College[]>([]);
@@ -200,6 +218,14 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
 
     const listRef = useRef<HTMLDivElement>(null);
     const dialogRef = useRef<HTMLDialogElement>(null);
+
+    // Stops an add in progress from carrying on after the dialog is closed.
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
 
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -286,41 +312,110 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
         }
     }
 
-    async function handleImport() {
-        setImportError(null);
-        setResult(null);
-        setSubmitting(true);
+    // One pass over the given lines, one at a time in order (one request per
+    // line). Each row shows `busy` while its request runs, then Added with the
+    // email, Skipped, or Failed with the reason, as soon as the answer arrives.
+    // Returns the lines that failed.
+    async function runPass(items: { index: number; text: string }[], busy: "trying" | "retrying") {
+        const failed: { index: number; text: string }[] = [];
 
-        try {
-            const res = await autoAddStudents(csv);
-            setResult(res);
-            // Failed lines stay in the box so only those are retried; lines
-            // that were added or skipped are done.
-            setCsv(
-                res.rows
-                    .filter((r) => r.status === "failed")
-                    .map((r) => `${r.name},${r.admissionId}`)
-                    .join("\n")
+        for (const item of items) {
+            if (!mounted.current) {
+                return failed;
+            }
+
+            setAddRows((prev) =>
+                prev && prev.map((r, i) => (i === item.index ? { ...r, status: busy, reason: busy === "trying" ? null : r.reason } : r))
             );
-            fetchStudents().then(setOwnStudents).catch(() => {});
-            loadRoster(debouncedSearch, statusFilter, collegeFilter);
-            onImported();
-        } catch (err) {
-            setImportError(err instanceof Error ? err.message : "Adding students failed");
-        } finally {
-            setSubmitting(false);
+
+            let outcome: Pick<AddRow, "status" | "email" | "reason">;
+
+            try {
+                const res = await autoAddStudents(item.text);
+                const row = res.rows[0];
+                outcome = row
+                    ? { status: row.status, email: row.status === "added" ? row.email : null, reason: row.reason }
+                    : { status: "failed", email: null, reason: "The server sent no answer for this line" };
+            } catch (err) {
+                outcome = {
+                    status: "failed",
+                    email: null,
+                    reason: err instanceof Error ? err.message : "Could not reach the server",
+                };
+            }
+
+            if (!mounted.current) {
+                return failed;
+            }
+
+            if (outcome.status === "failed") {
+                failed.push(item);
+            }
+
+            setAddRows((prev) => prev && prev.map((r, i) => (i === item.index ? { ...r, ...outcome } : r)));
         }
+
+        return failed;
     }
 
-    async function copyNewEmails() {
-        const emails = (result?.rows ?? []).filter((r) => r.status === "added" && r.email).map((r) => r.email);
+    // Every line once; then the lines that failed get ONE retry, at the end,
+    // shown as "Retrying"; a retry is a new request, so an address taken in the
+    // meantime gets the next number. Lines still failing go back into the box.
+    async function addLines(rows: AddRow[]) {
+        setSubmitting(true);
+
+        let failed = await runPass(rows.map((r, index) => ({ index, text: r.text })), "trying");
+
+        if (failed.length > 0 && mounted.current) {
+            failed = await runPass(failed, "retrying");
+        }
+
+        if (!mounted.current) {
+            return;
+        }
+
+        setCsv(failed.map((f) => f.text).join("\n"));
+        setSubmitting(false);
+        fetchStudents().then(setOwnStudents).catch(() => {});
+        loadRoster(debouncedSearch, statusFilter, collegeFilter);
+        onImported();
+    }
+
+    function handleImport() {
+        if (lineCheck.errors.length > 0 || lineCheck.lines.length === 0) {
+            return;
+        }
+
+        setImportError(null);
+        setCopied(false);
+        const rows: AddRow[] = lineCheck.lines.map((l) => ({
+            text: l.text,
+            name: l.name,
+            admissionId: l.admissionId,
+            status: "waiting",
+            email: null,
+            reason: null,
+        }));
+        setAddRows(rows);
+        setCsv("");
+        void addLines(rows);
+    }
+
+    // The added students as a CSV (header, then one line per student, comma
+    // separated): Student Name,College,Application No,Email. Names are letters
+    // and spaces only (and college names have no commas), so no value ever needs
+    // quoting. The mailbox password is deliberately not included.
+    async function copyData() {
+        const lines = (addRows ?? [])
+            .filter((r) => r.status === "added" && r.email)
+            .map((r) => `${r.name},${collegeName},${r.admissionId},${r.email}`);
 
         try {
-            await navigator.clipboard.writeText(emails.join("\n"));
+            await navigator.clipboard.writeText(["Student Name,College,Application No,Email", ...lines].join("\n"));
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
         } catch {
-            // Clipboard blocked - the emails are still on screen.
+            // Clipboard blocked - the data is still on screen.
         }
     }
 
@@ -352,37 +447,17 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="modal-header">
-                    <h2 id="manage-students-title">Students</h2>
+                    <h2 id="manage-students-title">{mode === "add" ? "Add students" : "Search students"}</h2>
                     <button className="modal-close" onClick={onClose} aria-label="Close">
                         &times;
                     </button>
                 </div>
 
-                {/* Same pill buttons as the console's filters. */}
-                <div className="filter-buttons view-switch" role="group" aria-label="Student views">
-                    {(
-                        [
-                            ["students", "Search students"],
-                            ["add", "Add students"],
-                        ] as const
-                    ).map(([tab, label]) => (
-                        <button
-                            key={tab}
-                            type="button"
-                            aria-pressed={rosterTab === tab}
-                            className={rosterTab === tab ? "filter-chip active" : "filter-chip"}
-                            onClick={() => setRosterTab(tab)}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-
                 {rosterTab === "add" && (
                     <div className="import-section">
                         <h3>Add to {collegeName} <span className="hint-text">(the college you selected at login)</span></h3>
-                        <p className="hint-text" id="import-help">Paste one student per line: name, then Application No. You can include the header.</p>
-                        <div className="import-example"><code>Student Name,Application No</code></div>
+                        <p className="hint-text" id="import-help">Type one student per line: the name, then a <strong>comma</strong>, then the Application No. The comma is required, and the name can have letters and spaces only. Example:</p>
+                        <div className="import-example"><code>Jane Doe,10012345</code></div>
                         <p className="hint-text">
                             Set automatically: the email (first word.last word@myemailinfo.com, with a number added after the name if taken) and the current year. Up to <strong>10 students at a time</strong>.
                         </p>
@@ -399,25 +474,47 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                             value={csv}
                             onChange={(e) => setCsv(e.target.value)}
                             disabled={submitting}
+                            aria-invalid={lineCheck.errors.length > 0}
                         />
+
+                        {lineCheck.errors.length > 0 && (
+                            <div className="line-errors" role="alert">
+                                <p>Fix these before adding. The Add button stays off until every line is right.</p>
+                                <ul>
+                                    {lineCheck.errors.map((e, index) => (
+                                        <li key={index}>
+                                            {e.line > 0 && <span className="line-errors-text">Line {e.line}: {e.text}</span>}
+                                            <span className="line-errors-why">{e.message}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
 
                         {importError && <p className="error" role="alert">{importError}</p>}
 
                         <button
                             className="send-button"
                             onClick={handleImport}
-                            disabled={submitting || csv.trim().length === 0}
+                            disabled={submitting || csv.trim().length === 0 || lineCheck.count === 0 || lineCheck.errors.length > 0}
                         >
                             {submitting && <span className="spinner" />}
                             {submitting ? "Creating mailboxes..." : "Create mailboxes and add"}
                         </button>
 
-                        {result && (
+                        {addRows && (
                             <div className="import-result" role="status">
                                 <p className="autoadd-summary">
-                                    <span className="autoadd-pill ok">{result.added} added</span>
-                                    {result.skipped > 0 && <span className="autoadd-pill warn">{result.skipped} skipped</span>}
-                                    {result.failed > 0 && <span className="autoadd-pill bad">{result.failed} failed</span>}
+                                    <span className="autoadd-pill ok">{addRows.filter((r) => r.status === "added").length} added</span>
+                                    {addRows.some((r) => ["waiting", "trying", "retrying"].includes(r.status)) && (
+                                        <span className="autoadd-pill busy">{addRows.filter((r) => ["waiting", "trying", "retrying"].includes(r.status)).length} in progress</span>
+                                    )}
+                                    {addRows.some((r) => r.status === "skipped") && (
+                                        <span className="autoadd-pill warn">{addRows.filter((r) => r.status === "skipped").length} skipped</span>
+                                    )}
+                                    {addRows.some((r) => r.status === "failed") && (
+                                        <span className="autoadd-pill bad">{addRows.filter((r) => r.status === "failed").length} failed</span>
+                                    )}
                                 </p>
                                 <div className="autoadd-table-wrap">
                                     <table className="autoadd-table">
@@ -425,18 +522,27 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                                             <tr>
                                                 <th>Student</th>
                                                 <th>App No</th>
-                                                <th>Email created</th>
+                                                <th>Email</th>
                                                 <th>Result</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {result.rows.map((r) => (
-                                                <tr key={r.line}>
-                                                    <td className="autoadd-name">{r.name || "—"}</td>
-                                                    <td>{r.admissionId || "—"}</td>
+                                            {addRows.map((r, index) => (
+                                                <tr key={index}>
+                                                    <td className="autoadd-name">{r.name}</td>
+                                                    <td>{r.admissionId}</td>
                                                     <td className="autoadd-email">{r.status === "added" ? r.email : "—"}</td>
                                                     <td>
-                                                        <span className={`autoadd-tag ${r.status}`}>{r.status.toUpperCase()}</span>
+                                                        <span className={`autoadd-tag ${r.status}`}>
+                                                            {(r.status === "trying" || r.status === "retrying") && <span className="spinner" />}
+                                                            {r.status === "waiting"
+                                                                ? "WAITING"
+                                                                : r.status === "trying"
+                                                                  ? "TRYING TO ADD…"
+                                                                  : r.status === "retrying"
+                                                                    ? "RETRYING…"
+                                                                    : r.status.toUpperCase()}
+                                                        </span>
                                                         {r.reason && <span className="autoadd-why">{r.reason}</span>}
                                                     </td>
                                                 </tr>
@@ -444,17 +550,16 @@ export default function ManageStudents({ collegeName, onClose, onImported }: Pro
                                         </tbody>
                                     </table>
                                 </div>
-                                {result.added > 0 && (
-                                    <p className="hint-text">
-                                        <button type="button" className="autoadd-copy" onClick={copyNewEmails}>
-                                            {copied ? "Copied" : "Copy new emails"}
-                                        </button>{" "}
-                                        All new mailboxes use the password <code>password</code>.
-                                    </p>
-                                )}
-                                {result.failed > 0 && (
-                                    <p className="hint-text">Failed lines are back in the box above so you can fix them and try again.</p>
-                                )}
+                                <p className="hint-text">
+                                    {addRows.some((r) => r.status === "added") && (
+                                        <button type="button" className="autoadd-copy" onClick={copyData}>
+                                            {copied ? "Copied" : "Copy data"}
+                                        </button>
+                                    )}{" "}
+                                    {!submitting && addRows.some((r) => r.status === "failed") && (
+                                        <>Failed lines were tried twice and are back in the box above. Fix them and add again.</>
+                                    )}
+                                </p>
                             </div>
                         )}
 

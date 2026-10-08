@@ -134,6 +134,8 @@ export interface AutoAddRow {
     line: number;
     name: string;
     admissionId: string;
+    // The line as pasted, so a failed line can go back in the box to be fixed.
+    source: string;
     email: string | null;
     status: "added" | "skipped" | "failed";
     reason: string | null;
