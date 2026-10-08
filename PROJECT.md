@@ -11,8 +11,8 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 38 (`120e215`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 39 (`2933728`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
@@ -44,7 +44,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 36 | Reason line on rejected rows in the list | deployed 2026-10-08 |
 | 37 | Add students from name + Application No, mailbox created automatically | deployed 2026-10-08 |
 | 38 | Add students: simpler hint text | deployed 2026-10-08 |
-| 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | checked in 2026-10-08 |
+| 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | deployed 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -168,7 +168,14 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 39 — Search students and Add students as two buttons, two dialogs; clerk-friendly input
 
-**Status: CHECKED IN 2026-10-08, deploy record follows.** The single "Find/Add
+**Status: DEPLOYED 2026-10-08 07:28 UTC** at `2933728` (user authorized). Deploy was `git pull --ff-only`,
+`npm run build` in `frontend/` (new bundle `index-BZLruZRy.js`), then a restart of `student-mail.service`
+(backend code changed); no backup and no migration, because there is no database change, and the Migadu
+settings were already in prod's `.env`. Verified: service and nginx active, the page serves the new bundle,
+`/api/threads` and `/api/students/auto-add` both answer 401 without a login (so the route exists), the
+live-update stream reconnected at once (sessions are in PostgreSQL, nobody logged out), sync passes "no new
+messages", the only journal warning is the normal stop (status 143). The assistant did not add a student on
+prod, so no mailbox was created there; the first real add by staff is the live test. The single "Find/Add
 Students" button in the console header became two buttons, **Search students** and **Add students**. Each
 opens its own dialog (the same `ManageStudents` component, now taking `mode: "search" | "add"`), titled
 "Search students" or "Add students", and the tab switch inside the dialog is gone. The roster and the add
