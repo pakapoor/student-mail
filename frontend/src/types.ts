@@ -129,6 +129,23 @@ export interface RejectedRow {
     reason: string;
 }
 
+// "Add students" (name + Application No): one row per pasted line.
+export interface AutoAddRow {
+    line: number;
+    name: string;
+    admissionId: string;
+    email: string | null;
+    status: "added" | "skipped" | "failed";
+    reason: string | null;
+}
+
+export interface AutoAddResult {
+    added: number;
+    skipped: number;
+    failed: number;
+    rows: AutoAddRow[];
+}
+
 export interface ImportResult {
     imported: number;
     skipped: number;

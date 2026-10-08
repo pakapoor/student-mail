@@ -2,6 +2,7 @@ import type {
     College,
     Session,
     AdminStudentPage,
+    AutoAddResult,
     ImportResult,
     RosterFilter,
     StatusFilter,
@@ -324,6 +325,23 @@ export async function fetchStudents(): Promise<StudentRow[]> {
     }
 
     return res.json();
+}
+
+export async function autoAddStudents(csv: string): Promise<AutoAddResult> {
+    const res = await apiFetch(`${API_BASE}/api/students/auto-add`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv }),
+    });
+
+    const payload = await res.json();
+
+    if (!res.ok) {
+        throw new Error(payload.error || `Adding students failed (${res.status})`);
+    }
+
+    return payload;
 }
 
 export async function importStudents(csv: string): Promise<ImportResult> {

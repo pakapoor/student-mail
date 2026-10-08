@@ -68,7 +68,7 @@ export async function fetchStudents(
     return result.rows;
 }
 
-function splitName(name: string | null): { first: string | null; last: string | null } {
+export function splitName(name: string | null): { first: string | null; last: string | null } {
     if (!name) {
         return { first: null, last: null };
     }
@@ -93,7 +93,7 @@ function splitName(name: string | null): { first: string | null; last: string | 
     };
 }
 
-function parseCsvLine(line: string): string[] {
+export function parseCsvLine(line: string): string[] {
     const fields: string[] = [];
     let current = "";
     let inQuotes = false;

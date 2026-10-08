@@ -742,6 +742,26 @@
     color: #b00020;
 }
 
+/* Add students result (name + Application No flow): counts, then one row per line. */
+.autoadd-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.autoadd-pill { padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 13px; }
+.autoadd-pill.ok { background: var(--ok-soft); color: var(--ok); }
+.autoadd-pill.warn { background: var(--warn-soft); color: var(--warn); }
+.autoadd-pill.bad { background: var(--bad-soft); color: var(--bad); }
+.autoadd-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.autoadd-table { border-collapse: collapse; width: 100%; min-width: 480px; font-size: 13px; }
+.autoadd-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); padding: 8px 10px; background: var(--page-bg); border-bottom: 1px solid var(--border); }
+.autoadd-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+.autoadd-table tr:last-child td { border-bottom: 0; }
+.autoadd-name { font-weight: 600; }
+.autoadd-email { font-family: ui-monospace, monospace; word-break: break-all; }
+.autoadd-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; }
+.autoadd-tag.added { background: var(--ok-soft); color: var(--ok); }
+.autoadd-tag.skipped { background: var(--warn-soft); color: var(--warn); }
+.autoadd-tag.failed { background: var(--bad-soft); color: var(--bad); }
+.autoadd-why { display: block; margin-top: 3px; font-size: 12px; color: var(--text-muted); }
+.autoadd-copy { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--accent); background: var(--card-bg); color: var(--accent); cursor: pointer; }
+
 .roster-list {
     list-style: none;
     margin: 0;

@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 37. |
+| Next step number | 38. |
 
 ### Step index
 
@@ -42,6 +42,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 34 | Flexible student search | deployed 2026-10-01 |
 | 35 | Login screen when signed out in another tab | deployed 2026-10-01 |
 | 36 | Reason line on rejected rows in the list | deployed 2026-10-08 |
+| 37 | Add students from name + Application No, mailbox created automatically | checked in 2026-10-08, not deployed |
 
 ## Operating prod (runbook)
 
@@ -162,6 +163,70 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 37 — Add students from a name and Application No (Migadu mailbox created automatically)
+
+**Status: CHECKED IN 2026-10-08, not deployed yet (the owner says when).** Client request: staff paste only
+`Student Name,Application No`; the console creates the Migadu mailbox and the student record and shows the
+new emails. Replaces the old five-column paste in the Add students tab (the old `/api/students/import`
+route and `importStudents` are left in place, now unused by the UI).
+
+- Email rule (owner's): first word + "." + last word of the name, lowercase, plain a-z/0-9 (accents folded,
+  other symbols dropped); one-word name = that word; if the address exists in Migadu or in `students`, a
+  number is added after the name (`x.y1`, `x.y2` ...). Password is `password`, year is the current UTC year.
+- `backend/src/migadu.ts` (new): Migadu API client (exists / create / remove), Basic auth with
+  `MIGADU_ADMIN_EMAIL` + `MIGADU_API_KEY` (both already set in prod `.env`; `MIGADU_DOMAIN` optional,
+  default `myemailinfo.com`). 15 s timeout per call. Earlier note about a "mailbox limit for unverified
+  accounts" 403 no longer applies: a mailbox was created through the API on 2026-10-08.
+- `backend/src/studentEmail.ts` (new): the address rule. `backend/src/autoAdd.ts` (new): per line, in
+  order: skip if the Application No is already used in this college (or twice in the paste), find a free
+  address, create the mailbox, save the student; if saving fails the mailbox is removed again. A line that
+  fails touches nothing else. Max 10 lines per request (measured on 2026-10-08: about 0.8 s per line, 5 lines in
+  4.1 s; lines are deliberately handled one after another because Migadu publishes no rate limits). `students.ts`: `parseCsvLine` and `splitName`
+  exported. `server.ts`: `POST /api/students/auto-add`.
+- Frontend: Add students tab takes two columns and shows counts plus a table (added / skipped / failed with
+  the reason, the email created, Copy new emails); failed lines stay in the box for a retry.
+  `types.ts`, `api.ts`, `ManageStudents.tsx`, `App.css`.
+- Assumptions made without an answer from the owner: any logged-in staff member can use it; a duplicate
+  Application No is skipped (not an error); lines are handled one after another.
+- Not done: forwarding to the central mailbox is not set (the Migadu API shows an empty forwarding list for
+  existing students too); the console reads the student's own mailbox on search regardless.
+- **Tried for real on 2026-10-08** (script on the backend code, local dev database, real Migadu account): the
+  paste `TEST ZETA,990001 / TEST ZETA,990002 / TEST ZETA OTHER,990001 / TEST,` gave `test.zeta@` and
+  `test.zeta1@myemailinfo.com` (second one with the "number added after the name" note), one skip (repeated
+  Application No) and one failure (missing Application No). Both Migadu mailboxes were active and an IMAP
+  login with `password` worked; the two local rows had first name TEST, last name ZETA, college 3, central
+  `central.ksma@`, year 2026. Those two test mailboxes (`test.zeta`, `test.zeta1`) and the two local
+  student rows (Application Nos 990001, 990002) were left in place; remove them in Migadu and locally if
+  not wanted. The screen itself was opened in a browser by the owner, not the assistant.
+- Local dev servers: backend `cd backend && npx tsx src/server.ts` (API on :3001), frontend
+  `cd frontend && npm run dev` (http://localhost:5173).
+- Tests: `backend/tests/autoAdd.test.mjs` (18 tests, fake database and fake Migadu: address rule, numbers
+  after taken names in Migadu or in our table, skipped Application Nos, per-line failures that do not stop
+  the next line, mailbox removed again when saving fails (and a failed removal still reports the failure),
+  all 50 candidate addresses taken, header optional in any case, CRLF and quoted names, tidied spaces,
+  a name with no letters, counts add up, 10-line limit) and `backend/tests/migadu.test.mjs` (9 tests, fake
+  fetch: missing credentials, default and custom domain, 200/404/other on lookup, Basic auth and URL,
+  create body, refusal message without credentials, no-JSON answer, delete incl. 404, URL encoding).
+  Whole backend suite **160 of 160** (none skipped, database tests included); backend and frontend type
+  checks and the frontend build pass.
+- Deploy needs a backend restart and a frontend rebuild; no database change. Rollback: `git revert`,
+  restart, rebuild. Mailboxes already created in Migadu stay (remove in Migadu if needed).
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Migadu mailboxes | Medium | Every added line creates a real mailbox that cannot be undone by the console (only a failed save removes it). A wrong name or Application No means a wrong mailbox to remove by hand. |
+| Who can use it | Medium | Any logged-in staff member can now create mailboxes. No extra permission was added. |
+| Weak password | Medium | `password` is the mailbox password for every new student, reachable over IMAP (the owner's rule). |
+| Data and database | Low | Same INSERT the old import used; no schema change. Duplicates are skipped by Application No and address. |
+| Concurrency | Low | Two staff adding the same name at once could pick the same address; the second Migadu create fails and that line is reported failed. |
+| Slow requests | Low | Up to 10 lines at about 0.8 s each (about 8 s); nginx cuts a request at 60 s, so there is room even if Migadu is several times slower. Not parallelised on purpose: no published Migadu rate limits and a flag on the only account would be costly. |
+| Existing import | Very low | Old import route and function untouched, now unused by the UI. |
+| Rollback | Low | `git revert`, restart, rebuild; created mailboxes remain. |
+
+Overall risk: **medium** (external side effects and no extra permission), code risk low.
 
 ## Step 36 — Reason line on rejected rows in the message list
 

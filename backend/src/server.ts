@@ -37,6 +37,7 @@ import {
     registerCentralMailbox,
 } from "./centralMailboxes.js";
 import { fetchStudents, importStudents } from "./students.js";
+import { autoAddStudents, AutoAddInputError } from "./autoAdd.js";
 import {
     ROSTER_FILTERS,
     searchAdminStudents,
@@ -196,6 +197,35 @@ app.post("/api/students/import", requireAuth, requireCollege, async (req, res) =
         res.locals.college.name
     );
     res.json(result);
+});
+
+// Add students from just Student Name,Application No: the server makes the
+// Migadu mailbox and the student record (see autoAdd.ts).
+app.post("/api/students/auto-add", requireAuth, requireCollege, async (req, res) => {
+    const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
+
+    if (!csv.trim()) {
+        res.status(400).json({ error: "Paste at least one line: Student Name,Application No" });
+        return;
+    }
+
+    try {
+        const result = await autoAddStudents(
+            csv,
+            res.locals.centralEmail,
+            res.locals.collegeId,
+            res.locals.college.name
+        );
+        res.json(result);
+    } catch (error) {
+        if (error instanceof AutoAddInputError) {
+            res.status(400).json({ error: error.message });
+            return;
+        }
+
+        console.error("Auto-add failed:", error);
+        res.status(500).json({ error: error instanceof Error ? error.message : "Adding students failed" });
+    }
 });
 
 // Admin roster (Students dialog) - read-only, scoped to the logged-in
