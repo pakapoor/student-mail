@@ -11,8 +11,8 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 40 (`8ad99a5`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 41 (`bd5d0d3`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
@@ -46,7 +46,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 38 | Add students: simpler hint text | deployed 2026-10-08 |
 | 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | deployed 2026-10-08 |
 | 40 | Add students: a repeated Application No is flagged in the box | deployed 2026-10-08 |
-| 41 | Students dialogs no longer close when the mouse leaves the card; clearer Add students hint | checked in 2026-10-08 |
+| 41 | Students dialogs no longer close when the mouse leaves the card; clearer Add students hint | deployed 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -170,8 +170,11 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 41 — Students dialogs no longer close when the mouse leaves the card
 
-**Status: CHECKED IN 2026-10-08, deploy record follows.** Frontend only
-(`frontend/src/ManageStudents.tsx`, `App.css`). During a client demo the Add students dialog disappeared (the page
+**Status: DEPLOYED 2026-10-08** at `bd5d0d3` (user authorized, "asap"). Frontend only: `git pull --ff-only`
+and `npm run build` in `frontend/` on prod (new bundle `index-p5lXeLTT.js`); the backend service was NOT
+restarted (still running since 07:28:30 UTC), so no logins or live-update streams were dropped. Verified:
+the page serves the new bundle, `/api/threads` without a login answers 401, service and nginx active. The
+owner had checked the UI locally first. Change (`frontend/src/ManageStudents.tsx`, `App.css`): During a client demo the Add students dialog disappeared (the page
 behind was fine). Cause: the dialog closed on any click on the dark area around it (`event.target ===
 event.currentTarget`), and the browser reports that click when the mouse is pressed inside the card and
 released outside (for example while selecting text in the result table), so the dialog and its results were
