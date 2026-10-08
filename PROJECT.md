@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 42. |
+| Next step number | 45. |
 
 ### Step index
 
@@ -47,6 +47,9 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | deployed 2026-10-08 |
 | 40 | Add students: a repeated Application No is flagged in the box | deployed 2026-10-08 |
 | 41 | Students dialogs no longer close when the mouse leaves the card; clearer Add students hint | deployed 2026-10-08 |
+| 42 | Add students: no reload while adding, plain error messages, audit log, adopt a lost-reply mailbox | checked in 2026-10-08 |
+| 43 | Migadu call times: audit log and a graph on the status page (migration 017) | checked in 2026-10-08 |
+| 44 | Add students: an Application No already used in the college is flagged before adding | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -167,6 +170,175 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 44 — Add students: an Application No already used in the college is flagged before adding
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** Before this, a number already used by a
+student of the college was only found after pressing Add (the row came back "Skipped, already used by
+NAME"), and in a paste of ten some lines could be added and others skipped. Now the box asks the server
+about the whole paste in **one request**, at two moments: when the clerk **leaves the box** (so a clash
+shows up early) and when **Add is pressed** (the button shows "Checking numbers..." for a moment). A used
+number is flagged in red like the other box errors, with the owner's name ("The Application No 30437 is
+already used by ZUNAIRA SAQI. Check the number.", "(a deleted student)" when that student was deleted: their
+number stays taken, as in the add flow), and nothing is created until it is fixed. Changing the number clears
+the flag (flags are keyed by the number). A line with another mistake shows that mistake first.
+
+- `backend/src/students.ts` `usedApplicationNumbers(collegeId, numbers)` and `POST /api/students/check-numbers`
+  (`server.ts`, logged-in staff of the college; the body is a list of at most 50 whole numbers, otherwise
+  400): one query on the existing unique (college, Application No) key; this college only; deleted students
+  count; answers `{ used: { number: { name, deleted } } }`.
+- `frontend/src/autoAddClient.ts` `postCheckNumbers` (via `api.ts`): advice only, so it **fails quietly**: any
+  problem (server error, HTML page, dropped connection, 8 s without an answer, odd answer) means "nothing
+  known" and adding goes ahead. `studentLines.ts`: `checkStudentLines(text, taken)` and
+  `applicationNumbers(text)`; `ManageStudents.tsx`: the `taken` state, the blur and Add look-ups.
+- The server still checks every number when adding (it can change between the look-up and Add: another clerk
+  adding the same number in that second), so this is advice, never the last word.
+- Tests: `backend/tests/usedNumbers.db.test.mjs` (4 tests against a throwaway PostgreSQL: owner names, this
+  college only, deleted students, repeats and the cap), 6 new in `studentLines.test.mjs` (flag with the
+  owner, deleted, not looked up / changed number, unknown owner, other mistakes first, `applicationNumbers`),
+  3 new in `autoAddClient.test.mjs` (the call, no numbers = no request, every kind of failure = nothing
+  known). Whole backend suite **242 of 242**; backend and frontend type checks and the frontend build pass.
+  Tried against the local database with real numbers (known ones answered with the owner, an unknown one
+  and another college's view answered nothing). The red display and the "Checking numbers" button have no
+  automated test (no frontend component test setup).
+- Deploy: `git pull --ff-only`, `npm run build` in `frontend/`, and a **backend restart** (new route); no
+  migration. Rollback: `git revert`, restart, rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Wrongly blocking an add | Low | Only a number the database really holds for this college (including deleted students) is flagged; the clerk corrects the number. A look-up that fails never blocks. |
+| Extra load | Very low | One small indexed query per blur or Add press, for the whole paste. |
+| Showing a student's name | Very low | Same college and same login as Search students. |
+| Stale answer | Low | A number taken a second after the look-up is still caught by the server when adding (shown as Skipped). |
+| Data and database | None | Read-only; no schema change. |
+| Rollback | Very low | `git revert`, restart, rebuild. |
+
+Overall risk: **very low**.
+
+## Step 43 — Migadu call times: audit log and a graph on the status page
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** The owner wants to watch how long the
+calls to Migadu take and, after a week or so, set the timeout from the real slowest calls (the 15 s and
+the later 20 s were not derived from data). **Needs migration `017_migadu_calls.sql`** (additive: one new
+table and index, safe to re-run, harmless to the old code) run as the app role **before** the new backend
+is started, after a fresh backup (runbook).
+
+- `backend/migrations/017_migadu_calls.sql` and `schema.sql`: table `migadu_calls` (`at`, `operation`
+  lookup / create / remove, `ms`, `outcome` ok / refused / server-error / timeout / network). It holds no
+  names, addresses or passwords. Rows older than 30 days are deleted (checked at most once an hour).
+- `backend/src/migadu.ts`: every call is timed (to the answer's headers) and reported through an optional
+  `onCall` hook; a 404 on a lookup or removal counts as ok. A recorder that throws never breaks a call.
+- `backend/src/migaduTiming.ts` (new): `recordMigaduCall` writes an `[audit]` log line
+  (`event: "migadu-call"`) and stores the row (fire and forget; a failure is logged and ignored);
+  `migaduTimingStatus` is registered as a status provider (`migadu`): the last 7 days as one point per
+  hour (calls, median, slowest, not-ok), the figures over the window (calls, median, 95th percentile,
+  slowest, not ok, timeouts), the five slowest calls, and the timeout in force. `autoAdd.ts` passes the
+  recorder when it makes the real client.
+- Status page (`MigaduTimingChart.tsx`, `StatusPage.tsx`, `api.ts`, `App.css`): a "Migadu call times" card:
+  a pill (No calls yet / All ok / N not ok / N timed out), a chart with one mark per hour (dot = median,
+  bar up to the slowest call, red cap when a call in that hour did not end ok, dashed line at the timeout
+  when it is within the chart's range, hover for details), the figures, and the slowest five calls.
+- Tried for real on 2026-10-08 against Migadu and the local database: two `TEST CHART` students gave 4
+  calls (lookup and create each, 0.2 to 0.7 s), median 0.49 s, none failed; the test mailboxes and local
+  rows were removed afterwards (the 4 timing rows were left, so the local chart has data).
+- Tests: `backend/tests/migaduTiming.db.test.mjs` (8 tests against a throwaway PostgreSQL: a call is
+  stored and logged with only time, event, operation, ms and outcome; recording never throws; pruning;
+  empty figures; median, 95th percentile, slowest, not-ok and timeouts; the 7-day window; hourly points;
+  slowest five) and `backend/tests/migadu.test.mjs` is now 16 tests (adds timing and outcome of every kind
+  of call, the 404 rule, a throwing recorder). `tests/helpers/testdb.mjs` now also clears `migadu_calls`.
+  Whole backend suite **229 of 229**; backend and frontend type checks and the frontend build pass. The chart
+  drawing itself has no automated test (no frontend component test setup); the owner checks the card.
+- Deploy: backup, then `psql ... -f backend/migrations/017_migadu_calls.sql` as the app role with
+  `ON_ERROR_STOP`, then `git pull --ff-only`, `npm run build` in `frontend/`, restart the backend. Rollback:
+  `git revert`, restart, rebuild (the table can stay).
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Database | Low | One new table and index, additive; migration safe to re-run; old code ignores it. |
+| Extra writes | Very low | One small insert per Migadu call (a few per added student), fire and forget. |
+| Breaking an add | Very low | Timing and recording are wrapped so they cannot throw into the add flow (tested). |
+| Privacy | Very low | The table and the log line hold only time, call kind, duration and outcome. |
+| Status page | Low | A new card; if the table is missing or the query fails the card shows "Unavailable" and the rest of the page is unaffected. |
+| Deploy order | Medium if forgotten | The migration must run before the new backend starts; otherwise the status card is "Unavailable" and each insert logs an error (adds still work). |
+| Rollback | Very low | `git revert`, restart, rebuild. |
+
+Overall risk: **low**.
+
+## Step 42 — Add students: no reload while adding, plain error messages, audit log, adopt a lost-reply mailbox
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** Found by reading back through Steps
+37-41 (owner chose items 1, 2, 6 and the audit log; the daily limit on new mailboxes was proposed and
+declined; a limit on the number of digits of an Application No is a business rule for the owner, not
+built; a Migadu alias clash for a name like "Postmaster" was judged too unlikely; the owner also asked
+for the Migadu call timeout to go from 15 to 20 seconds).
+
+- **No reload while a students dialog is open** (`frontend/src/Console.tsx`): the automatic reload onto a
+  new build used to run whenever no email thread was open, so a deploy could wipe an open Add students
+  dialog and stop an add halfway (lines already sent were saved). It now waits until the dialog is closed.
+- **Plain messages for server problems** (`frontend/src/autoAddClient.ts`, new, used by `api.ts`): an nginx
+  error page (HTML, not JSON) no longer shows "Unexpected token <"; a server that never answers ends after
+  45 s instead of leaving a row on "Trying to add" for ever; a dropped connection, a 401 and an unreadable
+  answer each get one plain sentence. The file has no browser-only imports so the backend tests can run it.
+- **Plain messages for failed rows** (`backend/src/autoAdd.ts`, `migadu.ts`, `server.ts`): a failed line shows
+  "The mailbox could not be created right now. Try again; if it keeps failing, tell the owner." (Migadu
+  refused or failed; new `MailboxApiError`) or "Something went wrong adding this student..." (anything
+  else); the route's own 500 is also a plain sentence. The technical detail still goes to the server log
+  (`console.error`), never to the screen.
+- **Adopt a mailbox made by an earlier try whose answer was lost** (`autoAdd.ts`, `migadu.ts`): if a create
+  reaches Migadu but the answer never comes back (for instance the call times out), the retry used to find
+  the address taken and make `x.y1`, leaving `x.y` as a stray mailbox. Now, when an address exists in Migadu
+  but not in our `students` table, the console reads that mailbox (`inspect`: its name and when it was
+  created) and **uses it instead of making another** if the name equals the student's (ignoring case) and it
+  was created **10 minutes ago or less**. Anything else (another name, older, age unknown, or already in
+  our table) is skipped for the next number as before. Migadu shows the creation time only as `"HH:MM"`
+  for today (UTC, matching the time it was created) and as a date such as `"29/09/26"` for earlier days, so
+  a mailbox made before today is never adopted. An adopted mailbox is audited as `mailbox-adopted`, is not
+  removed if saving the student then fails, and the row says "A mailbox for this student had just been
+  created by an earlier try, so it was used". Tried for real on 2026-10-08: a mailbox `test.adopt` was made
+  through the API as a lost reply would leave it, the add then used it (no `test.adopt1`), and both the
+  mailbox and the local row were removed afterwards. Remaining risk: two different students with the same
+  name added within 10 minutes with no Application No clash (the Application No check normally stops that).
+- **Migadu call timeout 20 s** (was 15 s): `REQUEST_TIMEOUT_MS` in `migadu.ts`. It was a round figure, not
+  derived from measurements (calls take about 0.5-0.7 s; a whole line about 0.8 s). A line makes up to
+  three or four Migadu calls, so in a very slow case it can exceed the browser's 45 s limit and nginx's 60 s;
+  the adopt rule above is what makes that case safe to retry.
+- **Audit log** (`autoAdd.ts`, `server.ts`): lines tagged `[audit]` in the server log, one JSON object each:
+  `mailbox-created` the moment a Migadu mailbox exists (the part the console cannot undo), `mailbox-adopted`
+  when an earlier try's mailbox is used, `mailbox-removed` when a failed save rolls a new one back, and one `student-add` per pasted line with its outcome (added, skipped,
+  failed), name, Application No, email (only when added) and reason. Each carries the time, the central
+  mailbox, the college and the client IP (staff share one login, so these identify who as far as possible).
+  Never a password. Read them with `sudo journalctl -u student-mail | grep '\[audit\]'`. Limits: the journal
+  is size-limited and shared with the noisy sync lines (on 2026-10-08 it reached back to 2026-09-21), so
+  this is a trail, not permanent storage; a database table is the next step if a permanent history is
+  wanted (needs a migration and a backup first).
+- Tests: `backend/tests/autoAdd.test.mjs` is now 43 tests (friendly messages, no technical text on screen,
+  audit entries for every outcome, the removed-mailbox audit, no password in any audit line, adopt and
+  not-adopt cases);
+  `backend/tests/migadu.test.mjs` is now 12 tests (adds inspect, creation time reading, the 20 s timeout);
+  new `backend/tests/autoAddClient.test.mjs` (8 tests: good answer, server message passed on, HTML error
+  page, other statuses, 401, dropped connection, timeout, wrong shape). Whole backend suite **217 of 217**;
+  backend and frontend type checks and the frontend build pass. The reload-while-dialog-open rule is a
+  one-line condition with no automated test (no frontend component test setup).
+- Deploy: `git pull --ff-only`, `npm run build` in `frontend/`, and a **backend restart** (audit and message
+  changes are backend code; no migration, no new setting). Rollback: `git revert`, restart, rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Data and database | None | No schema change; no new setting. |
+| Audit log volume | Low | A few log lines per added student; the journal is already size-limited. Entries hold names, Application Nos and emails, no passwords. |
+| Hiding the real error from staff | Low | Staff see a plain sentence; the cause is in the log (`console.error`) and the audit entry has the reason. |
+| Reload held back | Low | A tab with a students dialog open stays on the old build until the dialog is closed (same as with an email open). |
+| Time limit on requests | Low | 45 s is far above the normal second per line and below nginx's 60 s; a very slow Migadu day shows "did not answer in time" and the clerk retries. |
+| Backend restart on deploy | Low | Logins live in PostgreSQL; the live-update stream reconnects by itself. |
+| Rollback | Very low | `git revert`, restart, rebuild. |
+
+Overall risk: **low**.
 
 ## Step 41 — Students dialogs no longer close when the mouse leaves the card
 

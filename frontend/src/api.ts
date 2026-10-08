@@ -11,6 +11,7 @@ import type {
     ThreadSummary,
 } from "./types";
 import { apiFetch } from "./apiFetch";
+import { postAutoAdd, postCheckNumbers } from "./autoAddClient";
 
 // Must match the page's hostname (not just resolve to the same machine) -
 // SameSite=Lax cookies are dropped on cross-site fetches, and browsers treat
@@ -327,21 +328,12 @@ export async function fetchStudents(): Promise<StudentRow[]> {
     return res.json();
 }
 
+export async function checkApplicationNumbers(numbers: string[]) {
+    return postCheckNumbers(`${API_BASE}/api/students/check-numbers`, numbers);
+}
+
 export async function autoAddStudents(csv: string): Promise<AutoAddResult> {
-    const res = await apiFetch(`${API_BASE}/api/students/auto-add`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv }),
-    });
-
-    const payload = await res.json();
-
-    if (!res.ok) {
-        throw new Error(payload.error || `Adding students failed (${res.status})`);
-    }
-
-    return payload;
+    return postAutoAdd(`${API_BASE}/api/students/auto-add`, csv);
 }
 
 export async function importStudents(csv: string): Promise<ImportResult> {
@@ -466,6 +458,16 @@ export interface SystemStatus {
         memory: { totalBytes: number; usedBytes: number };
         appStartedAt: string;
     };
+    // Step 43: timing of the calls that create student mailboxes in Migadu.
+    migadu?:
+        | { error: string }
+        | {
+              timeoutMs: number;
+              windowDays: number;
+              summary: { calls: number; medianMs: number | null; p95Ms: number | null; slowestMs: number | null; notOk: number; timeouts: number };
+              hours: { at: string; calls: number; medianMs: number; slowestMs: number; notOk: number }[];
+              slowest: { at: string; operation: string; ms: number; outcome: string }[];
+          };
     hot?: { error?: string; enabled: boolean; watchingNow: number; checksThisHour: number; recoveredThisHour: number };
     sweep?: { error?: string; enabled: boolean; roundHours: number; mailboxes: number; sweptThisRound: number };
     // Newest 100, open problems first. solved/info rows are shown greyed.

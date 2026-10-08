@@ -213,6 +213,19 @@ CREATE TABLE status_problems (
 CREATE INDEX idx_status_problems_last_at ON status_problems (last_at DESC);
 CREATE UNIQUE INDEX idx_status_problems_open ON status_problems (kind, subject) WHERE solved_at IS NULL;
 
+-- How long each call to the Migadu mailbox API takes (migration 017, migaduTiming.ts):
+-- operation is lookup / create / remove, ms the duration, outcome ok / refused /
+-- server-error / timeout / network. Rows older than 30 days are deleted.
+CREATE TABLE migadu_calls (
+    id BIGSERIAL PRIMARY KEY,
+    at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    operation TEXT NOT NULL,
+    ms INTEGER NOT NULL,
+    outcome TEXT NOT NULL
+);
+
+CREATE INDEX idx_migadu_calls_at ON migadu_calls (at);
+
 -- Keeps the student's Edugate dates right when a code/login/rejection email is
 -- deleted or corrected (migration 015).
 CREATE FUNCTION students_refresh_edugate_status() RETURNS trigger

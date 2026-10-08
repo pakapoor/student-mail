@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shortDateTime } from "./format";
-import { checkStudentLines } from "./studentLines";
-import { autoAddStudents, fetchAdminStudents, fetchColleges, fetchStudents } from "./api";
+import { applicationNumbers, checkStudentLines, type TakenNumber } from "./studentLines";
+import { autoAddStudents, checkApplicationNumbers, fetchAdminStudents, fetchColleges, fetchStudents } from "./api";
 import type {
     AdminStudentPage,
     AdminStudentRow,
@@ -195,7 +195,12 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
     const mounted = useRef(true);
     const [copied, setCopied] = useState(false);
     // Mistakes in the box are shown as the clerk types; Add stays off until none are left.
-    const lineCheck = useMemo(() => checkStudentLines(csv), [csv]);
+    // Application Nos the server said are already used in this college (asked when the
+    // clerk leaves the box and when Add is pressed). Keyed by number, so changing a number
+    // clears its flag, and a number never asked about is simply not flagged.
+    const [taken, setTaken] = useState<Record<string, TakenNumber>>({});
+    const [checking, setChecking] = useState(false);
+    const lineCheck = useMemo(() => checkStudentLines(csv, taken), [csv, taken]);
 
     // Read-only roster of this operator's mailbox, every college (Step 30).
     // Search and Add are two separate dialogs (two buttons in the console header).
@@ -381,8 +386,37 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
         onImported();
     }
 
-    function handleImport() {
-        if (lineCheck.errors.length > 0 || lineCheck.lines.length === 0) {
+    // Asks the server which of the box's Application Nos are already used. Fails quietly
+    // (nothing known) - adding checks again anyway. Returns what is now known.
+    async function lookUpNumbers(text: string): Promise<Record<string, TakenNumber>> {
+        const numbers = applicationNumbers(text);
+        const found = await checkApplicationNumbers(numbers);
+        const merged = { ...taken, ...found };
+
+        if (mounted.current) {
+            setTaken(merged);
+        }
+
+        return merged;
+    }
+
+    async function handleImport() {
+        if (lineCheck.errors.length > 0 || lineCheck.lines.length === 0 || checking) {
+            return;
+        }
+
+        // One look-up for the whole box before anything is created: a number that is
+        // already used is flagged in red and nothing is added until it is fixed.
+        setChecking(true);
+        const known = await lookUpNumbers(csv);
+
+        if (!mounted.current) {
+            return;
+        }
+
+        setChecking(false);
+
+        if (checkStudentLines(csv, known).errors.length > 0) {
             return;
         }
 
@@ -481,6 +515,7 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
                             }
                             value={csv}
                             onChange={(e) => setCsv(e.target.value)}
+                            onBlur={() => void lookUpNumbers(csv)}
                             disabled={submitting}
                             aria-invalid={lineCheck.errors.length > 0}
                         />
@@ -504,10 +539,10 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
                         <button
                             className="send-button"
                             onClick={handleImport}
-                            disabled={submitting || csv.trim().length === 0 || lineCheck.count === 0 || lineCheck.errors.length > 0}
+                            disabled={submitting || checking || csv.trim().length === 0 || lineCheck.count === 0 || lineCheck.errors.length > 0}
                         >
-                            {submitting && <span className="spinner" />}
-                            {submitting ? "Creating mailboxes..." : "Create mailboxes and add"}
+                            {(submitting || checking) && <span className="spinner" />}
+                            {checking ? "Checking numbers..." : submitting ? "Creating mailboxes..." : "Create mailboxes and add"}
                         </button>
 
                         {addRows && (

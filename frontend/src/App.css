@@ -2243,3 +2243,14 @@ a.logout-button { display: inline-block; text-decoration: none; }
     .filter-row { flex-direction: column; align-items: flex-start; gap: 0; }
     .filter-label { width: auto; }
 }
+
+/* Status page: Migadu call times (Step 43) */
+.migadu-chart { width: 100%; }
+.migadu-chart svg { display: block; max-width: 100%; }
+.migadu-grid { stroke: var(--border-soft); stroke-width: 1; }
+.migadu-axis { font-size: 11px; fill: var(--text-muted); }
+.migadu-timeout { stroke: var(--bad); stroke-width: 1; stroke-dasharray: 4 3; }
+.migadu-range { stroke: var(--accent); stroke-width: 2; opacity: .35; }
+.migadu-median { fill: var(--accent); }
+.migadu-cap { fill: var(--warn); }
+.migadu-cap.bad { fill: var(--bad); }

@@ -1,6 +1,7 @@
 import { db } from "./db.js";
 import { emailBase, emailCandidates } from "./studentEmail.js";
-import { migaduMailboxApi, type MailboxApi } from "./migadu.js";
+import { migaduMailboxApi, MailboxApiError, type MailboxApi } from "./migadu.js";
+import { recordMigaduCall } from "./migaduTiming.js";
 import { splitName } from "./students.js";
 
 // "Add students" with two inputs per line: Student Name,Application No.
@@ -36,6 +37,14 @@ export interface AutoAddResult {
 
 export class AutoAddInputError extends Error {}
 
+// Audit trail: one line in the server log per event, tagged [audit] so it can be
+// found with `journalctl -u student-mail | grep '\[audit\]'`. Staff share one
+// login, so who did it is the central mailbox, the college and the client's
+// IP address. Never contains a password.
+function audit(event: string, details: Record<string, unknown>): void {
+    console.log(`[audit] ${JSON.stringify({ at: new Date().toISOString(), event, ...details })}`);
+}
+
 // The users are clerks: a line is exactly "name,Application No" with one comma
 // between them (spaces around the comma, before the name or after the number are
 // fine; Windows, Unix or old Mac line endings all work). A space or a tab instead of
@@ -61,14 +70,26 @@ const DEFAULT_PASSWORD = "password";
 export const AUTO_ADD_MAX_ROWS = 10;
 // How many addresses are tried per name (x.y, x.y1 ... x.y49).
 const MAX_CANDIDATES = 50;
+// A mailbox that already exists at the wanted address, has exactly this student's
+// name, was created this many minutes ago or less, and is not in our students
+// table is taken to be this same add's own earlier try (the create reached Migadu
+// but the answer was lost) and is used instead of making a second one.
+const ADOPT_WITHIN_MINUTES = 10;
+
+// What staff see when something fails. The technical detail goes to the server
+// log, never to the screen.
+const MAILBOX_FAILURE = "The mailbox could not be created right now. Try again; if it keeps failing, tell the owner.";
+const GENERIC_FAILURE = "Something went wrong adding this student. Try again; if it keeps failing, tell the owner.";
 
 export async function autoAddStudents(
     csvText: string,
     centralEmail: string,
     collegeId: string,
     collegeName: string,
-    mailboxes: MailboxApi = migaduMailboxApi()
+    mailboxes: MailboxApi = migaduMailboxApi(recordMigaduCall),
+    clientIp = ""
 ): Promise<AutoAddResult> {
+    const who = { central: centralEmail, college: collegeName, ip: clientIp };
     const nonEmpty = csvText
         .split(/\r\n|\n|\r/)
         .map((line, index) => ({ line, number: index + 1 }))
@@ -167,7 +188,9 @@ export async function autoAddStudents(
                 continue;
             }
 
-            const { localPart, migaduOnly } = created;
+            const { localPart, migaduOnly, adopted } = created;
+            // The mailbox now exists in Migadu - the part that cannot be undone from the console.
+            audit(adopted ? "mailbox-adopted" : "mailbox-created", { ...who, line: number, email: `${localPart}@${mailboxes.domain}`, applicationNo: admissionId, name });
 
             const email = `${localPart}@${mailboxes.domain}`;
             row.email = email;
@@ -184,9 +207,15 @@ export async function autoAddStudents(
                 );
             } catch (error) {
                 console.error("Auto-add: saving the student failed", { line: number, email }, error);
-                await mailboxes.remove(localPart).catch((removeError) => {
-                    console.error("Auto-add: could not remove the mailbox after a failed save", { email }, removeError);
-                });
+                // An adopted mailbox is left alone: it was made by an earlier try whose
+                // outcome we could not see, so removing it here would be a guess.
+                if (!adopted) {
+                    await mailboxes.remove(localPart).catch((removeError) => {
+                        console.error("Auto-add: could not remove the mailbox after a failed save", { email }, removeError);
+                    });
+                    audit("mailbox-removed", { ...who, line: number, email, reason: "saving the student failed" });
+                }
+
                 usedEmails.delete(localPart);
                 row.email = null;
                 row.reason = "The mailbox was created but the student could not be saved, so the mailbox was removed. Try this line again.";
@@ -196,8 +225,9 @@ export async function autoAddStudents(
             row.status = "added";
             // An address that is in Migadu but not in our student list was made by
             // hand earlier - it may even be this student's own mailbox, so say so.
-            row.reason =
-                localPart === base
+            row.reason = adopted
+                ? "A mailbox for this student had just been created by an earlier try, so it was used (no second mailbox was made)."
+                : localPart === base
                     ? null
                     : migaduOnly.length > 0
                       ? `${migaduOnly[0]} already exists in Migadu but is not in our student list, so a number was added after the name. If that is this student's own mailbox, tell the owner.`
@@ -205,8 +235,20 @@ export async function autoAddStudents(
         } catch (error) {
             console.error("Auto-add failed for a line", { line: number }, error);
             row.email = null;
-            row.reason = error instanceof Error ? error.message : "Unexpected error";
+            row.reason = error instanceof MailboxApiError ? MAILBOX_FAILURE : GENERIC_FAILURE;
         }
+    }
+
+    for (const row of rows) {
+        audit("student-add", {
+            ...who,
+            line: row.line,
+            outcome: row.status,
+            name: row.name,
+            applicationNo: row.admissionId,
+            email: row.status === "added" ? row.email : null,
+            reason: row.reason,
+        });
     }
 
     return {
@@ -230,7 +272,7 @@ async function createMailbox(
     name: string,
     mailboxes: MailboxApi,
     usedInThisImport: Set<string>
-): Promise<{ localPart: string; migaduOnly: string[] } | null> {
+): Promise<{ localPart: string; migaduOnly: string[]; adopted: boolean } | null> {
     const migaduOnly: string[] = [];
 
     for (const candidate of emailCandidates(base, MAX_CANDIDATES)) {
@@ -245,12 +287,26 @@ async function createMailbox(
         }
 
         if (await mailboxes.exists(candidate)) {
+            // Taken in Migadu and not in our table. If it carries exactly this student's
+            // name and was made a few minutes ago, it is this add's own earlier try
+            // (the create reached Migadu, the answer was lost): use it.
+            const info = await mailboxes.inspect(candidate);
+
+            if (
+                info &&
+                info.name.trim().toLowerCase() === name.toLowerCase() &&
+                info.createdMinutesAgo !== null &&
+                info.createdMinutesAgo <= ADOPT_WITHIN_MINUTES
+            ) {
+                return { localPart: candidate, migaduOnly, adopted: true };
+            }
+
             migaduOnly.push(candidate);
             continue;
         }
 
         await mailboxes.create(candidate, name, DEFAULT_PASSWORD);
-        return { localPart: candidate, migaduOnly };
+        return { localPart: candidate, migaduOnly, adopted: false };
     }
 
     return null;

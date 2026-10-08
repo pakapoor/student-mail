@@ -314,3 +314,35 @@ export async function importStudents(
 
     return { imported, skipped, rejected };
 }
+
+// Which of these Application Nos are already used by a student of this college
+// (deleted students count too: their number stays taken, as in the add flow).
+// Answers the Add students box before anything is created; the add itself
+// checks again, so this is advice, never the last word. Returns number -> who.
+export interface UsedNumber {
+    name: string | null;
+    deleted: boolean;
+}
+
+export const MAX_NUMBERS_TO_CHECK = 50;
+
+export async function usedApplicationNumbers(collegeId: string, numbers: string[]): Promise<Record<string, UsedNumber>> {
+    const wanted = [...new Set(numbers)].slice(0, MAX_NUMBERS_TO_CHECK);
+
+    if (wanted.length === 0) {
+        return {};
+    }
+
+    const result = await db.query<{ admission_id: string; name: string | null; deleted_at: string | null }>(
+        "SELECT admission_id, name, deleted_at FROM students WHERE college_id = $1 AND admission_id = ANY($2)",
+        [collegeId, wanted]
+    );
+
+    const used: Record<string, UsedNumber> = {};
+
+    for (const row of result.rows) {
+        used[row.admission_id] = { name: row.name, deleted: row.deleted_at !== null };
+    }
+
+    return used;
+}

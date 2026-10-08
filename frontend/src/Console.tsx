@@ -307,16 +307,17 @@ function Console({ college, onLoggedOut }: Props) {
     }
 
     // A newer build was deployed: reload onto it, but never while an email
-    // is open - the operator may be typing a reply. Waits until they leave
-    // it. The search box is carried across the reload.
+    // is open - the operator may be typing a reply - or a students dialog is
+    // open - an add may be running and its result table would be lost. Waits
+    // until they leave it. The search box is carried across the reload.
     const newVersionAvailable = useNewVersionAvailable();
 
     useEffect(() => {
-        if (newVersionAvailable && selectedId === null) {
+        if (newVersionAvailable && selectedId === null && studentsDialog === null) {
             saveSearchForReload(search);
             window.location.reload();
         }
-    }, [newVersionAvailable, selectedId, search]);
+    }, [newVersionAvailable, selectedId, studentsDialog, search]);
 
     async function handleLogout() {
         await logout();

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchSystemStatus, type SystemStatus } from "./api";
 import { shortDateTime } from "./format";
 import ExpiredCodesChart from "./ExpiredCodesChart";
+import MigaduTimingChart from "./MigaduTimingChart";
 
 // System status page at /status (Step 21). Not linked from the staff
 // screens; needs the normal console login. Refreshes every 30 s. No alert
@@ -103,6 +104,7 @@ export default function StatusPage() {
     const diskPct = s.server.disk ? Math.round((s.server.disk.usedBytes / s.server.disk.totalBytes) * 100) : null;
     const sweepPct = sweep && sweep.mailboxes > 0 ? Math.round((sweep.sweptThisRound / sweep.mailboxes) * 100) : 0;
     const codes = s.codes && !("error" in s.codes) ? s.codes : null;
+    const migadu = s.migadu && !("error" in s.migadu) ? s.migadu : null;
     const waitingNow = codes?.timeline.points.at(-1)?.waiting ?? 0;
 
     return (
@@ -282,6 +284,70 @@ export default function StatusPage() {
                                 </table>
                             </div>
                             <p className="status-hint">Handled = a fresh code arrived. Migadu delay = the code email itself was held over 5 min.</p>
+                        </>
+                    )}
+                </div>
+
+                {/* Step 43: how long the Migadu calls behind "Add students" take. */}
+                <div className="status-card">
+                    <div className="status-card-head">
+                        <b>Migadu call times</b>
+                        {!migadu ? (
+                            <Pill tone="warn">Unavailable</Pill>
+                        ) : migadu.summary.calls === 0 ? (
+                            <Pill tone="ok">No calls yet</Pill>
+                        ) : migadu.summary.timeouts > 0 ? (
+                            <Pill tone="bad">{migadu.summary.timeouts} timed out</Pill>
+                        ) : migadu.summary.notOk > 0 ? (
+                            <Pill tone="warn">{migadu.summary.notOk} not ok</Pill>
+                        ) : (
+                            <Pill tone="ok">All ok</Pill>
+                        )}
+                    </div>
+                    {migadu && (
+                        <>
+                            <p className="status-hint">
+                                Every call to Migadu when students are added, one mark per hour over the last {migadu.windowDays} days: the dot is the
+                                hour's median, the bar reaches its slowest call. Used to set the {Math.round(migadu.timeoutMs / 1000)} s timeout from real
+                                data.
+                            </p>
+                            {migadu.summary.calls === 0 ? (
+                                <p className="empty-state">No calls recorded yet. They appear here after students are added.</p>
+                            ) : (
+                                <>
+                                    <MigaduTimingChart hours={migadu.hours} timeoutMs={migadu.timeoutMs} />
+                                    <div className="status-kv">
+                                        <Row label="Calls" value={String(migadu.summary.calls)} />
+                                        <Row label="Median" value={migadu.summary.medianMs === null ? "—" : `${(migadu.summary.medianMs / 1000).toFixed(2)} s`} />
+                                        <Row label="Slowest 5%" value={migadu.summary.p95Ms === null ? "—" : `${(migadu.summary.p95Ms / 1000).toFixed(2)} s or more`} />
+                                        <Row label="Slowest" value={migadu.summary.slowestMs === null ? "—" : `${(migadu.summary.slowestMs / 1000).toFixed(2)} s`} />
+                                        <Row label="Not ok" value={`${migadu.summary.notOk} (${migadu.summary.timeouts} timed out)`} />
+                                        <Row label="Timeout now" value={`${Math.round(migadu.timeoutMs / 1000)} s`} />
+                                    </div>
+                                    <div className="status-table-wrap">
+                                        <table className="status-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Slowest calls</th>
+                                                    <th>What</th>
+                                                    <th>Took</th>
+                                                    <th>Ended</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {migadu.slowest.map((c, i) => (
+                                                    <tr key={i}>
+                                                        <td className="t">{shortDateTime(c.at)}</td>
+                                                        <td>{c.operation === "create" ? "Create mailbox" : c.operation === "remove" ? "Remove mailbox" : "Look up address"}</td>
+                                                        <td>{(c.ms / 1000).toFixed(2)} s</td>
+                                                        <td>{c.outcome}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
+                            )}
                         </>
                     )}
                 </div>

@@ -15,6 +15,14 @@ export interface LineError {
     text: string;
 }
 
+// An Application No the server says is already used in this college (who has it,
+// and whether that student was deleted). Looked up when the clerk leaves the box
+// and when Add is pressed; a number that was never looked up is simply not flagged.
+export interface TakenNumber {
+    name: string | null;
+    deleted: boolean;
+}
+
 export interface StudentLine {
     // The line as typed (trimmed), name and Application No already split.
     text: string;
@@ -45,7 +53,7 @@ function splitFields(line: string): string[] {
     return line.split(",").map((field) => field.trim());
 }
 
-export function checkStudentLines(text: string): LineCheck {
+export function checkStudentLines(text: string, taken: Record<string, TakenNumber> = {}): LineCheck {
     // Windows (CRLF), Unix (LF) or old Mac (CR) line endings.
     const typed = text
         .split(/\r\n|\n|\r/)
@@ -105,6 +113,17 @@ export function checkStudentLines(text: string): LineCheck {
                     text: content.trim(),
                 });
             }
+
+            // Already used by a student in this college (as far as it was looked up).
+            const owner = taken[admissionId];
+
+            if (owner && errors.length === errorsBefore) {
+                errors.push({
+                    line: number,
+                    message: `The Application No ${admissionId} is already used by ${owner.name ?? "another student"}${owner.deleted ? " (a deleted student)" : ""}. Check the number.`,
+                    text: content.trim(),
+                });
+            }
         }
     }
 
@@ -121,4 +140,25 @@ export function checkStudentLines(text: string): LineCheck {
               });
 
     return { errors, count: dataLines.length, lines };
+}
+
+// The Application Nos in the box that are worth asking the server about: from
+// lines that have exactly one comma and a whole positive number after it,
+// without repeats. (Other mistakes are flagged by checkStudentLines itself.)
+export function applicationNumbers(text: string): string[] {
+    const typed = text.split(/\r\n|\n|\r/).filter((content) => content.trim().length > 0);
+    const first = typed[0];
+    const data = first && splitFields(first).join(",").toLowerCase() === EXPECTED_HEADER ? typed.slice(1) : typed;
+    const numbers = new Set<string>();
+
+    for (const content of data) {
+        const fields = splitFields(content);
+        const admissionId = fields[1] ?? "";
+
+        if (fields.length === 2 && /^\d+$/.test(admissionId) && /[1-9]/.test(admissionId)) {
+            numbers.add(admissionId);
+        }
+    }
+
+    return [...numbers];
 }

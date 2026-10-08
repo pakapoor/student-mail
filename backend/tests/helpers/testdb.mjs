@@ -98,7 +98,7 @@ export async function startTestDb({ schema = true } = {}) {
         return { ok: r.status === 0, stderr: r.stderr, stdout: r.stdout };
     };
 
-    return { pool, port, stop, runSqlFile, reset: () => pool.query('TRUNCATE messages, replies, students, sessions, status_problems, central_mailboxes RESTART IDENTITY CASCADE') };
+    return { pool, port, stop, runSqlFile, reset: () => pool.query('TRUNCATE messages, replies, students, sessions, status_problems, central_mailboxes, migadu_calls RESTART IDENTITY CASCADE') };
 }
 
 // Small builders so a test reads as a story about students and mail.

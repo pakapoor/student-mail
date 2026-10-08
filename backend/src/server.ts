@@ -36,7 +36,7 @@ import {
     listCentralMailboxes,
     registerCentralMailbox,
 } from "./centralMailboxes.js";
-import { fetchStudents, importStudents } from "./students.js";
+import { fetchStudents, importStudents, usedApplicationNumbers, MAX_NUMBERS_TO_CHECK } from "./students.js";
 import { autoAddStudents, AutoAddInputError } from "./autoAdd.js";
 import {
     ROSTER_FILTERS,
@@ -199,6 +199,23 @@ app.post("/api/students/import", requireAuth, requireCollege, async (req, res) =
     res.json(result);
 });
 
+// Which Application Nos in the Add students box are already used in this college
+// (one request for the whole box). Advice for the screen only: adding checks again.
+app.post("/api/students/check-numbers", requireAuth, requireCollege, async (req, res) => {
+    const numbers: unknown = req.body?.numbers;
+
+    if (
+        !Array.isArray(numbers) ||
+        numbers.length > MAX_NUMBERS_TO_CHECK ||
+        !numbers.every((n) => typeof n === "string" && /^\d{1,20}$/.test(n))
+    ) {
+        res.status(400).json({ error: "numbers must be a short list of whole numbers" });
+        return;
+    }
+
+    res.json({ used: await usedApplicationNumbers(res.locals.collegeId, numbers as string[]) });
+});
+
 // Add students from just Student Name,Application No: the server makes the
 // Migadu mailbox and the student record (see autoAdd.ts).
 app.post("/api/students/auto-add", requireAuth, requireCollege, async (req, res) => {
@@ -214,7 +231,9 @@ app.post("/api/students/auto-add", requireAuth, requireCollege, async (req, res)
             csv,
             res.locals.centralEmail,
             res.locals.collegeId,
-            res.locals.college.name
+            res.locals.college.name,
+            undefined,
+            String(req.headers["x-forwarded-for"] ?? req.ip ?? "").split(",")[0]!.trim()
         );
         res.json(result);
     } catch (error) {
@@ -224,7 +243,7 @@ app.post("/api/students/auto-add", requireAuth, requireCollege, async (req, res)
         }
 
         console.error("Auto-add failed:", error);
-        res.status(500).json({ error: error instanceof Error ? error.message : "Adding students failed" });
+        res.status(500).json({ error: "Could not add students right now. Try again; if it keeps failing, tell the owner." });
     }
 });
 

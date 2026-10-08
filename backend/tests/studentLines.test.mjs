@@ -4,7 +4,7 @@
 // parity test below fails if the two ever disagree.
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkStudentLines, MAX_STUDENT_LINES } from '../../frontend/src/studentLines.ts';
+import { checkStudentLines, applicationNumbers, MAX_STUDENT_LINES } from '../../frontend/src/studentLines.ts';
 
 const messages = (text) => checkStudentLines(text).errors.map((e) => `${e.line}:${e.message}`);
 
@@ -170,4 +170,42 @@ test('a line already flagged for something else is flagged for that, and its num
 test('fixing the repeat clears the flag and lets the box go ahead', () => {
     assert.equal(checkStudentLines('A One,5\nB Two,5').lines.length, 0);
     assert.equal(checkStudentLines('A One,5\nB Two,6').lines.length, 2);
+});
+
+// ---- Application Nos already used in the college (looked up from the server)
+const taken = { 30437: { name: 'ZUNAIRA SAQI', deleted: false }, 777: { name: 'OLD STUDENT', deleted: true } };
+
+test('a number the server says is already used is flagged in red with the owner\'s name', () => {
+    const check = checkStudentLines('Arjun Verma,30437\nJane Doe,5', taken);
+    assert.deepEqual(check.errors.map((e) => [e.line, e.text]), [[1, 'Arjun Verma,30437']]);
+    assert.equal(check.errors[0].message, 'The Application No 30437 is already used by ZUNAIRA SAQI. Check the number.');
+    assert.deepEqual(check.lines, [], 'nothing can be added while it is flagged');
+});
+
+test('a deleted student\'s number is flagged too, and says so', () => {
+    assert.equal(checkStudentLines('Arjun Verma,777', taken).errors[0].message, 'The Application No 777 is already used by OLD STUDENT (a deleted student). Check the number.');
+});
+
+test('a number that was never looked up, or is not taken, is not flagged; changing the number clears the flag', () => {
+    assert.deepEqual(checkStudentLines('Arjun Verma,30437').errors, [], 'no look-up result: not flagged');
+    assert.deepEqual(checkStudentLines('Arjun Verma,30438', taken).errors, []);
+    assert.equal(checkStudentLines('Arjun Verma,30437', taken).errors.length, 1);
+    assert.equal(checkStudentLines('Arjun Verma,30439', taken).errors.length, 0, 'fixed the number: flag gone');
+});
+
+test('an unknown owner is flagged as another student', () => {
+    assert.match(checkStudentLines('A One,5', { 5: { name: null, deleted: false } }).errors[0].message, /already used by another student/);
+});
+
+test('a line with another mistake shows that mistake first; a repeat inside the box shows the repeat, not the owner twice', () => {
+    assert.match(checkStudentLines("A T0,30437", taken).errors[0].message, /^The name can only have letters/);
+    const errors = checkStudentLines('A One,30437\nB Two,30437', taken).errors;
+    assert.deepEqual(errors.map((e) => e.line), [1, 2]);
+    assert.match(errors[0].message, /already used by ZUNAIRA SAQI/);
+    assert.match(errors[1].message, /already on line 1/);
+});
+
+test('applicationNumbers picks the valid numbers of the box, once each, skipping the header and bad lines', () => {
+    assert.deepEqual(applicationNumbers('Student Name,Application No\nA One,5\nB Two,6\nC Three,5\nD Four 7\nE Five,x8\nF Six,0\n\n  G Seven , 9 '), ['5', '6', '9']);
+    assert.deepEqual(applicationNumbers(''), []);
 });

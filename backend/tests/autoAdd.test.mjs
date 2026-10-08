@@ -25,18 +25,24 @@ mock.module('../src/db.ts', { exports: { db: { query: async (sql, params) => {
 
 const { emailBase, emailCandidates } = await import('../src/studentEmail.ts');
 const { autoAddStudents, AutoAddInputError, AUTO_ADD_MAX_ROWS } = await import('../src/autoAdd.ts');
+const { MailboxApiError } = await import('../src/migadu.ts');
+const FRIENDLY_MAILBOX = 'The mailbox could not be created right now. Try again; if it keeps failing, tell the owner.';
+const FRIENDLY_GENERIC = 'Something went wrong adding this student. Try again; if it keeps failing, tell the owner.';
 
 // Fake Migadu: `taken` = local parts that already exist; `fail` = local parts
 // whose creation is refused.
-function fakeMigadu({ taken = [], fail = [] } = {}) {
+function fakeMigadu({ taken = [], fail = [], details = {} } = {}) {
     const existing = new Set(taken);
     const calls = { created: [], removed: [] };
     return {
         calls,
         domain: 'myemailinfo.com',
         exists: async (local) => existing.has(local),
+        // `details[local]` = { name, createdMinutesAgo } for an existing mailbox; by default a taken
+        // address belongs to somebody else and was made long ago.
+        inspect: async (local) => (existing.has(local) ? (details[local] ?? { name: 'SOMEONE ELSE', createdMinutesAgo: null }) : null),
         create: async (local, name, password) => {
-            if (fail.includes(local)) throw new Error('Migadu mailbox creation failed (403)');
+            if (fail.includes(local)) throw new MailboxApiError('Migadu mailbox creation failed (403)');
             existing.add(local);
             calls.created.push({ local, name, password });
         },
@@ -105,7 +111,7 @@ test('Migadu refusing a mailbox fails only that line and saves nothing for it', 
     const migadu = fakeMigadu({ fail: ['neha.joshi', 'neha.joshi1'] });
     const result = await run('NEHA JOSHI,1\nRAJ KUMAR,2', migadu);
     assert.deepEqual(result.rows.map((r) => r.status), ['failed', 'added']);
-    assert.match(result.rows[0].reason, /Migadu mailbox creation failed/);
+    assert.equal(result.rows[0].reason, FRIENDLY_MAILBOX);
     assert.equal(result.rows[0].email, null);
     assert.equal(state.inserts.length, 1);
 });
@@ -175,12 +181,12 @@ test('a Migadu lookup error fails that line with the error and does not stop the
     let first = true;
     const original = migadu.exists;
     migadu.exists = async (local) => {
-        if (first) { first = false; throw new Error('Migadu mailbox lookup failed (500)'); }
+        if (first) { first = false; throw new MailboxApiError('Migadu mailbox lookup failed (500)'); }
         return original(local);
     };
     const result = await run('ONE PERSON,1\nTWO PERSON,2', migadu);
     assert.deepEqual(result.rows.map((r) => r.status), ['failed', 'added']);
-    assert.match(result.rows[0].reason, /lookup failed/);
+    assert.equal(result.rows[0].reason, FRIENDLY_MAILBOX);
     assert.equal(state.inserts.length, 1);
 });
 
@@ -288,11 +294,12 @@ function refusingMigadu(refuse, { taken = true } = {}) {
     const exists = new Set();
     api.calls.attempts = [];
     api.exists = async (local) => exists.has(local);
+    api.inspect = async (local) => (exists.has(local) ? { name: 'SOMEONE ELSE', createdMinutesAgo: null } : null);
     api.create = async (local, name, password) => {
         api.calls.attempts.push(local);
         if (refuse.includes(local)) {
             if (taken) exists.add(local);
-            throw new Error('Migadu mailbox creation failed (400): bad request');
+            throw new MailboxApiError('Migadu mailbox creation failed (400): bad request');
         }
         exists.add(local);
         api.calls.created.push({ local, name, password });
@@ -305,7 +312,7 @@ test('a failed create is not retried inside the same request: one create per lin
     const migadu = refusingMigadu(['new.person']);
     const result = await run('NEW PERSON,5', migadu);
     assert.equal(result.rows[0].status, 'failed');
-    assert.match(result.rows[0].reason, /creation failed \(400\)/);
+    assert.equal(result.rows[0].reason, FRIENDLY_MAILBOX);
     assert.deepEqual(migadu.calls.attempts, ['new.person']);
     assert.equal(state.inserts.length, 0);
 });
@@ -373,4 +380,108 @@ test('a name in quotes with a comma inside has two commas and is refused', async
     assert.equal(result.rows[0].status, 'failed');
     assert.equal(result.rows[0].reason, 'Use only one comma, between the name and the Application No');
     assert.deepEqual(migadu.calls.created, []);
+});
+
+test('the screen never gets technical text: no Migadu message, status code or exception detail in a failed row', async () => {
+    reset();
+    const migadu = fakeMigadu({ fail: ['one.person', 'one.person1'] });
+    const result = await run('ONE PERSON,1', migadu);
+    assert.doesNotMatch(result.rows[0].reason, /Migadu|403|400|Error/);
+});
+
+test('a failure that is not from Migadu gets the generic friendly message', async () => {
+    reset();
+    const migadu = fakeMigadu();
+    migadu.exists = async () => { throw new TypeError('something unexpected'); };
+    const result = await run('ONE PERSON,1', migadu);
+    assert.equal(result.rows[0].reason, FRIENDLY_GENERIC);
+    assert.doesNotMatch(result.rows[0].reason, /unexpected/);
+});
+
+// ---- audit trail: [audit] lines in the server log, never with a password
+async function captureAudit(fn) {
+    const lines = [];
+    const original = console.log;
+    console.log = (...args) => { const text = args.join(' '); if (text.startsWith('[audit] ')) lines.push(JSON.parse(text.slice(8))); else original(...args); };
+    try { await fn(); } finally { console.log = original; }
+    return lines;
+}
+
+test('every line gets an audit entry with who (central, college, IP), what and the outcome', async () => {
+    reset();
+    state.usedAdmission.set('30437', 'ZUNAIRA SAQI');
+    const migadu = fakeMigadu({ fail: ['neha.joshi', 'neha.joshi1'] });
+    const entries = await captureAudit(() => autoAddStudents(
+        'SAMYAK MESHRAM,32299\nARJUN VERMA,30437\nNEHA JOSHI,32305', 'central@example.test', '3', 'IHSM ELITE', migadu, '203.0.113.9'));
+    const lines = entries.filter((e) => e.event === 'student-add');
+    assert.deepEqual(lines.map((e) => [e.line, e.outcome, e.applicationNo, e.email]), [
+        [1, 'added', '32299', 'samyak.meshram@myemailinfo.com'],
+        [2, 'skipped', '30437', null],
+        [3, 'failed', '32305', null],
+    ]);
+    assert.ok(lines.every((e) => e.central === 'central@example.test' && e.college === 'IHSM ELITE' && e.ip === '203.0.113.9' && e.at));
+    assert.match(lines[1].reason, /already used by ZUNAIRA SAQI/);
+    assert.deepEqual(entries.filter((e) => e.event === 'mailbox-created').map((e) => e.email), ['samyak.meshram@myemailinfo.com']);
+});
+
+test('a mailbox removed after a failed save is audited, and nothing audited contains a password', async () => {
+    reset();
+    state.failInsert = true;
+    const migadu = fakeMigadu();
+    const entries = await captureAudit(() => autoAddStudents('RAJ KUMAR,2', 'central@example.test', '3', 'IHSM ELITE', migadu, '198.51.100.7'));
+    assert.deepEqual(entries.map((e) => e.event), ['mailbox-created', 'mailbox-removed', 'student-add']);
+    assert.equal(entries[2].outcome, 'failed');
+    assert.ok(entries.every((e) => !JSON.stringify(e).toLowerCase().includes('password')));
+});
+
+// ---- a mailbox made by this add's own earlier try (reply lost) is adopted, not duplicated
+test('a mailbox with this student\'s name, made a few minutes ago and not in our table, is adopted: no second mailbox', async () => {
+    reset();
+    const migadu = fakeMigadu({ taken: ['samyak.meshram'], details: { 'samyak.meshram': { name: 'SAMYAK MESHRAM', createdMinutesAgo: 2 } } });
+    let result;
+    const entries = await captureAudit(async () => { result = await run('SAMYAK MESHRAM,32299', migadu); });
+    assert.equal(result.rows[0].status, 'added');
+    assert.equal(result.rows[0].email, 'samyak.meshram@myemailinfo.com', 'the same address, not samyak.meshram1');
+    assert.match(result.rows[0].reason, /earlier try/);
+    assert.deepEqual(migadu.calls.created, [], 'nothing new was created in Migadu');
+    assert.equal(state.inserts[0][3], 'samyak.meshram@myemailinfo.com');
+    assert.deepEqual(entries.filter((e) => e.event !== 'student-add').map((e) => e.event), ['mailbox-adopted']);
+});
+
+test('a mailbox with a different name, or made long ago, or of unknown age, is not adopted: the next number is used', async () => {
+    reset();
+    const cases = [
+        { name: 'SOMEONE ELSE', createdMinutesAgo: 1 },
+        { name: 'SAMYAK MESHRAM', createdMinutesAgo: 11 },
+        { name: 'SAMYAK MESHRAM', createdMinutesAgo: null },
+    ];
+    for (const info of cases) {
+        const migadu = fakeMigadu({ taken: ['samyak.meshram'], details: { 'samyak.meshram': info } });
+        const result = await run('SAMYAK MESHRAM,32299', migadu);
+        assert.equal(result.rows[0].email, 'samyak.meshram1@myemailinfo.com', JSON.stringify(info));
+        assert.deepEqual(migadu.calls.created.map((c) => c.local), ['samyak.meshram1']);
+    }
+});
+
+test('adoption needs the same name ignoring case and exactly 10 minutes or less', async () => {
+    reset();
+    const ok = fakeMigadu({ taken: ['sam.lee'], details: { 'sam.lee': { name: 'sam lee', createdMinutesAgo: 10 } } });
+    assert.equal((await run('SAM LEE,1', ok)).rows[0].email, 'sam.lee@myemailinfo.com');
+});
+
+test('an address that is already in our students table is never adopted, even if it looks like a match', async () => {
+    reset();
+    state.dbEmails.add('samyak.meshram@myemailinfo.com');
+    const migadu = fakeMigadu({ taken: ['samyak.meshram'], details: { 'samyak.meshram': { name: 'SAMYAK MESHRAM', createdMinutesAgo: 1 } } });
+    const result = await run('SAMYAK MESHRAM,32299', migadu);
+    assert.equal(result.rows[0].email, 'samyak.meshram1@myemailinfo.com');
+});
+
+test('if saving fails for an adopted mailbox, it is left in place (not removed) and the line fails', async () => {
+    reset();
+    state.failInsert = true;
+    const migadu = fakeMigadu({ taken: ['sam.lee'], details: { 'sam.lee': { name: 'SAM LEE', createdMinutesAgo: 1 } } });
+    const result = await run('SAM LEE,1', migadu);
+    assert.equal(result.rows[0].status, 'failed');
+    assert.deepEqual(migadu.calls.removed, []);
 });
