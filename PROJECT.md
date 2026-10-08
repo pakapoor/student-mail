@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 41. |
+| Next step number | 42. |
 
 ### Step index
 
@@ -46,6 +46,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 38 | Add students: simpler hint text | deployed 2026-10-08 |
 | 39 | Search students and Add students as two buttons and two dialogs; clerk-friendly input, live results, one retry | deployed 2026-10-08 |
 | 40 | Add students: a repeated Application No is flagged in the box | deployed 2026-10-08 |
+| 41 | Students dialogs no longer close when the mouse leaves the card; clearer Add students hint | checked in 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -166,6 +167,41 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 41 — Students dialogs no longer close when the mouse leaves the card
+
+**Status: CHECKED IN 2026-10-08, deploy record follows.** Frontend only
+(`frontend/src/ManageStudents.tsx`, `App.css`). During a client demo the Add students dialog disappeared (the page
+behind was fine). Cause: the dialog closed on any click on the dark area around it (`event.target ===
+event.currentTarget`), and the browser reports that click when the mouse is pressed inside the card and
+released outside (for example while selecting text in the result table), so the dialog and its results were
+lost. No server errors or 5xx were found for that period (checked in nginx and the backend log). Fix: a click
+outside no longer closes either dialog (Search students and Add students share the component); only the ×
+button and Escape close it, and Escape is still ignored while an add is running.
+
+- **Add students hint reworded** (same step, the owner's wording, for clerks): "Type one student per line:"
+  then `<student name>,<application number>`, then three lines: Name - full name with only uppercase and
+  lowercase letters (Eg Rohit Kumar Khanna); the comma ( , ) is required after that; Application number -
+  only numbers, no letters (Eg 1423423). The grey placeholder in the box no longer starts with a
+  `Student Name,Application No` header line (it looked like something to type) and shows two example
+  students instead; a pasted header line is still recognised and skipped.
+- Not covered by an automated test (no frontend component test setup); the owner checks by pressing in the
+  card, dragging out and releasing on the dark area, and by clicking outside: nothing should close.
+- Whole backend suite unchanged (197 of 197); frontend type check and build pass.
+- Deploy: `git pull --ff-only` and `npm run build` in `frontend/`; no backend restart. Rollback:
+  `git revert`, rebuild.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Closing the dialog | Low | Staff who click outside to close must now use the × or Escape; the × is in the dialog header. |
+| Lost results | Lower than before | A stray click or a drag out of the card can no longer lose the result table. |
+| Data and backend | None | Frontend only; no API, schema or restart. |
+| Open tabs on deploy | Low | Tabs with no thread open reload onto the new build; a tab with a thread open keeps the old behaviour until closed. |
+| Rollback | Very low | `git revert`, rebuild the frontend. |
+
+Overall risk: **very low**.
 
 ## Step 40 — Add students: a repeated Application No is flagged in the box
 

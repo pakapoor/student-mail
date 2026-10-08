@@ -419,9 +419,11 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
         }
     }
 
-    // Escape and a stray backdrop click are easy to hit by accident - ignore
-    // them while an import is in flight, or its result panel (which rows
-    // were rejected) is lost. The × button still closes deliberately.
+    // Escape is easy to hit by accident - ignore it while an import is in
+    // flight, or its result panel (which rows were rejected) is lost. A click
+    // outside the dialog no longer closes it at all (dragging the mouse out of
+    // the card while selecting text closed it and lost the results); only the ×
+    // button and Escape close it.
     function closeUnlessBusy() {
         if (!submitting) {
             onClose();
@@ -441,7 +443,7 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
                 event.preventDefault();
                 first?.focus();
             }
-        }} aria-labelledby="manage-students-title" onCancel={(event) => { event.preventDefault(); closeUnlessBusy(); }} onClick={(event) => { if (event.target === event.currentTarget) closeUnlessBusy(); }}>
+        }} aria-labelledby="manage-students-title" onCancel={(event) => { event.preventDefault(); closeUnlessBusy(); }}>
             <div
                 className="modal-card modal-card-wide"
                 onClick={(e) => e.stopPropagation()}
@@ -456,8 +458,15 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
                 {rosterTab === "add" && (
                     <div className="import-section">
                         <h3>Add to {collegeName} <span className="hint-text">(the college you selected at login)</span></h3>
-                        <p className="hint-text" id="import-help">Type one student per line: the name, then a <strong>comma</strong>, then the Application No. The comma is required, and the name can have letters and spaces only. Example:</p>
-                        <div className="import-example"><code>Jane Doe,10012345</code></div>
+                        <div className="import-help" id="import-help">
+                            <p className="hint-text">Type one student per line:</p>
+                            <div className="import-example"><code>&lt;student name&gt;,&lt;application number&gt;</code></div>
+                            <ul className="import-rules">
+                                <li><strong>Name</strong> - full name with only uppercase and lowercase letters. Eg <code>Rohit Kumar Khanna</code></li>
+                                <li>The <strong>comma ( , )</strong> is required after that</li>
+                                <li><strong>Application number</strong> - only numbers, no letters. Eg <code>1423423</code></li>
+                            </ul>
+                        </div>
                         <p className="hint-text">
                             Set automatically: the email (first word.last word@myemailinfo.com, with a number added after the name if taken) and the current year. Up to <strong>10 students at a time</strong>.
                         </p>
@@ -467,9 +476,8 @@ export default function ManageStudents({ mode, collegeName, onClose, onImported 
                             aria-describedby="import-help"
                             rows={6}
                             placeholder={
-                                "Student Name,Application No\n" +
-                                "Jane Doe,10012345\n" +
-                                "John Roe,10012346"
+                                "Rohit Kumar Khanna,1423423\n" +
+                                "Jane Doe,1423424"
                             }
                             value={csv}
                             onChange={(e) => setCsv(e.target.value)}

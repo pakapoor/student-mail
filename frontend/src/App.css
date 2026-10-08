@@ -2086,6 +2086,8 @@ select,
 .admin-row .secondary-button { padding: 7px 10px; }
 .import-section { border: 0; padding-bottom: 0; margin-bottom: 0; }
 .import-example { margin-top: 12px; padding: 12px; background: var(--page-bg); border-radius: 8px; }
+.import-rules { margin: 10px 0 12px; padding-left: 18px; font-size: 13px; color: var(--text); line-height: 1.7; }
+.import-rules code { font-family: ui-monospace, monospace; background: var(--page-bg); padding: 1px 6px; border-radius: 4px; }
 .import-details { margin-top: 12px; font-size: 13px; color: var(--text-muted); }
 .import-details summary { color: var(--accent); cursor: pointer; }
 .import-details p { margin-top: 8px; }
