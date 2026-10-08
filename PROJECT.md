@@ -11,8 +11,8 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 37 (`35ceef4`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 38 (`120e215`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
@@ -43,7 +43,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 35 | Login screen when signed out in another tab | deployed 2026-10-01 |
 | 36 | Reason line on rejected rows in the list | deployed 2026-10-08 |
 | 37 | Add students from name + Application No, mailbox created automatically | deployed 2026-10-08 |
-| 38 | Add students: simpler hint text | checked in 2026-10-08 |
+| 38 | Add students: simpler hint text | deployed 2026-10-08 |
 
 ## Operating prod (runbook)
 
@@ -167,7 +167,10 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 38 — Add students: simpler hint text
 
-**Status: CHECKED IN 2026-10-08** (user asked for it). Frontend only: the hint under the format on the Add
+**Status: DEPLOYED 2026-10-08** at `120e215` (user authorized). Frontend only: `git pull --ff-only` and
+`npm run build` in `frontend/` on prod (new bundle `index-DPLWEBtg.js`); the backend service was NOT restarted
+(still running since 06:43:22 UTC), so no logins or live-update streams were dropped. Verified: the page
+serves the new bundle, `/api/threads` without a login answers 401, service and nginx active. Change: the hint under the format on the Add
 students tab no longer mentions the password, and "10 students at a time" is bold
 (`frontend/src/ManageStudents.tsx`). Behaviour is unchanged; the result panel's note about the password was
 left as it was. Whole backend suite 160 of 160; backend and frontend type checks and the frontend build pass.
