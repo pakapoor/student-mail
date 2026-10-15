@@ -131,7 +131,8 @@ export async function searchAdminStudents(opts: {
     // Mailbox + search: shared by the page, the status counts and the
     // college counts, so all of them describe the current search. The year
     // is deliberately not searchable (every student has the same one).
-    const searchConds: string[] = ["st.deleted_at IS NULL", "st.central_email = $1"];
+    // A student whose new mailbox has not received its TEST email yet is hidden (Step 48).
+    const searchConds: string[] = ["st.deleted_at IS NULL", "st.mailbox_confirmed_at IS NOT NULL", "st.central_email = $1"];
     const searchParams: unknown[] = [opts.centralEmail];
 
     if (search) {

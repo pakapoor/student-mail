@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 48. |
+| Next step number | 49. |
 
 ### Step index
 
@@ -53,6 +53,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 45 | Search students opens on the college chosen at login | deployed 2026-10-08 |
 | 46 | Search students: less clutter, one small All colleges button | deployed 2026-10-08 |
 | 47 | Search students: a search always looks in every college, with a clear (✕) button | deployed 2026-10-08 |
+| 48 | Add students: a TEST email confirms each new mailbox (60 s, else the add fails); unconfirmed students hidden; Add students log on the status page (migration 018) | checked in 2026-10-15, deploying |
 
 ## Operating prod (runbook)
 
@@ -173,6 +174,104 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 48 — Add students: a TEST email confirms each new mailbox; Add students log on the status page
+
+**Status: CHECKED IN 2026-10-15**, deploy authorized by the owner the same day. Note: the chat session
+where this was built was deleted by mistake, so this section was rebuilt from the code on 2026-10-15
+(the earlier draft described a 5-minute "NOT CONFIRMED" design that was replaced during the build).
+From now on every change is written here first, before the code.
+
+**Why:** on 2026-10-15 staff added TAMANNA (32237, KSMA CENTRAL); the row said Added but the owner could
+not see the mailbox in Migadu's web page. The mailbox existed (API, IMAP login, a test mail from Gmail
+arrived in 3 s and reached central): the Migadu page was out of date. The owner asked that a row only say
+Added once a test email has really reached the new mailbox, that a student who is not confirmed is not
+shown to staff, and that every add event is visible on the status page.
+
+**How it works** (`backend/src/mailboxTest.ts`, new):
+
+1. **Inside the add request** (`autoAdd.ts` -> `sendFirstTestMail`): the student is saved with
+   `students.mailbox_confirmed_at` NULL (hidden from staff). Then the new mailbox is checked (Migadu
+   lookup, IMAP login retried each second for up to 15 s) and a TEST email is sent from the central
+   mailbox (SMTP, its stored password): subject "TEST - mailbox check, please ignore", header
+   `X-Student-Mail-Test: 1`, fixed Message-ID `<mailbox-test-ID@domain>`. A failed check or send never
+   fails the add; it is logged (`test-send-failed`) and sent again by the next look.
+2. **The browser asks** `POST /api/students/test-mailbox` (`server.ts`) until the answer is not
+   `waiting`. Each ask watches the new mailbox read-only (IMAP EXAMINE, 1 s polls) for up to 20 s.
+   Arrived: `mailbox_confirmed_at` is set, the student shows up everywhere, answer `received`.
+   Only a student of the session's college and central mailbox, saved in the last hour (else 404).
+3. **Not arrived 60 s after the student was saved** (`LIMIT_SECONDS`): the add has **failed**. In one
+   transaction the student's Application No is changed to a random unused `99xxxxxxxxxx` number (so the
+   real one can be added again) and the record is marked deleted (hidden for good; a late mail changes
+   nothing). One detailed `add-failed` entry (reason, last error, every logged step) goes to the Add
+   students log. The Migadu mailbox is kept. The clerk sees: "This student's email could not be created.
+   Please try again after 10 minutes." A retry makes a new address (`first.last1`), since the failed
+   record still holds the old one.
+4. **Dialog closed early:** a server sweep (`startStaleAddSweep`, once a minute) takes every unconfirmed
+   student older than 90 s (and under 24 h), looks once more, then confirms or fails it the same way.
+5. **The central sync** (`sync.ts` `insertMessageForStudent`): a mail with the header **and** sent by
+   the central mailbox itself is never stored (staff never see a "please ignore" thread); seeing it
+   confirms the student (`confirmFromTestMail`) if the browser stopped asking.
+
+The 60 s limit comes from a timing trial on real Migadu (`backend/scripts/mailbox-trial.ts`, run by
+hand, never part of `npm test`; it creates test mailboxes, sends the mail and deletes them at the end):
+13 mailboxes, create -> mail in the inbox in 5-14 s.
+
+**Hidden until confirmed:** `fetchStudents` (`students.ts`), Search students (`studentsAdmin.ts`), and
+the console's student search and thread matching (`thread.ts`) all require `mailbox_confirmed_at IS NOT
+NULL`. Every existing student, and anyone the CSV import adds, gets the column default `now()`, so
+nobody already listed disappears. An Application No held by an unconfirmed student is flagged "added but
+not ready yet. Wait, then search for this student" (in the box, `studentLines.ts`, and by the server,
+`autoAdd.ts`, `usedApplicationNumbers`).
+
+**The add dialog** (`ManageStudents.tsx`, `App.css`, `autoAddClient.ts` `postTestMailbox`): an added
+line becomes **WAITING… do not use yet** (spinner, no email shown) and turns **Added** (with the add's own
+note) when the mail arrived, or **Failed** with the message above. Failed lines go back into the box.
+The checks run while the next lines are added; the button says "Waiting for test emails..." until all
+are done. The browser call never throws: a 404 counts as failed, any other problem as waiting (asked
+again after 10 s); a 2-minute safety limit in the browser ends it if the server never answers.
+
+**Add students log** (`backend/src/addLog.ts`, new; migration `018_student_add_log.sql`; card in
+`StatusPage.tsx`): the `[audit]` lines of `autoAdd.ts` (moved here) are also stored in `student_add_log`
+(kept 30 days), plus `test-sent`, `test-send-failed`, `test-received` (seconds, via add dialog / server
+check / central sync) and `add-failed`. The card lists the last 7 days newest first (at most 500), failed
+rows highlighted. Never a password. Storing never throws; if the log cannot be read, the test mail counts
+as already sent (better no mail than one per request).
+
+**Migration 018** (additive): `students.mailbox_confirmed_at TIMESTAMPTZ DEFAULT now()` (fills existing
+rows without a rewrite) and table `student_add_log` with an index on `at`. Mirrored in `schema.sql`.
+
+**Tests:** new `backend/tests/mailboxTest.db.test.mjs` (13 tests on a throwaway PostgreSQL: the add sends
+the mail; a failed send is retried; hidden until confirmed then shown; waiting under 60 s; failure after
+60 s frees the number and logs everything; a late mail changes nothing; the sync never stores the mail
+and confirms the student; header + sender rule; the stale sweep; college / mailbox / last-hour scope;
+existing and imported students count as confirmed; status list and 30-day pruning; logging never
+throws). Updated: `autoAdd`, `autoAddClient`, `studentLines`, `usedNumbers` tests. Full check 2026-10-15:
+backend `tsc` OK, **263 of 263** backend tests, frontend `tsc -b` OK, frontend build OK. The dialog and
+the status card have no automated test (no frontend component test setup).
+
+**Deploy:** fresh backup; migration 018 as the app role with `ON_ERROR_STOP` **before** the new backend
+starts; `git pull --ff-only`; `npm run build` in `frontend/`; restart the backend. Rollback: `git
+revert`, restart, rebuild (the column and table can stay; old code ignores them).
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Data / database | Low | Migration is additive; existing students get `now()` and stay visible. A failed add changes only the new record (new random number, deleted), in one transaction. |
+| Wrong behavior: false failures | Medium | If Migadu holds mail longer than 60 s, a good mailbox is marked failed and the clerk retries after 10 minutes with a new address (`first.last1`); the first mailbox stays in Migadu unused. Measured 5-14 s on 13 mailboxes. |
+| Wrong behavior: hidden students | Low | Only students made by Add students start unconfirmed; they appear on confirmation. Tested on every staff list. |
+| Hiding real mail | Very low | Only mail with the header and sent by the central mailbox itself is skipped; nobody else sends from it (staff never use Send). |
+| Sync code touched | Low | One early return before the insert; tested with a real database. |
+| Slower adding | Low | Each line waits for its mail (about 5-15 s) before Added; the next lines are added meanwhile. |
+| Extra mail and logins | Low | One TEST mail per new student; read-only IMAP looks while waiting; a once-a-minute sweep query. |
+| Security | Low | Central password used for SMTP as the IMAP login already does; never logged. Endpoint needs login and college, limited to own college and the last hour. |
+| Privacy | Low | The log holds names, Application Nos, emails, college and IP (as the journal did), no password; the status page needs the console login. |
+| Open sessions | Low | Backend restart drops SSE briefly (consoles reconnect); logins persist. |
+| Deploy order | Medium if forgotten | Migration 018 must run before the new backend starts, or every student query fails on the missing column. |
+| Rollback | Very low | `git revert`, restart, rebuild. |
+
+Overall risk: **low-medium** (the 60 s limit is the main judgement call).
 
 ## Step 47 — Search students: a search always looks in every college
 

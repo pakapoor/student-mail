@@ -299,6 +299,7 @@ async function findMatchingStudentEmails(
         SELECT email
         FROM students
         WHERE deleted_at IS NULL
+          AND mailbox_confirmed_at IS NOT NULL
           AND college_id = $1
           AND ${searchClause(SEARCH_TEXT, 2, patterns.length)}
         `,
@@ -337,6 +338,7 @@ export async function findSearchMatches(
         SELECT id, email, first_name, last_name, name, central_email
         FROM students
         WHERE deleted_at IS NULL
+          AND mailbox_confirmed_at IS NOT NULL
           AND college_id = $1
           AND ${searchClause(SEARCH_TEXT, 2, patterns.length)}
         ORDER BY id

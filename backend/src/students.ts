@@ -59,7 +59,7 @@ export async function fetchStudents(
         `
         SELECT id, name, email, created_at
         FROM students
-        WHERE central_email = $1 AND college_id = $2
+        WHERE central_email = $1 AND college_id = $2 AND mailbox_confirmed_at IS NOT NULL
         ORDER BY created_at DESC
         `,
         [centralEmail, collegeId]
@@ -322,6 +322,8 @@ export async function importStudents(
 export interface UsedNumber {
     name: string | null;
     deleted: boolean;
+    // Added, but its mailbox has not received the TEST email yet (hidden, Step 48).
+    notReady: boolean;
 }
 
 export const MAX_NUMBERS_TO_CHECK = 50;
@@ -333,15 +335,15 @@ export async function usedApplicationNumbers(collegeId: string, numbers: string[
         return {};
     }
 
-    const result = await db.query<{ admission_id: string; name: string | null; deleted_at: string | null }>(
-        "SELECT admission_id, name, deleted_at FROM students WHERE college_id = $1 AND admission_id = ANY($2)",
+    const result = await db.query<{ admission_id: string; name: string | null; deleted_at: string | null; not_ready: boolean }>(
+        "SELECT admission_id, name, deleted_at, mailbox_confirmed_at IS NULL AS not_ready FROM students WHERE college_id = $1 AND admission_id = ANY($2)",
         [collegeId, wanted]
     );
 
     const used: Record<string, UsedNumber> = {};
 
     for (const row of result.rows) {
-        used[row.admission_id] = { name: row.name, deleted: row.deleted_at !== null };
+        used[row.admission_id] = { name: row.name, deleted: row.deleted_at !== null, notReady: row.not_ready === true && row.deleted_at === null };
     }
 
     return used;

@@ -74,6 +74,50 @@ export async function postAutoAdd(url: string, csv: string, timeoutMs: number = 
     }
 }
 
+export type MailboxTestState = "received" | "waiting" | "failed";
+
+// Step 48: one look at a newly added mailbox for the TEST email the add sent (the
+// server waits up to 20 s; 60 s after the add without it, the add has failed).
+// Never throws: a failed call or an odd answer counts as "waiting" (the caller asks
+// again until its own time limit); a 404 (no such new student) counts as "failed".
+export async function postTestMailbox(
+    url: string,
+    email: string,
+    timeoutMs: number = AUTO_ADD_TIMEOUT_MS
+): Promise<{ state: MailboxTestState; failed: boolean }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const res = await apiFetch(url, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+            signal: controller.signal,
+        });
+
+        if (res.status === 404) {
+            return { state: "failed", failed: false };
+        }
+
+        if (!res.ok) {
+            return { state: "waiting", failed: true };
+        }
+
+        const payload: unknown = await res.json();
+        const state = payload && typeof payload === "object" && "state" in payload ? payload.state : null;
+
+        return state === "received" || state === "waiting" || state === "failed"
+            ? { state, failed: false }
+            : { state: "waiting", failed: true };
+    } catch {
+        return { state: "waiting", failed: true };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 // Which of these Application Nos are already used in the college. This is only
 // advice for the screen, so it fails quietly: on any problem the answer is
 // "nothing known" and adding goes ahead (the server checks again).

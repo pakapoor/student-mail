@@ -209,3 +209,9 @@ test('applicationNumbers picks the valid numbers of the box, once each, skipping
     assert.deepEqual(applicationNumbers('Student Name,Application No\nA One,5\nB Two,6\nC Three,5\nD Four 7\nE Five,x8\nF Six,0\n\n  G Seven , 9 '), ['5', '6', '9']);
     assert.deepEqual(applicationNumbers(''), []);
 });
+
+test('Step 48: a number whose student is added but not ready yet says to wait and search', () => {
+    const errors = checkStudentLines('Jane Doe,888', { 888: { name: 'JANE DOE', deleted: false, notReady: true } }).errors;
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].message, 'The Application No 888 belongs to JANE DOE, who was added but is not ready yet. Wait, then search for this student.');
+});

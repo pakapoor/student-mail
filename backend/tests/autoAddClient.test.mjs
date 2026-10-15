@@ -3,7 +3,7 @@
 // parsing error, and a request that never answers ends instead of hanging.
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { postAutoAdd, postCheckNumbers } from '../../frontend/src/autoAddClient.ts';
+import { postAutoAdd, postCheckNumbers, postTestMailbox } from '../../frontend/src/autoAddClient.ts';
 import { setSessionEndedHandler } from '../../frontend/src/apiFetch.ts';
 
 const realFetch = globalThis.fetch;
@@ -102,4 +102,27 @@ test('any problem with the look-up (server error, HTML page, dropped connection,
     assert.deepEqual(await postCheckNumbers('/x', ['5']), {});
     globalThis.fetch = (url, init) => new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
     assert.deepEqual(await postCheckNumbers('/x', ['5'], 50), {});
+});
+
+// ---- Step 48: the mailbox test call never throws; a problem means "ask again"
+test('the mailbox test passes the state on and sends the email', async () => {
+    let sent;
+    globalThis.fetch = async (url, init) => { sent = { url, init }; return new Response(JSON.stringify({ state: 'received', seconds: 3 }), { status: 200 }); };
+    assert.deepEqual(await postTestMailbox('/api/students/test-mailbox', 'a@b.c'), { state: 'received', failed: false });
+    assert.deepEqual(JSON.parse(sent.init.body), { email: 'a@b.c' });
+    globalThis.fetch = reply(200, { state: 'waiting' });
+    assert.deepEqual(await postTestMailbox('/x', 'a@b.c'), { state: 'waiting', failed: false });
+    globalThis.fetch = reply(200, { state: 'failed' });
+    assert.deepEqual(await postTestMailbox('/x', 'a@b.c'), { state: 'failed', failed: false });
+});
+
+test('the mailbox test: no such new student is failed; any other problem is waiting (and asked again)', async () => {
+    globalThis.fetch = reply(404, { error: 'No student' });
+    assert.deepEqual(await postTestMailbox('/x', 'a@b.c'), { state: 'failed', failed: false });
+    for (const make of [reply(500, { error: 'x' }), reply(502, '<html>Bad Gateway</html>', 'text/html'), reply(200, { state: 'odd' }), reply(200, '<html>', 'text/html'), () => Promise.reject(new TypeError('Failed to fetch'))]) {
+        globalThis.fetch = make;
+        assert.deepEqual(await postTestMailbox('/x', 'a@b.c'), { state: 'waiting', failed: true });
+    }
+    globalThis.fetch = (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+    assert.deepEqual(await postTestMailbox('/x', 'a@b.c', 20), { state: 'waiting', failed: true });
 });

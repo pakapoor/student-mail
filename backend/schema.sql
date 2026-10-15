@@ -40,6 +40,9 @@ CREATE TABLE students (
     college_id BIGINT REFERENCES colleges(id),
     admission_id TEXT,
     is_test BOOLEAN NOT NULL DEFAULT FALSE,
+    -- When a TEST email reached the student's mailbox (migration 018). Add
+    -- students inserts NULL: the student is hidden from staff screens until set.
+    mailbox_confirmed_at TIMESTAMPTZ DEFAULT now(),
     -- Edugate registration status (migration 010): NULL = no code/login
     -- email yet, 'REGISTRATION_PENDING' = a code email arrived, 'REGISTERED'
     -- = a registration email arrived (never goes back). Times are the
@@ -225,6 +228,18 @@ CREATE TABLE migadu_calls (
 );
 
 CREATE INDEX idx_migadu_calls_at ON migadu_calls (at);
+
+-- Step 48: the Add students log on the status page (addLog.ts), kept 30 days.
+-- `details` holds who (central, college, ip) and the student (name,
+-- applicationNo, email, reason, seconds) - never a password.
+CREATE TABLE student_add_log (
+    id BIGSERIAL PRIMARY KEY,
+    at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    event TEXT NOT NULL,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX idx_student_add_log_at ON student_add_log (at);
 
 -- Keeps the student's Edugate dates right when a code/login/rejection email is
 -- deleted or corrected (migration 015).

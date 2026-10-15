@@ -5,6 +5,7 @@ import { logMigaduDelay, measureMigaduHold, type MigaduHold } from "./migaduDela
 import { classifyEdugate, isEdugateSender } from "../../shared/edugate.js";
 import { applyRegistrationEvent } from "./registrationStatus.js";
 import { noteEvent, noteProblem, solveProblems } from "./systemStatus.js";
+import { confirmFromTestMail, isMailboxTestMail } from "./mailboxTest.js";
 
 // Shared by the central-mailbox sync below and the per-student direct check
 // (checkStudentMail.ts). Both paths key on (message_id, student_email), so a
@@ -21,6 +22,14 @@ export async function insertMessageForStudent(
     centralEmail: string,
     migaduHold: MigaduHold | null = null
 ): Promise<boolean> {
+    // The console's own TEST email to a newly added mailbox (mailboxTest.ts) is
+    // never stored, so staff do not see a "please ignore" thread for each student;
+    // seeing it confirms the student's new mailbox.
+    if (isMailboxTestMail(parsed, senderEmail, centralEmail)) {
+        await confirmFromTestMail(studentEmail, messageId);
+        return false;
+    }
+
     // The sender's own send time (Date: header) - ordering uses this rather
     // than arrival, which Migadu delays can scramble.
     const sentAt = parsed.date && !Number.isNaN(parsed.date.getTime()) ? parsed.date : null;

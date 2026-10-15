@@ -38,6 +38,7 @@ import {
 } from "./centralMailboxes.js";
 import { fetchStudents, importStudents, usedApplicationNumbers, MAX_NUMBERS_TO_CHECK } from "./students.js";
 import { autoAddStudents, AutoAddInputError } from "./autoAdd.js";
+import { startStaleAddSweep, testNewMailbox } from "./mailboxTest.js";
 import {
     ROSTER_FILTERS,
     searchAdminStudents,
@@ -244,6 +245,41 @@ app.post("/api/students/auto-add", requireAuth, requireCollege, async (req, res)
 
         console.error("Auto-add failed:", error);
         res.status(500).json({ error: "Could not add students right now. Try again; if it keeps failing, tell the owner." });
+    }
+});
+
+// Step 48: after a student is added (the add already sent the new mailbox a TEST
+// email), the console calls this until the answer is no longer "waiting": the
+// mailbox is watched for the mail; 60 s after the add without it, the add has
+// failed (see mailboxTest.ts). Only students of this college added in the last hour.
+app.post("/api/students/test-mailbox", requireAuth, requireCollege, async (req, res) => {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+
+    if (!email || email.length > 320) {
+        res.status(400).json({ error: "email is required" });
+        return;
+    }
+
+    try {
+        const result = await testNewMailbox(
+            email,
+            {
+                central: res.locals.centralEmail,
+                college: res.locals.college.name,
+                ip: String(req.headers["x-forwarded-for"] ?? req.ip ?? "").split(",")[0]!.trim(),
+            },
+            res.locals.collegeId
+        );
+
+        if (!result) {
+            res.status(404).json({ error: "No student just added with that email in this college" });
+            return;
+        }
+
+        res.json(result);
+    } catch (error) {
+        console.error("Mailbox test failed:", error);
+        res.status(500).json({ error: "Could not check the mailbox right now." });
     }
 });
 
@@ -629,6 +665,9 @@ app.listen(port, "0.0.0.0", async () => {
     // Hot list: watch a student's mailbox while staff wait for the
     // registration email after a code (hotList.ts).
     startHotList();
+    // Fails a new student whose TEST email never arrived after the add dialog
+    // stopped checking (mailboxTest.ts).
+    startStaleAddSweep();
     console.log(`API listening on http://127.0.0.1:${port}`);
 
     const mailboxes = await listCentralMailboxes();

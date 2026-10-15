@@ -765,7 +765,8 @@
 .autoadd-tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; }
 .autoadd-tag.waiting { background: var(--border-soft); color: var(--text-muted); }
 .autoadd-tag.trying,
-.autoadd-tag.retrying { background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; }
+.autoadd-tag.retrying,
+.autoadd-tag.checking { background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; }
 .autoadd-pill.busy { background: var(--accent-soft); color: var(--accent); }
 .autoadd-tag.added { background: var(--ok-soft); color: var(--ok); }
 .autoadd-tag.skipped { background: var(--warn-soft); color: var(--warn); }
@@ -2270,3 +2271,7 @@ a.logout-button { display: inline-block; text-decoration: none; }
 .admin-search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); font-size: 14px; line-height: 1; cursor: pointer; }
 .admin-search-clear:hover { background: var(--border-soft); color: var(--text); }
 .admin-search-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Step 48: failures in the Add students log. */
+.status-row-bad td { background: var(--bad-soft); }
+.status-pre { white-space: pre-wrap; font-size: 11px; margin: 4px 0 0; max-width: 480px; }

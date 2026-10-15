@@ -6,19 +6,22 @@ import assert from 'node:assert/strict';
 
 // Fake database. `usedAdmission` = Application Nos already in the college,
 // `dbEmails` = emails already in students, `failInsert` makes the INSERT throw.
-const state = { usedAdmission: new Map(), dbEmails: new Set(), failInsert: false, inserts: [] };
+const state = { usedAdmission: new Map(), notReady: new Set(), dbEmails: new Set(), failInsert: false, inserts: [] };
 mock.module('../src/db.ts', { exports: { db: { query: async (sql, params) => {
     if (sql.includes('FROM students WHERE college_id')) {
         const name = state.usedAdmission.get(params[1]);
-        return name === undefined ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ name }] };
+        return name === undefined ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ name, not_ready: state.notReady.has(params[1]) }] };
     }
     if (sql.includes('FROM students WHERE email')) {
         return { rowCount: state.dbEmails.has(params[0]) ? 1 : 0, rows: [] };
     }
+    if (sql.includes('student_add_log')) {
+        return { rowCount: 1, rows: [] };
+    }
     if (sql.includes('INSERT INTO students')) {
         if (state.failInsert) throw new Error('insert failed');
         state.inserts.push(params);
-        return { rowCount: 1, rows: [] };
+        return { rowCount: 1, rows: [{ id: String(100 + state.inserts.length) }] };
     }
     throw new Error(`unexpected SQL: ${sql}`);
 } } } });
@@ -50,8 +53,10 @@ function fakeMigadu({ taken = [], fail = [], details = {} } = {}) {
     };
 }
 
-const reset = () => { state.usedAdmission = new Map(); state.dbEmails = new Set(); state.failInsert = false; state.inserts = []; };
-const run = (csv, migadu) => autoAddStudents(csv, 'central@example.test', '3', 'IHSM ELITE', migadu);
+const reset = () => { state.usedAdmission = new Map(); state.notReady = new Set(); state.dbEmails = new Set(); state.failInsert = false; state.inserts = []; state.tests = []; };
+// Step 48: the TEST email start is faked here (mailboxTest.db.test.mjs covers it).
+const fakeStart = async (student, who) => { state.tests.push({ student, who }); };
+const run = (csv, migadu, startTest = fakeStart) => autoAddStudents(csv, 'central@example.test', '3', 'IHSM ELITE', migadu, '', startTest);
 
 test('address rule: first word + last word, lowercase, plain letters', () => {
     assert.equal(emailBase('SAMYAK MESHRAM'), 'samyak.meshram');
@@ -412,7 +417,7 @@ test('every line gets an audit entry with who (central, college, IP), what and t
     state.usedAdmission.set('30437', 'ZUNAIRA SAQI');
     const migadu = fakeMigadu({ fail: ['neha.joshi', 'neha.joshi1'] });
     const entries = await captureAudit(() => autoAddStudents(
-        'SAMYAK MESHRAM,32299\nARJUN VERMA,30437\nNEHA JOSHI,32305', 'central@example.test', '3', 'IHSM ELITE', migadu, '203.0.113.9'));
+        'SAMYAK MESHRAM,32299\nARJUN VERMA,30437\nNEHA JOSHI,32305', 'central@example.test', '3', 'IHSM ELITE', migadu, '203.0.113.9', fakeStart));
     const lines = entries.filter((e) => e.event === 'student-add');
     assert.deepEqual(lines.map((e) => [e.line, e.outcome, e.applicationNo, e.email]), [
         [1, 'added', '32299', 'samyak.meshram@myemailinfo.com'],
@@ -428,7 +433,7 @@ test('a mailbox removed after a failed save is audited, and nothing audited cont
     reset();
     state.failInsert = true;
     const migadu = fakeMigadu();
-    const entries = await captureAudit(() => autoAddStudents('RAJ KUMAR,2', 'central@example.test', '3', 'IHSM ELITE', migadu, '198.51.100.7'));
+    const entries = await captureAudit(() => autoAddStudents('RAJ KUMAR,2', 'central@example.test', '3', 'IHSM ELITE', migadu, '198.51.100.7', fakeStart));
     assert.deepEqual(entries.map((e) => e.event), ['mailbox-created', 'mailbox-removed', 'student-add']);
     assert.equal(entries[2].outcome, 'failed');
     assert.ok(entries.every((e) => !JSON.stringify(e).toLowerCase().includes('password')));
@@ -484,4 +489,46 @@ test('if saving fails for an adopted mailbox, it is left in place (not removed) 
     const result = await run('SAM LEE,1', migadu);
     assert.equal(result.rows[0].status, 'failed');
     assert.deepEqual(migadu.calls.removed, []);
+});
+
+// ---- Step 48: the new student is saved hidden, and the TEST email is started before the answer
+test('a saved student is stored as not confirmed, and its TEST email is started with who added it', async () => {
+    reset();
+    const result = await run('SAMYAK MESHRAM,32299', fakeMigadu());
+    assert.equal(result.rows[0].status, 'added');
+    assert.equal(state.inserts.length, 1);
+    assert.deepEqual(state.tests, [{
+        student: { id: '101', email: 'samyak.meshram@myemailinfo.com', password: 'password', name: 'SAMYAK MESHRAM', admissionId: '32299' },
+        who: { central: 'central@example.test', college: 'IHSM ELITE', ip: '' },
+    }]);
+});
+
+test('no TEST email for a line that was skipped, failed or could not be saved', async () => {
+    reset();
+    state.usedAdmission.set('30437', 'ZUNAIRA SAQI');
+    await run('ARJUN VERMA,30437\nNEHA JOSHI,32305', fakeMigadu({ fail: ['neha.joshi'] }));
+    state.failInsert = true;
+    await run('RAJ KUMAR,2', fakeMigadu());
+    assert.deepEqual(state.tests, []);
+});
+
+test('a TEST email that cannot start never fails the add', async () => {
+    reset();
+    const original = console.error;
+    console.error = () => {};
+    try {
+        const result = await run('SAMYAK MESHRAM,32299', fakeMigadu(), async () => { throw new Error('smtp down'); });
+        assert.equal(result.rows[0].status, 'added');
+    } finally { console.error = original; }
+});
+
+test('a number held by a student who is not ready yet says so, and nothing is created', async () => {
+    reset();
+    state.usedAdmission.set('30437', 'JANE DOE');
+    state.notReady.add('30437');
+    const migadu = fakeMigadu();
+    const result = await run('JANE DOE,30437', migadu);
+    assert.equal(result.rows[0].status, 'skipped');
+    assert.equal(result.rows[0].reason, 'Application No 30437 belongs to JANE DOE, who was added but is not ready yet. Wait, then search for this student. No mailbox was created.');
+    assert.deepEqual(migadu.calls.created, []);
 });

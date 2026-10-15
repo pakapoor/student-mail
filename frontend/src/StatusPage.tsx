@@ -44,6 +44,30 @@ function Pill({ tone, children }: { tone: "ok" | "warn" | "bad"; children: React
     return <span className={`status-pill ${tone}`}>{children}</span>;
 }
 
+// Step 48: the Add students log, in plain words.
+function addEventLabel(event: string, outcome?: string): string {
+    switch (event) {
+        case "mailbox-created":
+            return "Mailbox created";
+        case "mailbox-adopted":
+            return "Mailbox reused (earlier try)";
+        case "mailbox-removed":
+            return "Mailbox removed";
+        case "student-add":
+            return outcome === "added" ? "Student saved" : outcome === "skipped" ? "Skipped" : "Failed";
+        case "test-sent":
+            return "Test email sent";
+        case "test-send-failed":
+            return "Test email could not be sent (retried)";
+        case "test-received":
+            return "Test email received · Added";
+        case "add-failed":
+            return "Add failed – email not confirmed";
+        default:
+            return event;
+    }
+}
+
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
     return (
         <>
@@ -105,6 +129,9 @@ export default function StatusPage() {
     const sweepPct = sweep && sweep.mailboxes > 0 ? Math.round((sweep.sweptThisRound / sweep.mailboxes) * 100) : 0;
     const codes = s.codes && !("error" in s.codes) ? s.codes : null;
     const migadu = s.migadu && !("error" in s.migadu) ? s.migadu : null;
+    const addLog = s.addLog && !("error" in s.addLog) ? s.addLog : null;
+    const addFailed = addLog?.entries.filter((e) => e.event === "add-failed").length ?? 0;
+    const addFailures = addLog?.entries.filter((e) => e.event === "student-add" && e.outcome === "failed").length ?? 0;
     const waitingNow = codes?.timeline.points.at(-1)?.waiting ?? 0;
 
     return (
@@ -347,6 +374,86 @@ export default function StatusPage() {
                                         </table>
                                     </div>
                                 </>
+                            )}
+                        </>
+                    )}
+                </div>
+
+                {/* Step 48: every step of every Add students line, newest first. */}
+                <div className="status-card">
+                    <div className="status-card-head">
+                        <b>Add students log</b>
+                        {!addLog ? (
+                            <Pill tone="warn">Unavailable</Pill>
+                        ) : addFailed > 0 ? (
+                            <Pill tone="bad">{addFailed} add{addFailed === 1 ? "" : "s"} failed (email not confirmed)</Pill>
+                        ) : addFailures > 0 ? (
+                            <Pill tone="warn">{addFailures} failed</Pill>
+                        ) : (
+                            <Pill tone="ok">{addLog.entries.filter((e) => e.event === "test-received").length} added</Pill>
+                        )}
+                    </div>
+                    {addLog && (
+                        <>
+                            <p className="status-hint">
+                                Every step of adding students over the last {addLog.windowDays} days (newest first, at most {addLog.limit}): mailbox
+                                created, student saved, test email sent and received. A student counts as Added once the test email arrived; without it
+                                after 60 s the add fails, the real Application No is freed (the record gets a random number and is hidden) and the
+                                clerk is told to try again after 10 minutes.
+                            </p>
+                            {addLog.entries.length === 0 ? (
+                                <p className="empty-state">No students added in the last {addLog.windowDays} days.</p>
+                            ) : (
+                                <div className="status-table-wrap status-table-scroll">
+                                    <table className="status-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>What</th>
+                                                <th>Student</th>
+                                                <th>Email</th>
+                                                <th>College · IP</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {addLog.entries.map((e, i) => (
+                                                <tr key={`${e.at}-${i}`} className={e.event === "add-failed" || e.event === "test-send-failed" ? "status-row-bad" : undefined}>
+                                                    <td className="t">{shortDateTime(e.at)}</td>
+                                                    <td>{addEventLabel(e.event, e.outcome)}</td>
+                                                    <td>
+                                                        {e.name ?? "—"}
+                                                        {e.applicationNo ? <small> · {e.applicationNo}</small> : null}
+                                                    </td>
+                                                    <td>{e.email ?? "—"}</td>
+                                                    <td>
+                                                        {e.college ?? "—"}
+                                                        {e.ip ? <small> · {e.ip}</small> : null}
+                                                    </td>
+                                                    <td>
+                                                        {e.event === "test-received"
+                                                            ? [e.seconds != null ? `arrived after ${e.seconds} s` : null, e.via ? `seen by ${e.via}` : null].filter(Boolean).join(" · ")
+                                                            : e.event === "test-sent"
+                                                              ? [
+                                                                    e.loginMs != null ? `mailbox check ${((Number(e.lookupMs ?? 0) + Number(e.loginMs)) / 1000).toFixed(1)} s` : null,
+                                                                    e.sendMs != null ? `send ${(Number(e.sendMs) / 1000).toFixed(1)} s` : null,
+                                                                    e.retried ? "sent again" : null,
+                                                                ].filter(Boolean).join(" · ")
+                                                              : e.reason ?? ""}
+                                                        {e.event === "add-failed" && (
+                                                            <details>
+                                                                <summary>
+                                                                    Application No changed to {e.newApplicationNo ?? "—"} · waited {e.waitedSeconds ?? "—"} s · mailbox kept
+                                                                </summary>
+                                                                <pre className="status-pre">{JSON.stringify({ createdAt: e.createdAt, steps: e.steps }, null, 2)}</pre>
+                                                            </details>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
                         </>
                     )}

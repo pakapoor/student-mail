@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shortDateTime } from "./format";
 import { applicationNumbers, checkStudentLines, type TakenNumber } from "./studentLines";
-import { autoAddStudents, checkApplicationNumbers, fetchAdminStudents, fetchStudents } from "./api";
+import { autoAddStudents, checkApplicationNumbers, fetchAdminStudents, fetchStudents, testNewMailbox } from "./api";
 import type {
     AdminStudentPage,
     AdminStudentRow,
@@ -13,14 +13,24 @@ export type StudentsMode = "search" | "add";
 
 // One line of the Add students result. The email only exists once the student
 // has really been added; until then the row shows just the name and Application No.
+// "checking": the mailbox and student exist and a TEST email was sent to the
+// mailbox; the row says "do not use yet" and shows no email until the mail has
+// arrived (then Added) or 60 s have passed without it (then Failed) - Step 48.
 interface AddRow {
     text: string;
     name: string;
     admissionId: string;
-    status: "waiting" | "trying" | "retrying" | "added" | "skipped" | "failed";
+    status: "waiting" | "trying" | "retrying" | "checking" | "added" | "skipped" | "failed";
     email: string | null;
     reason: string | null;
 }
+
+const IN_PROGRESS: AddRow["status"][] = ["waiting", "trying", "retrying", "checking"];
+const FAILED_TEXT = "This student's email could not be created. Please try again after 10 minutes.";
+// The server says "failed" 60 s after the add; this is only a safety net in case
+// its answers never come.
+const CONFIRM_LIMIT_MS = 2 * 60 * 1000;
+const CONFIRM_PAUSE_AFTER_ERROR_MS = 10000;
 
 interface Props {
     mode: StudentsMode;
@@ -274,8 +284,10 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
     // One pass over the given lines, one at a time in order (one request per
     // line). Each row shows `busy` while its request runs, then Added with the
     // email, Skipped, or Failed with the reason, as soon as the answer arrives.
-    // Returns the lines that failed.
-    async function runPass(items: { index: number; text: string }[], busy: "trying" | "retrying") {
+    // Returns the lines that failed. An added line is not shown as Added yet: it
+    // becomes "checking" and its mailbox check (confirmMailbox) is pushed onto
+    // `checks`, running while the next lines are added.
+    async function runPass(items: { index: number; text: string }[], busy: "trying" | "retrying", checks: Promise<string | null>[]) {
         const failed: { index: number; text: string }[] = [];
 
         for (const item of items) {
@@ -311,10 +323,47 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                 failed.push(item);
             }
 
+            if (outcome.status === "added" && outcome.email) {
+                checks.push(confirmMailbox(item, outcome.email, outcome.reason));
+                outcome = { status: "checking", email: outcome.email, reason: null };
+            }
+
             setAddRows((prev) => prev && prev.map((r, i) => (i === item.index ? { ...r, ...outcome } : r)));
         }
 
         return failed;
+    }
+
+    // Asks the server to look for the TEST email the add sent, again and again (each
+    // ask waits up to 20 s), until it has arrived - then the row is Added, with the
+    // add's own note - or the server says the add failed (60 s without it). Returns
+    // the line's text when it failed, so it can go back into the box.
+    async function confirmMailbox(item: { index: number; text: string }, email: string, note: string | null): Promise<string | null> {
+        const giveUpAt = Date.now() + CONFIRM_LIMIT_MS;
+        const settle = (status: AddRow["status"], reason: string | null) =>
+            setAddRows((prev) => prev && prev.map((r, i) => (i === item.index ? { ...r, status, reason } : r)));
+
+        for (;;) {
+            const answer = await testNewMailbox(email);
+
+            if (!mounted.current) {
+                return null;
+            }
+
+            if (answer.state === "received") {
+                settle("added", note);
+                return null;
+            }
+
+            if (answer.state === "failed" || Date.now() >= giveUpAt) {
+                settle("failed", FAILED_TEXT);
+                return item.text;
+            }
+
+            if (answer.failed) {
+                await new Promise((resolve) => setTimeout(resolve, CONFIRM_PAUSE_AFTER_ERROR_MS));
+            }
+        }
     }
 
     // Every line once; then the lines that failed get ONE retry, at the end,
@@ -322,18 +371,21 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
     // meantime gets the next number. Lines still failing go back into the box.
     async function addLines(rows: AddRow[]) {
         setSubmitting(true);
+        const checks: Promise<string | null>[] = [];
 
-        let failed = await runPass(rows.map((r, index) => ({ index, text: r.text })), "trying");
+        let failed = await runPass(rows.map((r, index) => ({ index, text: r.text })), "trying", checks);
 
         if (failed.length > 0 && mounted.current) {
-            failed = await runPass(failed, "retrying");
+            failed = await runPass(failed, "retrying", checks);
         }
+
+        const notCreated = (await Promise.all(checks)).filter((text): text is string => text !== null);
 
         if (!mounted.current) {
             return;
         }
 
-        setCsv(failed.map((f) => f.text).join("\n"));
+        setCsv([...failed.map((f) => f.text), ...notCreated].join("\n"));
         setSubmitting(false);
         fetchStudents().then(setOwnStudents).catch(() => {});
         loadRoster(debouncedSearch, statusFilter, effectiveCollege);
@@ -498,15 +550,21 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                             disabled={submitting || checking || csv.trim().length === 0 || lineCheck.count === 0 || lineCheck.errors.length > 0}
                         >
                             {(submitting || checking) && <span className="spinner" />}
-                            {checking ? "Checking numbers..." : submitting ? "Creating mailboxes..." : "Create mailboxes and add"}
+                            {checking
+                                ? "Checking numbers..."
+                                : submitting
+                                  ? addRows?.some((r) => r.status === "waiting" || r.status === "trying" || r.status === "retrying")
+                                      ? "Creating mailboxes..."
+                                      : "Waiting for test emails..."
+                                  : "Create mailboxes and add"}
                         </button>
 
                         {addRows && (
                             <div className="import-result" role="status">
                                 <p className="autoadd-summary">
                                     <span className="autoadd-pill ok">{addRows.filter((r) => r.status === "added").length} added</span>
-                                    {addRows.some((r) => ["waiting", "trying", "retrying"].includes(r.status)) && (
-                                        <span className="autoadd-pill busy">{addRows.filter((r) => ["waiting", "trying", "retrying"].includes(r.status)).length} in progress</span>
+                                    {addRows.some((r) => IN_PROGRESS.includes(r.status)) && (
+                                        <span className="autoadd-pill busy">{addRows.filter((r) => IN_PROGRESS.includes(r.status)).length} in progress</span>
                                     )}
                                     {addRows.some((r) => r.status === "skipped") && (
                                         <span className="autoadd-pill warn">{addRows.filter((r) => r.status === "skipped").length} skipped</span>
@@ -533,14 +591,16 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                                                     <td className="autoadd-email">{r.status === "added" ? r.email : "—"}</td>
                                                     <td>
                                                         <span className={`autoadd-tag ${r.status}`}>
-                                                            {(r.status === "trying" || r.status === "retrying") && <span className="spinner" />}
+                                                            {(r.status === "trying" || r.status === "retrying" || r.status === "checking") && <span className="spinner" />}
                                                             {r.status === "waiting"
                                                                 ? "WAITING"
                                                                 : r.status === "trying"
                                                                   ? "TRYING TO ADD…"
                                                                   : r.status === "retrying"
                                                                     ? "RETRYING…"
-                                                                    : r.status.toUpperCase()}
+                                                                    : r.status === "checking"
+                                                                      ? "WAITING… do not use yet"
+                                                                      : r.status.toUpperCase()}
                                                         </span>
                                                         {r.reason && <span className="autoadd-why">{r.reason}</span>}
                                                     </td>
@@ -556,7 +616,7 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                                         </button>
                                     )}{" "}
                                     {!submitting && addRows.some((r) => r.status === "failed") && (
-                                        <>Failed lines were tried twice and are back in the box above. Fix them and add again.</>
+                                        <>Failed lines are back in the box above. Fix them and add again (if the email could not be created, wait 10 minutes first).</>
                                     )}
                                 </p>
                             </div>

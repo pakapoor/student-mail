@@ -25,7 +25,7 @@ test('numbers used by a student of the college come back with that student\'s na
     await b.student({ first: 'Zunaira', last: 'Saqi', college: 1, admission: '30437' });
     await b.student({ first: 'Rajat', last: 'Roy', college: 1, admission: '32212' });
     const used = await students.usedApplicationNumbers('1', ['30437', '32212', '99999']);
-    assert.deepEqual(used, { 30437: { name: 'Zunaira Saqi', deleted: false }, 32212: { name: 'Rajat Roy', deleted: false } });
+    assert.deepEqual(used, { 30437: { name: 'Zunaira Saqi', deleted: false, notReady: false }, 32212: { name: 'Rajat Roy', deleted: false, notReady: false } });
 });
 
 test('only this college is looked at: the same number in another college is free', { skip }, async () => {
@@ -37,7 +37,7 @@ test('only this college is looked at: the same number in another college is free
 
 test('a deleted student\'s number counts as used and says so', { skip }, async () => {
     await b.student({ first: 'Old', last: 'Student', college: 1, admission: '777', deleted: true });
-    assert.deepEqual(await students.usedApplicationNumbers('1', ['777']), { 777: { name: 'Old Student', deleted: true } });
+    assert.deepEqual(await students.usedApplicationNumbers('1', ['777']), { 777: { name: 'Old Student', deleted: true, notReady: false } });
 });
 
 test('nothing asked, nothing returned; repeats are asked once; the list is capped', { skip }, async () => {
@@ -46,5 +46,11 @@ test('nothing asked, nothing returned; repeats are asked once; the list is cappe
     assert.equal(Object.keys(await students.usedApplicationNumbers('1', ['5', '5', '5'])).length, 1);
     const many = Array.from({ length: students.MAX_NUMBERS_TO_CHECK + 10 }, (_, i) => String(i + 1));
     await b.student({ college: 1, admission: String(students.MAX_NUMBERS_TO_CHECK + 5) });
-    assert.deepEqual(await students.usedApplicationNumbers('1', many), { 5: { name: 'Ann Lee', deleted: false } }, 'numbers past the cap are not looked at');
+    assert.deepEqual(await students.usedApplicationNumbers('1', many), { 5: { name: 'Ann Lee', deleted: false, notReady: false } }, 'numbers past the cap are not looked at');
+});
+
+test('a number held by a student added moments ago and not confirmed yet is flagged as not ready', { skip }, async () => {
+    await b.student({ first: 'Jane', last: 'Doe', college: 1, admission: '888' });
+    await t.pool.query("UPDATE students SET mailbox_confirmed_at = NULL WHERE admission_id = '888'");
+    assert.deepEqual(await students.usedApplicationNumbers('1', ['888']), { 888: { name: 'Jane Doe', deleted: false, notReady: true } });
 });

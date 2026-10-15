@@ -11,7 +11,7 @@ import type {
     ThreadSummary,
 } from "./types";
 import { apiFetch } from "./apiFetch";
-import { postAutoAdd, postCheckNumbers } from "./autoAddClient";
+import { postAutoAdd, postCheckNumbers, postTestMailbox } from "./autoAddClient";
 
 // Must match the page's hostname (not just resolve to the same machine) -
 // SameSite=Lax cookies are dropped on cross-site fetches, and browsers treat
@@ -336,6 +336,10 @@ export async function autoAddStudents(csv: string): Promise<AutoAddResult> {
     return postAutoAdd(`${API_BASE}/api/students/auto-add`, csv);
 }
 
+export async function testNewMailbox(email: string) {
+    return postTestMailbox(`${API_BASE}/api/students/test-mailbox`, email);
+}
+
 export async function importStudents(csv: string): Promise<ImportResult> {
     const res = await apiFetch(`${API_BASE}/api/students/import`, {
         method: "POST",
@@ -467,6 +471,34 @@ export interface SystemStatus {
               summary: { calls: number; medianMs: number | null; p95Ms: number | null; slowestMs: number | null; notOk: number; timeouts: number };
               hours: { at: string; calls: number; medianMs: number; slowestMs: number; notOk: number }[];
               slowest: { at: string; operation: string; ms: number; outcome: string }[];
+          };
+    // Step 48: every event of adding a student, newest first (last 7 days).
+    addLog?:
+        | { error: string }
+        | {
+              windowDays: number;
+              limit: number;
+              entries: {
+                  at: string;
+                  event: string;
+                  college?: string;
+                  ip?: string;
+                  name?: string | null;
+                  applicationNo?: string | null;
+                  email?: string | null;
+                  outcome?: string;
+                  reason?: string | null;
+                  seconds?: number | null;
+                  via?: string;
+                  lookupMs?: number;
+                  loginMs?: number;
+                  sendMs?: number;
+                  retried?: boolean;
+                  newApplicationNo?: string | null;
+                  waitedSeconds?: number;
+                  createdAt?: string;
+                  steps?: unknown[];
+              }[];
           };
     hot?: { error?: string; enabled: boolean; watchingNow: number; checksThisHour: number; recoveredThisHour: number };
     sweep?: { error?: string; enabled: boolean; roundHours: number; mailboxes: number; sweptThisRound: number };

@@ -3,6 +3,8 @@ import { emailBase, emailCandidates } from "./studentEmail.js";
 import { migaduMailboxApi, MailboxApiError, type MailboxApi } from "./migadu.js";
 import { recordMigaduCall } from "./migaduTiming.js";
 import { splitName } from "./students.js";
+import { audit } from "./addLog.js";
+import { sendFirstTestMail, type NewStudent, type Who } from "./mailboxTest.js";
 
 // "Add students" with two inputs per line: Student Name,Application No.
 // For each line the server works out the email address (studentEmail.ts),
@@ -36,14 +38,6 @@ export interface AutoAddResult {
 }
 
 export class AutoAddInputError extends Error {}
-
-// Audit trail: one line in the server log per event, tagged [audit] so it can be
-// found with `journalctl -u student-mail | grep '\[audit\]'`. Staff share one
-// login, so who did it is the central mailbox, the college and the client's
-// IP address. Never contains a password.
-function audit(event: string, details: Record<string, unknown>): void {
-    console.log(`[audit] ${JSON.stringify({ at: new Date().toISOString(), event, ...details })}`);
-}
 
 // The users are clerks: a line is exactly "name,Application No" with one comma
 // between them (spaces around the comma, before the name or after the number are
@@ -87,7 +81,9 @@ export async function autoAddStudents(
     collegeId: string,
     collegeName: string,
     mailboxes: MailboxApi = migaduMailboxApi(recordMigaduCall),
-    clientIp = ""
+    clientIp = "",
+    // Step 48: checks the new mailbox and sends it the TEST email (mailboxTest.ts).
+    startTest: (student: NewStudent, who: Who) => Promise<unknown> = (student, who) => sendFirstTestMail(student, who, mailboxes)
 ): Promise<AutoAddResult> {
     const who = { central: centralEmail, college: collegeName, ip: clientIp };
     const nonEmpty = csvText
@@ -170,14 +166,17 @@ export async function autoAddStudents(
         seenAdmissionIds.set(admissionId, number);
 
         try {
-            const used = await db.query<{ name: string | null }>(
-                "SELECT name FROM students WHERE college_id = $1 AND admission_id = $2",
+            const used = await db.query<{ name: string | null; not_ready: boolean }>(
+                "SELECT name, mailbox_confirmed_at IS NULL AND deleted_at IS NULL AS not_ready FROM students WHERE college_id = $1 AND admission_id = $2",
                 [collegeId, admissionId]
             );
 
             if ((used.rowCount ?? 0) > 0) {
+                const owner = used.rows[0]?.name ?? "another student";
                 row.status = "skipped";
-                row.reason = `Application No ${admissionId} is already used by ${used.rows[0]?.name ?? "another student"}. No mailbox was created.`;
+                row.reason = used.rows[0]?.not_ready
+                    ? `Application No ${admissionId} belongs to ${owner}, who was added but is not ready yet. Wait, then search for this student. No mailbox was created.`
+                    : `Application No ${admissionId} is already used by ${owner}. No mailbox was created.`;
                 continue;
             }
 
@@ -196,15 +195,21 @@ export async function autoAddStudents(
             row.email = email;
             usedEmails.add(localPart);
 
+            let studentId: string | number | undefined;
+
             try {
                 const { first: firstName, last: lastName } = splitName(name);
-                await db.query(
+                // mailbox_confirmed_at NULL: hidden from staff screens until the TEST
+                // email has reached the new mailbox (mailboxTest.ts).
+                const inserted = await db.query<{ id: string }>(
                     `
-                    INSERT INTO students (name, first_name, last_name, email, smtp_password, central_email, college, college_id, admission_id, year_enrolled, is_test)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, FALSE)
+                    INSERT INTO students (name, first_name, last_name, email, smtp_password, central_email, college, college_id, admission_id, year_enrolled, is_test, mailbox_confirmed_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, FALSE, NULL)
+                    RETURNING id
                     `,
                     [name, firstName, lastName, email, DEFAULT_PASSWORD, centralEmail, collegeName, collegeId, admissionId, year]
                 );
+                studentId = inserted.rows[0]?.id;
             } catch (error) {
                 console.error("Auto-add: saving the student failed", { line: number, email }, error);
                 // An adopted mailbox is left alone: it was made by an earlier try whose
@@ -220,6 +225,14 @@ export async function autoAddStudents(
                 row.email = null;
                 row.reason = "The mailbox was created but the student could not be saved, so the mailbox was removed. Try this line again.";
                 continue;
+            }
+
+            // Check the new mailbox and send it the TEST email before answering, so
+            // the mail is on its way even if the dialog is closed now. Never fails the add.
+            if (studentId !== undefined) {
+                await startTest({ id: studentId, email, password: DEFAULT_PASSWORD, name, admissionId }, who).catch((error) => {
+                    console.error("Auto-add: mailbox test could not start", { email }, error);
+                });
             }
 
             row.status = "added";

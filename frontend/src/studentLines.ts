@@ -21,6 +21,8 @@ export interface LineError {
 export interface TakenNumber {
     name: string | null;
     deleted: boolean;
+    // Added moments ago, its mailbox not confirmed yet (Step 48; hidden from search).
+    notReady?: boolean;
 }
 
 export interface StudentLine {
@@ -120,7 +122,9 @@ export function checkStudentLines(text: string, taken: Record<string, TakenNumbe
             if (owner && errors.length === errorsBefore) {
                 errors.push({
                     line: number,
-                    message: `The Application No ${admissionId} is already used by ${owner.name ?? "another student"}${owner.deleted ? " (a deleted student)" : ""}. Check the number.`,
+                    message: owner.notReady
+                        ? `The Application No ${admissionId} belongs to ${owner.name ?? "another student"}, who was added but is not ready yet. Wait, then search for this student.`
+                        : `The Application No ${admissionId} is already used by ${owner.name ?? "another student"}${owner.deleted ? " (a deleted student)" : ""}. Check the number.`,
                     text: content.trim(),
                 });
             }
