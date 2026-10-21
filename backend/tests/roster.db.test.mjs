@@ -237,3 +237,35 @@ test('the roster never reads the messages table', { skip }, async () => {
     assert.ok(seen.length >= 4);
     for (const sql of seen) assert.doesNotMatch(sql, /FROM\s+messages/i);
 });
+
+// Step 51: Save CSV gets every student the list would show, beyond one page.
+test('the export holds every match of the list, across pages, in list order', { skip }, async () => {
+    for (let i = 0; i < 205; i++) await b.student({ first: `N${String(i).padStart(3, '0')}`, college: i % 2 ? 1 : 2 });
+    const all = await roster.exportAdminStudents({ centralEmail: CENTRAL });
+    assert.equal(all.length, 205);
+    assert.equal(new Set(all.map((s) => s.email)).size, 205);
+    const paged = [];
+    let cursor = null;
+    do {
+        const page = await find({ cursor, limit: 100 });
+        paged.push(...emails(page));
+        cursor = page.nextCursor;
+    } while (cursor);
+    assert.deepEqual(all.map((s) => s.email), paged);
+    assert.equal((await roster.exportAdminStudents({ centralEmail: CENTRAL, collegeId: '1' })).length, 102);
+});
+
+test('the export follows the search and status button and keeps the list\'s scope', { skip }, async () => {
+    const ann = await b.student({ first: 'Ann', college: 1 });
+    const annReg = await b.student({ first: 'Ann', college: 2 });
+    await b.student({ first: 'Bob' });
+    await b.student({ first: 'Ann', deleted: true });
+    await b.student({ first: 'Ann', central: 'other@example.test' });
+    const hidden = await b.student({ first: 'Ann' });
+    await t.pool.query('UPDATE students SET mailbox_confirmed_at = NULL WHERE email = $1', [hidden]);
+    await setEdugate(annReg, { login: minutesAgo(5) });
+    const ex = (opts) => roster.exportAdminStudents({ centralEmail: CENTRAL, ...opts }).then((rows) => rows.map((s) => s.email));
+    assert.deepEqual(await ex({ search: 'ann' }), [ann, annReg]);
+    assert.deepEqual(await ex({ search: 'ann', status: 'registered' }), [annReg]);
+    assert.deepEqual(await ex({ search: 'ann', collegeId: '1' }), [ann]);
+});

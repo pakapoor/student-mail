@@ -240,3 +240,26 @@ export async function searchAdminStudents(opts: {
 
     return { students: page, nextCursor, counts, collegeCounts };
 }
+
+// Step 51: every student matching the Search students screen (search, college,
+// status button), for its Save CSV button. Pages through searchAdminStudents so
+// the scope is exactly the list's own.
+export const EXPORT_MAX_ROWS = 20000;
+
+export async function exportAdminStudents(opts: {
+    centralEmail: string;
+    collegeId?: string | null;
+    search?: string;
+    status?: RosterFilter | null;
+}): Promise<AdminStudentRow[]> {
+    const students: AdminStudentRow[] = [];
+    let cursor: string | null = null;
+
+    do {
+        const page: AdminStudentPage = await searchAdminStudents({ ...opts, cursor, limit: 100 });
+        students.push(...page.students);
+        cursor = page.nextCursor;
+    } while (cursor && students.length < EXPORT_MAX_ROWS);
+
+    return students.slice(0, EXPORT_MAX_ROWS);
+}

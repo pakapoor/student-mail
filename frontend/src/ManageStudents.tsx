@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shortDateTime } from "./format";
 import { applicationNumbers, checkStudentLines, type TakenNumber } from "./studentLines";
-import { autoAddStudents, checkApplicationNumbers, fetchAdminStudents, fetchStudents, testNewMailbox } from "./api";
+import { autoAddStudents, checkApplicationNumbers, fetchAdminStudents, fetchAdminStudentsExport, fetchStudents, testNewMailbox } from "./api";
+import { displayName, studentsCsv, studentsCsvFileName } from "./studentsCsv";
 import type {
     AdminStudentPage,
     AdminStudentRow,
@@ -143,11 +144,6 @@ function RosterFilterButtons({
     );
 }
 
-function displayName(s: AdminStudentRow): string {
-    const combined = [s.first_name, s.last_name].filter(Boolean).join(" ");
-    return combined || s.name || "(no name)";
-}
-
 export default function ManageStudents({ mode, collegeId, collegeName, onClose, onImported }: Props) {
     // Import section - unrelated to the roster below, kept from the original
     // per-mailbox modal. It imports into the college picked at login.
@@ -187,6 +183,7 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
     const [rosterLoading, setRosterLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [rosterError, setRosterError] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
 
     const listRef = useRef<HTMLDivElement>(null);
     const dialogRef = useRef<HTMLDialogElement>(null);
@@ -268,6 +265,34 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
             )
             .finally(() => setLoadingMore(false));
     }, [cursor, loadingMore, debouncedSearch, statusFilter, effectiveCollege]);
+
+    // Step 51: saves every student matching the list (not only the rows loaded so
+    // far) as a CSV file, with the same columns as the list.
+    async function saveCsv() {
+        if (saving) {
+            return;
+        }
+
+        setSaving(true);
+        setRosterError(null);
+
+        try {
+            const students = await fetchAdminStudentsExport(debouncedSearch, statusFilter, effectiveCollege);
+            const blob = new Blob([studentsCsv(students)], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = studentsCsvFileName(effectiveCollege === null ? null : effectiveCollege === collegeId ? collegeName : null);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (err) {
+            setRosterError(err instanceof Error ? err.message : "Could not save the list");
+        } finally {
+            setSaving(false);
+        }
+    }
 
     function handleScroll() {
         const el = listRef.current;
@@ -664,6 +689,15 @@ export default function ManageStudents({ mode, collegeId, collegeName, onClose, 
                                     : `All colleges${collegeCounts ? ` ${collegeCounts.all ?? 0}` : ""}`}
                             </button>
                         )}
+                        <button
+                            type="button"
+                            className="all-colleges-button"
+                            onClick={() => void saveCsv()}
+                            disabled={saving || rosterLoading || rows.length === 0}
+                            title="Save every student in this list as a CSV file"
+                        >
+                            {saving ? "Saving..." : "Save CSV"}
+                        </button>
                     </div>
 
                     <RosterFilterButtons filter={statusFilter} counts={counts} onChange={setStatusFilter} />

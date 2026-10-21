@@ -2,6 +2,7 @@ import type {
     College,
     Session,
     AdminStudentPage,
+    AdminStudentRow,
     AutoAddResult,
     ImportResult,
     RosterFilter,
@@ -390,6 +391,38 @@ export async function fetchAdminStudents(
     }
 
     return res.json();
+}
+
+// Step 51: every student matching the Students dialog list, for Save CSV.
+export async function fetchAdminStudentsExport(
+    search: string,
+    status: RosterFilter | null,
+    collegeId: string | null
+): Promise<AdminStudentRow[]> {
+    const params = new URLSearchParams();
+
+    if (status) {
+        params.set("status", status);
+    }
+
+    if (collegeId) {
+        params.set("college", collegeId);
+    }
+
+    if (search) {
+        params.set("search", search);
+    }
+
+    const res = await apiFetch(`${API_BASE}/api/admin/students/export?${params}`, {
+        credentials: "include",
+    });
+
+    if (!res.ok) {
+        throw new Error(`Could not save the list (${res.status})`);
+    }
+
+    const body: { students: AdminStudentRow[] } = await res.json();
+    return body.students;
 }
 
 export async function markHandled(id: number): Promise<void> {

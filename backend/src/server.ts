@@ -41,6 +41,7 @@ import { autoAddStudents, AutoAddInputError } from "./autoAdd.js";
 import { startStaleAddSweep, testNewMailbox } from "./mailboxTest.js";
 import {
     ROSTER_FILTERS,
+    exportAdminStudents,
     searchAdminStudents,
 } from "./studentsAdmin.js";
 
@@ -301,6 +302,23 @@ app.get("/api/admin/students", requireAuth, requireCollege, async (req, res) => 
         status,
     });
     res.json(page);
+});
+
+// Step 51: every student matching the Students dialog list (same query
+// parameters, no paging), for its Save CSV button.
+app.get("/api/admin/students/export", requireAuth, requireCollege, async (req, res) => {
+    const search = typeof req.query.search === "string" ? req.query.search : "";
+    const status = ROSTER_FILTERS.find((f) => f === req.query.status) ?? null;
+    const collegeId =
+        typeof req.query.college === "string" && /^\d{1,18}$/.test(req.query.college) ? req.query.college : null;
+
+    const students = await exportAdminStudents({
+        centralEmail: res.locals.centralEmail,
+        collegeId,
+        search,
+        status,
+    });
+    res.json({ students });
 });
 
 app.get("/api/messages", requireAuth, requireCollege, async (req, res) => {

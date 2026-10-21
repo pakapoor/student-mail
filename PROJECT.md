@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 50. |
+| Next step number | 52. |
 
 ### Step index
 
@@ -55,6 +55,8 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 47 | Search students: a search always looks in every college, with a clear (✕) button | deployed 2026-10-08 |
 | 48 | Add students: a TEST email confirms each new mailbox (60 s, else the add fails); unconfirmed students hidden; Add students log on the status page (migration 018) | deployed 2026-10-15 |
 | 49 | New college KYRGYZ NATIONAL UNIVERSITY with its logo (migration 019) | deployed 2026-10-21 |
+| 50 | Bulk add of the 105 KNU students by script, each confirmed by its TEST email | done on prod 2026-10-21 |
+| 51 | Search students: Save CSV of every matching student | in progress |
 
 ## Operating prod (runbook)
 
@@ -176,9 +178,52 @@ Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
 
+## Step 51 — Search students: Save CSV of every matching student
+
+**Status: in progress 2026-10-21** (owner approved; build and deploy). The owner wants to hand the client a
+CSV made from Search students (first use: the 105 KNU students).
+
+- **Button:** a small **Save CSV** next to the search box. It saves every student matching what is on screen
+  (search text, college choice, status button), not only the rows loaded so far (the list loads 30 at a
+  time while scrolling).
+- **File:** `students-<college or all-colleges>-<date>.csv`, columns as on screen: `Name,Email,Application
+  No,College,Year enrolled,Edugate status` (status text and time as shown, e.g. `Registered - 3 Oct, 2:14
+  PM`). **No password** (owner's decision). UTF-8 with a BOM so Excel opens it right; values quoted when
+  needed.
+- **Backend:** `GET /api/admin/students/export` (same login and query as the list) returns every match as
+  JSON. `exportAdminStudents` (`studentsAdmin.ts`) pages through `searchAdminStudents` 100 at a time, so
+  it uses the exact same scope (own central mailbox, not deleted, confirmed); capped at 20,000 rows.
+  The CSV is built in the browser so the status text matches the screen.
+- **Columns:** exactly the six the list shows; nothing else (owner confirmed).
+- **Tests:** `roster.db.test.mjs` +2 (export equals the paged list across 205 students and by college;
+  follows search and status; leaves out deleted, other-mailbox and unconfirmed students); new
+  `studentsCsv.test.mjs` (5: header and columns, no password, BOM, quoting, status wording, file name).
+  Full check 2026-10-21: backend `tsc` OK, **270 of 270** backend tests, frontend `tsc -b` OK, build OK.
+- **Deploy:** no migration; `git pull --ff-only`, `npm run build` in `frontend/`, restart the backend.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Data / database | None | Read-only; no schema change. |
+| Wrong rows | Low | Reuses the list's own query and paging; tested that the export equals the paged list for search, college and status, and leaves out hidden and deleted students. |
+| Security / privacy | Low | Needs the console login, same scope as the list; no password in the file. The file holds names and emails, as the screen does. |
+| Performance | Low | ~25 queries of a few ms for every student; only when the button is pressed. |
+| Open sessions | Low | Backend restart drops live updates briefly; logins persist. |
+| Deploy / rollback | Very low | `git revert`, restart, rebuild. |
+
+Overall risk: **very low**.
+
 ## Step 50 — Bulk add of the 105 KNU students from the client's list (script)
 
-**Status: in progress 2026-10-21** (owner approved the plan). The client sent "REGESTRATION KNU ST LIST 105
+**Status: DONE ON PROD 2026-10-21 13:02 UTC** (script at `0cb4495`; owner approved each stage). Result: all 105
+added to college 7, every TEST email received (one first send timed out and was resent by the check), 0
+failed, 0 deleted; checked in the database (105 confirmed and active, Application Nos 2026001-2026105).
+Backup `~/backups/student_mail-pre-step50-20261021T125411Z.dump`. 9 addresses got a number because the
+plain one was taken (`adnan1`, `anjali2`, `asharfi.khan1`, `deepika1`, `hitesh.kumar2`, `mohd.kaif3`,
+`nikhil.kumar1`, `sankalp.sharma1`, `shreyash.bansal1`). CSV written to `~/knu-students-2026.csv`. The 104
+ran back to back; the owner asked for safe gaps of time between batches next time (add a pause option to the
+script before the next big run). Migadu was moved to the Standard plan for the run. The client sent "REGESTRATION KNU ST LIST 105
 WITH PASSPORT DETAILS" (S NO., APPLICATION NO., SURNAME, NAME; Application Nos 2026001-2026105, all unique)
 for KYRGYZ NATIONAL UNIVERSITY. The owner asked that they be added on prod exactly as the Add students
 screen does, and that a student's email goes into the final CSV only after its TEST email has arrived.
