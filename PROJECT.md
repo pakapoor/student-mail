@@ -11,8 +11,8 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 48 (`c049426`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 42 Add students hardening (no reload while adding, plain errors, audit log, adopt a lost-reply mailbox), 43 Migadu call times on the status page (migration 017), 44 used Application No flagged before adding, 45 Search students opens on the login college, 46 Search students with less clutter (one small All colleges button), 47 a search looks in every college and can be cleared with a ✕, 48 a TEST email confirms each new mailbox (60 s, else the add fails) and the Add students log on the status page (migration 018), 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 49 (`cb4a082`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 42 Add students hardening (no reload while adding, plain errors, audit log, adopt a lost-reply mailbox), 43 Migadu call times on the status page (migration 017), 44 used Application No flagged before adding, 45 Search students opens on the login college, 46 Search students with less clutter (one small All colleges button), 47 a search looks in every college and can be cleared with a ✕, 48 a TEST email confirms each new mailbox (60 s, else the add fails) and the Add students log on the status page (migration 018), 49 new college KYRGYZ NATIONAL UNIVERSITY (migration 019), 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
@@ -54,7 +54,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 46 | Search students: less clutter, one small All colleges button | deployed 2026-10-08 |
 | 47 | Search students: a search always looks in every college, with a clear (✕) button | deployed 2026-10-08 |
 | 48 | Add students: a TEST email confirms each new mailbox (60 s, else the add fails); unconfirmed students hidden; Add students log on the status page (migration 018) | deployed 2026-10-15 |
-| 49 | New college KYRGYZ NATIONAL UNIVERSITY with its logo (migration 019) | deploy authorized 2026-10-21 |
+| 49 | New college KYRGYZ NATIONAL UNIVERSITY with its logo (migration 019) | deployed 2026-10-21 |
 
 ## Operating prod (runbook)
 
@@ -178,7 +178,10 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 49 — New college: KYRGYZ NATIONAL UNIVERSITY
 
-**Status: built 2026-10-21; deploy authorized by the owner the same day.** The client asked for one more
+**Status: DEPLOYED 2026-10-21 12:40 UTC** at `cb4a082` (owner authorized). Backup
+`~/backups/student_mail-pre-step49-20261021T124012Z.dump`; `git pull --ff-only`; migration 019 as the app
+role with `ON_ERROR_STOP` (college id 7); frontend build (`index-19um8Ner.js`); no backend restart. Verified:
+`/api/colleges` lists the new college, `/logos/knu.png` served, service and nginx active. The client asked for one more
 college, "Kyrgyz National University", with its round blue and yellow seal as the logo. Stored in capitals
 like the other three. Colleges come from the database, so no code change is needed beyond the logo:
 
