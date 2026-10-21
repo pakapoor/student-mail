@@ -176,6 +176,41 @@ Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
 
+## Step 50 — Bulk add of the 105 KNU students from the client's list (script)
+
+**Status: in progress 2026-10-21** (owner approved the plan). The client sent "REGESTRATION KNU ST LIST 105
+WITH PASSPORT DETAILS" (S NO., APPLICATION NO., SURNAME, NAME; Application Nos 2026001-2026105, all unique)
+for KYRGYZ NATIONAL UNIVERSITY. The owner asked that they be added on prod exactly as the Add students
+screen does, and that a student's email goes into the final CSV only after its TEST email has arrived.
+
+- **Names:** Student Name = NAME then SURNAME, capitals, spaces collapsed (`AARYA MANGESH` + `GADE` ->
+  `AARYA MANGESH GADE` -> `aarya.gade@`). 16 rows have no surname; 8 of them are one word (ADNAN, AFSANA, ANJALI,
+  DEEPIKA, DHRUV, KESHAV, TEENA, AJNISH) and get a one-word address (`adnan@`, or `adnan1@` if taken). S NO. 84 (`NARSINGH`, `YADAV VISHNU`) looks swapped; the owner said keep it as given.
+- **Script `backend/scripts/bulk-add-students.ts`** (run by hand on the server, never part of `npm test`):
+  reads `Student Name,Application No` lines on stdin, adds them 10 at a time with the same code as the
+  screen (`autoAddStudents`: Migadu mailbox, password `password`, student saved hidden, TEST email sent),
+  then for each added student asks `testNewMailbox` (the code behind `POST /api/students/test-mailbox`)
+  until the answer is `received` or `failed` (60 s limit, failure handling unchanged). It stops after the
+  first batch with a failure, so a Migadu daily sending limit cannot fail the whole list. Prints one JSON
+  line per student (never the password). Who: the central mailbox, the college, IP `bulk-add-script`, so
+  every event is in the Add students log on the status page.
+- **Run:** backup; 1-student trial, shown to the owner; then the other 104 after the owner's OK.
+- **Output:** `~/knu-students-2026.csv` on the dev machine (mode 600, outside the repo), header
+  `Student Name,College,Application No,Email,Password`, only students whose TEST email arrived.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Data / database | Low | Same inserts as the screen; backup first; the college had no students. |
+| Migadu sending limit | Low-medium | The owner moved Migadu to the Standard plan for this run. ~105 TEST emails from central in one run; if a daily limit is hit, adds fail the 60 s check (record deleted, number freed, mailbox kept). The script stops after the first failing batch. |
+| Wrong names / addresses | Low | Built mechanically from the list; S NO. 84 kept as given on the owner's word. |
+| Staff impact | None | Students appear only once confirmed; no restart, no deploy of app code. |
+| Security | Low | Script uses the server's `.env`; prints no password; output CSV kept off the repo. |
+| Rollback | Medium | Mailboxes in Migadu cannot be undone by git; students can be soft-deleted if needed. |
+
+Overall risk: **low-medium** (the sending limit is the open question).
+
 ## Step 49 — New college: KYRGYZ NATIONAL UNIVERSITY
 
 **Status: DEPLOYED 2026-10-21 12:40 UTC** at `cb4a082` (owner authorized). Backup
