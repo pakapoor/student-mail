@@ -6,6 +6,7 @@ const COLLEGE_LOGOS: Record<string, string> = {
     "KSMA CENTRAL": "/logos/ksma.png",
     "IHSM CENTRAL": "/logos/ihsm.png",
     "IHSM ELITE": "/logos/ihsm.png",
+    "KYRGYZ NATIONAL UNIVERSITY": "/logos/knu.png",
 };
 
 export const ISM_EDUTECH_LOGO = "/logos/ism-edutech.png";

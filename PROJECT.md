@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 49. |
+| Next step number | 50. |
 
 ### Step index
 
@@ -54,6 +54,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 46 | Search students: less clutter, one small All colleges button | deployed 2026-10-08 |
 | 47 | Search students: a search always looks in every college, with a clear (✕) button | deployed 2026-10-08 |
 | 48 | Add students: a TEST email confirms each new mailbox (60 s, else the add fails); unconfirmed students hidden; Add students log on the status page (migration 018) | deployed 2026-10-15 |
+| 49 | New college KYRGYZ NATIONAL UNIVERSITY with its logo (migration 019) | deploy authorized 2026-10-21 |
 
 ## Operating prod (runbook)
 
@@ -174,6 +175,36 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 49 — New college: KYRGYZ NATIONAL UNIVERSITY
+
+**Status: built 2026-10-21; deploy authorized by the owner the same day.** The client asked for one more
+college, "Kyrgyz National University", with its round blue and yellow seal as the logo. Stored in capitals
+like the other three. Colleges come from the database, so no code change is needed beyond the logo:
+
+- **Migration `019_kyrgyz_national_university.sql`:** inserts `KYRGYZ NATIONAL UNIVERSITY` into `colleges`
+  (`ON CONFLICT (name) DO NOTHING`, safe to re-run). Same row added to `backend/schema.sql`.
+- **Logo:** `frontend/public/logos/knu.png`, the supplied 1254 px / 1.4 MB image shrunk to 400×400 (like
+  `ksma.png`) so the login screen stays light (64 KB); mapped in `frontend/src/branding.ts`.
+- **Full check 2026-10-21:** backend `tsc` OK, **263 of 263** backend tests, frontend `tsc -b` OK, frontend
+  build OK. No new test (one data row and one image).
+- Mail goes through the same central mailbox as the other colleges; students are separated by
+  `college_id`. CSV import and Add students use the login college, so they work for it unchanged.
+- **Deploy:** backup, migration 019 as the app role with `ON_ERROR_STOP`, `git pull --ff-only`, frontend
+  build. No backend restart needed: the college list is read from the database on each request. Rollback:
+  `git revert` and rebuild; the college row can stay (or be deleted while it has no students).
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Data / database | Very low | One new row in `colleges`; no existing row touched. |
+| Wrong behavior | Very low | The new college starts empty; other colleges' lists and scoping are unchanged (scoping is by `college_id`). |
+| Security | None | No new endpoint or permission. |
+| Open sessions | None | No backend restart; open tabs reload onto the new build. |
+| Deploy / rollback | Very low | Additive migration; `git revert` and rebuild. |
+
+Overall risk: **very low**.
 
 ## Step 48 — Add students: a TEST email confirms each new mailbox; Add students log on the status page
 
