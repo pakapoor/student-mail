@@ -1,11 +1,13 @@
-import { withSyncDeadline } from "./syncDeadline.js";
+import { SyncAbandoned, withHardLimit, withSyncDeadline } from "./syncDeadline.js";
 import { ImapFlow } from "imapflow";
 import { SyncFailure, syncInbox } from "./sync.js";
 import { broadcast } from "./realtime.js";
 import { db } from "./db.js";
 import { noteProblem, noteSyncSuccess, noteWatcher } from "./systemStatus.js";
 
-const runningSync = new Set<string>();
+// The pass running per mailbox, by token: an abandoned pass that settles late
+// must not clear the guard of the pass that replaced it (Step 52).
+const runningSync = new Map<string, symbol>();
 // Set when a trigger arrives while a sync is already in flight for that
 // mailbox - instead of just dropping it (which could leave a message
 // arriving mid-sync waiting on the next IDLE event or fallback poll tick),
@@ -16,6 +18,10 @@ const activeWatchers = new Set<string>();
 // The deadline aborts IMAP work; the running guard stays held until cleanup
 // and any in-flight database statement settle.
 const SYNC_WATCHDOG_MS = 45000;
+// Step 52: how long after the deadline a pass may still take to settle before
+// it is abandoned. On 2026-10-28 a pass never settled and blocked syncing for
+// 41 hours.
+const SYNC_ABANDON_GRACE_MS = 60000;
 
 // Colleges the newly synced mail belongs to - each console only chimes for
 // its own college. A lookup failure just means no chime, never a failed sync.
@@ -46,11 +52,16 @@ export async function triggerSync(
         return;
     }
 
-    runningSync.add(email);
+    const token = Symbol(email);
+    runningSync.set(email, token);
     const start = Date.now();
 
     try {
-        const { inserted, insertedStudentEmails, retryPending } = await withSyncDeadline((signal) => syncInbox(email, password, signal), SYNC_WATCHDOG_MS, email);
+        const { inserted, insertedStudentEmails, retryPending } = await withHardLimit(
+            withSyncDeadline((signal) => syncInbox(email, password, signal), SYNC_WATCHDOG_MS, email),
+            SYNC_WATCHDOG_MS + SYNC_ABANDON_GRACE_MS,
+            email
+        );
         noteSyncSuccess(email);
 
         // An email came back without content - try again shortly rather
@@ -70,7 +81,12 @@ export async function triggerSync(
             console.log(`[TIMING] Sync [${email}]: no new messages (took ${durationMs}ms)`);
         }
     } catch (error) {
-        console.error(`Sync failed [${email}]:`, error);
+        if (error instanceof SyncAbandoned) {
+            console.error(`Sync ABANDONED [${email}]: ${error.message}`);
+        } else {
+            console.error(`Sync failed [${email}]:`, error);
+        }
+
         noteProblem("sync-failed", email, `${email}: ${error instanceof Error ? error.message : String(error)}`);
 
         // Emails stored before the failure are committed but were never
@@ -83,10 +99,12 @@ export async function triggerSync(
             console.log(`[TIMING] broadcast sent for ${inserted} message(s) stored before the failure [${email}]`);
         }
     } finally {
-        runningSync.delete(email);
+        if (runningSync.get(email) === token) {
+            runningSync.delete(email);
 
-        if (pendingRerun.delete(email)) {
-            triggerSync(email, password);
+            if (pendingRerun.delete(email)) {
+                triggerSync(email, password);
+            }
         }
     }
 }

@@ -39,6 +39,7 @@ import {
 import { fetchStudents, importStudents, usedApplicationNumbers, MAX_NUMBERS_TO_CHECK } from "./students.js";
 import { autoAddStudents, AutoAddInputError } from "./autoAdd.js";
 import { startStaleAddSweep, testNewMailbox } from "./mailboxTest.js";
+import { startSyncAlert } from "./syncAlert.js";
 import {
     ROSTER_FILTERS,
     exportAdminStudents,
@@ -686,6 +687,8 @@ app.listen(port, "0.0.0.0", async () => {
     // Fails a new student whose TEST email never arrived after the add dialog
     // stopped checking (mailboxTest.ts).
     startStaleAddSweep();
+    // Journal line and owner email when the central sync stalls (syncAlert.ts, Step 52).
+    startSyncAlert();
     console.log(`API listening on http://127.0.0.1:${port}`);
 
     const mailboxes = await listCentralMailboxes();

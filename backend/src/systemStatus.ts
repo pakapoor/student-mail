@@ -95,8 +95,14 @@ export function registerStatusProvider(name: string, provider: Provider): void {
 }
 
 // A sync that hasn't succeeded for this long means new mail isn't reaching
-// the console.
-const SYNC_STALE_MS = 10 * 60 * 1000;
+// the console (Step 52: 10 -> 5 min; also drives the stall alert, syncAlert.ts).
+export const SYNC_STALE_MS = 5 * 60 * 1000;
+
+// When each central mailbox last synced successfully (the process start if it
+// never has), for the stall alert.
+export function syncHealth(): { email: string; lastOkAt: number }[] {
+    return [...sync.entries()].map(([email, s]) => ({ email, lastOkAt: s.lastSuccessAt ?? startedAt }));
+}
 const DISK_PROBLEM_RATIO = 0.9;
 // "Recent problems": the newest RECENT_LIMIT rows, open ones first. Solved
 // problems are kept (greyed) for a week, everything is gone after 30 days.

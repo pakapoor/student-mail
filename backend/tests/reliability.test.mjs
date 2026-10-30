@@ -375,3 +375,89 @@ test('a student with several code emails shows one code row: the newest', async 
     const withReply=await fetchThreadSummaries('all','staff@example.test','1',25,0);
     assert.equal(withReply.threads.length,2,'an older code thread with a human message stays visible');
 });
+
+// Step 52: on 2026-10-28 a central sync pass never settled after its deadline
+// and every later pass was skipped as "already running" for 41 hours.
+test('a sync pass that never settles is abandoned after deadline + grace, and the queued pass runs', async t => {
+    const { triggerSync } = await import('../src/mailboxSync.ts');
+    t.mock.timers.enable({apis:['setTimeout']});
+    const firstHang=defer(), thirdHang=defer();
+    let n=0;
+    setupImap=client=>{
+        n++;
+        if(n===1) client.connect=()=>firstHang.promise.then(()=>{throw new Error('settled late');});
+        else if(n===3) client.connect=()=>thirdHang.promise;
+        else client.mailbox.exists=0;
+    };
+    query=async()=>({rows:[]});
+    const before=clients.length;
+    const first=triggerSync('stuck@example.test','fake');
+    await new Promise(setImmediate);
+    await triggerSync('stuck@example.test','fake');
+    assert.equal(clients.length,before+1,'second trigger is queued, not started');
+    t.mock.timers.tick(45001);
+    await new Promise(setImmediate);
+    assert.equal(clients.at(-1).closed,true,'the deadline closed the stuck connection');
+    assert.equal(clients.length,before+1,'within the grace the guard is still held');
+    t.mock.timers.tick(60000);
+    await first;
+    for (let i=0;i<5;i++) await new Promise(setImmediate);
+    assert.equal(clients.length,before+2,'after the grace the queued pass ran');
+
+    // A newer pass is running (hangs) when the abandoned one finally settles:
+    // the newer pass keeps its guard.
+    const third=triggerSync('stuck@example.test','fake');
+    await new Promise(setImmediate);
+    assert.equal(clients.length,before+3);
+    firstHang.resolve();
+    for (let i=0;i<5;i++) await new Promise(setImmediate);
+    await triggerSync('stuck@example.test','fake');
+    assert.equal(clients.length,before+3,'still "already running": the late finisher did not clear the newer guard');
+    t.mock.timers.tick(105001);
+    await third;
+    setupImap=()=>{};
+});
+
+test('withHardLimit passes results through and gives up on work that never settles', async t => {
+    const { withHardLimit, SyncAbandoned } = await import('../src/syncDeadline.ts');
+    t.mock.timers.enable({apis:['setTimeout']});
+    assert.equal(await withHardLimit(Promise.resolve(7),1000,'m'),7);
+    const never=new Promise(()=>{});
+    const run=assert.rejects(withHardLimit(never,1000,'m'),e=>e instanceof SyncAbandoned && /did not settle within 1000ms/.test(e.message));
+    t.mock.timers.tick(1001);
+    await run;
+});
+
+test('a stalled central sync is logged every check, emailed once per incident, and cleared on recovery', async t => {
+    const { checkSyncStall } = await import('../src/syncAlert.ts');
+    const errors=t.mock.method(console,'error',()=>{});
+    const sent=[];
+    const mailer={send:async(from,subject)=>{ if(from==='alert@example.test') sent.push(subject); }};
+    noteSyncSuccess('alert@example.test');
+    const t0=Date.now();
+    const stalledLines=()=>errors.mock.calls.filter(c=>String(c.arguments[0]).includes('SYNC STALLED [alert@example.test]')).length;
+    await checkSyncStall(t0+4*60000,mailer);
+    assert.deepEqual(sent,[],'under 5 minutes: no alert');
+    assert.equal(stalledLines(),0);
+    await checkSyncStall(t0+6*60000,mailer);
+    await checkSyncStall(t0+7*60000,mailer);
+    assert.equal(stalledLines(),2,'an error line on every check while stalled');
+    assert.deepEqual(sent,['Student Mail: emails are NOT reaching the console'],'one email per incident');
+    noteSyncSuccess('alert@example.test');
+    await checkSyncStall(Date.now()+1000,mailer);
+    assert.deepEqual(sent.slice(1),['Student Mail: emails are reaching the console again']);
+    await checkSyncStall(Date.now()+2000,mailer);
+    assert.equal(sent.length,2,'nothing more once recovered');
+});
+
+test('a failing alert email never breaks the stall check', async t => {
+    const { checkSyncStall } = await import('../src/syncAlert.ts');
+    t.mock.method(console,'error',()=>{});
+    noteSyncSuccess('alertfail@example.test');
+    await checkSyncStall(Date.now()+10*60000,{send:async()=>{throw new Error('smtp down');}});
+});
+
+test('the status page calls a sync stale after 5 minutes', async () => {
+    const { SYNC_STALE_MS } = await import('../src/systemStatus.ts');
+    assert.equal(SYNC_STALE_MS,5*60*1000);
+});

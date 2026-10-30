@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 52. |
+| Next step number | 53 (52 in progress). |
 
 ### Step index
 
@@ -57,6 +57,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 49 | New college KYRGYZ NATIONAL UNIVERSITY with its logo (migration 019) | deployed 2026-10-21 |
 | 50 | Bulk add of the 105 KNU students by script, each confirmed by its TEST email | done on prod 2026-10-21 |
 | 51 | Search students: Save CSV of every matching student | deployed 2026-10-21 |
+| 52 | Central sync can no longer stay stuck: hard limit after the deadline, 5-min stall alert (log, status page, email) | in progress |
 
 ## Operating prod (runbook)
 
@@ -177,6 +178,78 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 52 — Central sync can never stay stuck; alert when mail stops
+
+**Status: in progress 2026-10-30** (owner approved the plan; local first, deploy only when told).
+
+**Incident (2026-10-28 18:26 UTC to 2026-10-30 11:33 UTC, ~41 h).** IHSM staff reported codes arriving ~20 min
+late (Purnima Yadav, 32631: Edugate sent the code 10:04:42 UTC, Migadu had it 10:04:45, the console stored it
+10:17:12, found by the daily sweep). Cause: one central sync pass (`triggerSync`, `mailboxSync.ts`) started
+~18:26:33 on Oct 28 and never settled. The 45 s deadline (`withSyncDeadline`) closes the IMAP connection, then
+**waits without limit** for the pass to finish its cleanup (Step 26 design, so two passes never write at the
+same time). The pass never finished, so `runningSync` stayed set and every later pass was skipped ("already
+running, queued a follow-up pass" every 5 s, no error logged). The database had no stuck session; the hang was
+most likely an imapflow call that never settled after the close (not proven: nothing was logged at the moment).
+Mail reached the console only through the backup routes: 151 emails recovered by the sweep (median 12-17 h late,
+worst 30 h) and the hot list (1, 2 min late); **144 never arrived** (142 Edugate rejection emails of Oct 30 from
+08:39 UTC, 2 codes) until the backend was restarted at 11:33:05 UTC (owner authorized), when the first pass
+stored all 144 in 11 s. Migadu was not the delay: during the incident Edugate -> Migadu averaged 6 s (max 47 s),
+Migadu hold 1 s (max 30 s). All three colleges and both Edugate senders were affected. The status page did show
+"No successful sync" in red (after 10 min), but nobody watches it and nothing reached the log or the owner.
+
+**Audit of the other mail paths:** the per-student check used by the sweep, the hot list and search
+(`checkStudentMail.ts`) and the TEST email check (`mailboxTest.ts`) race their work against a 45 s timer and
+move on; the live IDLE watcher reconnects on close/error and the 5 s poll in `server.ts` triggers syncs even if
+IDLE goes quiet. Only the central sync had a wait with no limit.
+
+**Plan:**
+1. **Hard limit** (`syncDeadline.ts` `withHardLimit`, `mailboxSync.ts`): a pass still unsettled 60 s after its
+   45 s deadline is abandoned: logged as an error, `runningSync` released, a follow-up pass runs. Each pass holds
+   a token; a late finisher of an abandoned pass never clears a newer pass's guard and its result/error is
+   ignored. Safe: after the abort `syncInbox` writes no watermark (existing test), and inserts are idempotent
+   (`ON CONFLICT DO NOTHING`).
+2. **Stall alert** (`syncAlert.ts`, new; `systemStatus.ts`): stale threshold 10 -> **5 min**. A check once a
+   minute: while a central mailbox has had no successful pass for 5 min, an error line goes to the journal every
+   minute; once per incident an **email to the owner** (`ALERT_EMAIL` in the server's `.env`, not in the repo),
+   sent from the central mailbox over SMTP like the TEST email; a second email when syncing recovers. No
+   `ALERT_EMAIL` -> log and status page only.
+3. **Tests** in `reliability.test.mjs`: a pass that never settles is abandoned after deadline + grace and the
+   next pass runs; a late finisher does not clear the newer guard; the alert fires once per incident, repeats
+   the log line, and clears on recovery.
+4. **Step 53 (next, separate):** sweep students who are not registered yet every 2 h instead of daily.
+
+**Built (2026-10-30, not committed yet):** `syncDeadline.ts` (`withHardLimit`, `SyncAbandoned`), `mailboxSync.ts`
+(per-pass token, 60 s grace, "Sync ABANDONED" error line), `systemStatus.ts` (`SYNC_STALE_MS` 5 min, `syncHealth`),
+`syncAlert.ts` (new; started in `server.ts`). `ALERT_EMAIL` must be added to the server's `backend/.env` at deploy
+(owner approval; not in the repo).
+
+**Why testing missed it (owner: "it should have been caught earlier in testing itself"):** the Step 26 test
+asserted the unbounded wait ("queued sync cannot start while the timed-out predecessor is still settling") and no
+test tried work that never settles; nothing tested that a stall reaches a person. New rule: every guard or "wait
+for cleanup" gets a never-settles test, every background job an owner alert.
+
+**Tests** (`reliability.test.mjs`, +5): a pass that never settles is abandoned after 45 s + 60 s and the queued
+pass runs; the abandoned pass settling late does not clear the newer pass's guard; `withHardLimit` passes results
+and gives up on never-settling work; the stall alert logs every check, emails once per incident and once on
+recovery; a failing alert email never breaks the check; stale = 5 min. Mutation check: with the grace set to
+"forever" the abandon test fails. Full check 2026-10-30: backend `tsc` OK, **275 of 275** tests, frontend `tsc -b`
+OK, build OK.
+
+**Risk analysis**
+
+| Area | Risk | Why |
+|---|---|---|
+| Two passes at once | Low | Only after 105 s with no settle. The abandoned pass was aborted, so it writes no watermark (existing test) and inserts are idempotent; at worst a duplicate fetch that is skipped. |
+| Wrong behavior: normal syncs | Very low | Normal passes take ~1.2 s; the limit only acts at 105 s. Existing serialization test still passes. |
+| False alarms | Low | 5 min with no successful pass; a backend restart resets the clock. At most one email per incident plus one on recovery. |
+| Alert email | Low | Sent from the central mailbox like the TEST email; failure only logged. Needs `ALERT_EMAIL` on the server; without it, log + status page only. |
+| Security | Low | No new endpoint; the owner's address lives only in the server `.env`. |
+| Open sessions | Low | Backend restart: SSE drops briefly, logins persist. |
+| Rollback | Very low | `git revert`, restart. No schema change. |
+| Residual gap | Medium | The exact call that hung is still unknown; this fix contains it rather than removes it. The "Sync ABANDONED" line will show if it happens again. |
+
+Overall risk: **low**.
 
 ## Step 51 — Search students: Save CSV of every matching student
 
