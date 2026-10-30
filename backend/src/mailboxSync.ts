@@ -109,6 +109,21 @@ export async function triggerSync(
     }
 }
 
+// The 5 s backup poll (server.ts): one sync per central mailbox. Step 53: run
+// through runJob, so a database error here is caught instead of crashing the
+// process as an unhandled rejection.
+export async function pollAllMailboxes(list: () => Promise<{ email: string; password: string }[]>): Promise<number> {
+    const current = await list();
+
+    for (const mailbox of current) {
+        // Idempotent: also starts the live watcher if the startup listing failed.
+        ensureWatcher(mailbox.email, mailbox.password);
+        void triggerSync(mailbox.email, mailbox.password);
+    }
+
+    return current.length;
+}
+
 export function ensureWatcher(email: string, password: string) {
     if (activeWatchers.has(email)) {
         return;

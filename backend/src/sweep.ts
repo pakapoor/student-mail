@@ -2,6 +2,7 @@ import { db } from "./db.js";
 import { broadcast } from "./realtime.js";
 import { checkStudentMailbox, type CheckOutcome } from "./checkStudentMail.js";
 import { registerStatusProvider } from "./systemStatus.js";
+import { registerJob, runJob } from "./jobHealth.js";
 
 // Rolling daily sweep (Step 17 A): every student's own INBOX is checked
 // once per SWEEP_ROUND_HOURS (default 24), a few mailboxes at a time, spread
@@ -28,6 +29,10 @@ const MIN_INTERVAL_MS = 20 * 1000;
 // trouble; back off instead of hammering it.
 const NETWORK_FAILURES_TO_PAUSE = 3;
 const PAUSE_MS = 15 * 60 * 1000;
+// Step 53: one batch may take this long at most (BATCH_SIZE checks in parallel,
+// each at most ~2 min); no completed batch for OVERDUE_MS is an outage (alert).
+export const SWEEP_BATCH_LIMIT_MS = 5 * 60 * 1000;
+export const SWEEP_OVERDUE_MS = 30 * 60 * 1000;
 
 interface SweepStudent {
     id: string;
@@ -65,17 +70,24 @@ export function startSweep(): void {
     }
 
     console.log(`[sweep] started: one round every ${ROUND_HOURS} h, ${BATCH_SIZE} mailboxes per batch`);
+    registerJob("sweep", "Daily sweep of student mailboxes", SWEEP_OVERDUE_MS);
     schedule(MIN_INTERVAL_MS);
 }
 
 function schedule(delayMs: number) {
-    timer = setTimeout(() => {
-        runBatch()
-            .then((next) => schedule(next))
-            .catch((error) => {
-                console.error("[sweep] batch failed:", error);
-                schedule(PAUSE_MS);
-            });
+    // Step 53: a batch that throws or never finishes can no longer end the chain:
+    // the next batch is always scheduled.
+    timer = setTimeout(async () => {
+        let next = PAUSE_MS;
+        const outcome = await runJob("sweep", async () => {
+            next = await runBatch();
+        }, SWEEP_BATCH_LIMIT_MS);
+
+        if (outcome !== "ok") {
+            next = PAUSE_MS;
+        }
+
+        schedule(next);
     }, delayMs);
     timer.unref?.();
 }

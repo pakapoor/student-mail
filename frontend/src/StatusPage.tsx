@@ -5,8 +5,11 @@ import ExpiredCodesChart from "./ExpiredCodesChart";
 import MigaduTimingChart from "./MigaduTimingChart";
 
 // System status page at /status (Step 21). Not linked from the staff
-// screens; needs the normal console login. Refreshes every 30 s. No alert
-// emails - the user checks this page when they want (their choice).
+// screens; needs the normal console login. Refreshes every 30 s.
+// Step 53 (owner: "A HUGE ALERT", "make it simple"): a huge red banner only
+// when mail is being lost right now, else one green line; a bold Crashes and
+// restarts panel; amber "Needs a look" for patterns; single-student mailbox
+// timeouts as a quiet count; every statistics card folded into Details.
 
 function ago(iso: string | null | undefined): string {
     if (!iso) {
@@ -121,7 +124,10 @@ export default function StatusPage() {
     const mailboxes = s.sync.mailboxes;
     // Same rule as the backend: no sync yet since a restart only counts as
     // overdue 10 min after the app started.
-    const syncStale = mailboxes.some((mailbox) => new Date(s.generatedAt).getTime() - new Date(mailbox.lastSuccessAt ?? s.server.appStartedAt).getTime() > 10 * 60 * 1000);
+    const syncStale = mailboxes.some((mailbox) => new Date(s.generatedAt).getTime() - new Date(mailbox.lastSuccessAt ?? s.server.appStartedAt).getTime() > 5 * 60 * 1000);
+    const banner = s.banner;
+    const crashes = s.crashes ?? [];
+    const needsLook = s.needsLook ?? [];
     const syncConnected = mailboxes.length > 0 && mailboxes.every((mailbox) => mailbox.connected);
     const hot = s.hot;
     const sweep = s.sweep;
@@ -146,6 +152,66 @@ export default function StatusPage() {
 
             <div className="status-content">
                 {error && <p className="status-refresh-error" role="alert">Refresh failed. Showing the last successful snapshot from {shortDateTime(s.generatedAt)}. Retrying automatically.</p>}
+                {banner && banner.level === "red" ? (
+                    <div className="status-banner red" role="alert">
+                        <div className="status-banner-title">{banner.title}</div>
+                        <div className="status-banner-detail">{banner.detail}</div>
+                        {banner.since && <div className="status-banner-since">Since {shortDateTime(banner.since)}. The owner has been emailed.</div>}
+                    </div>
+                ) : banner ? (
+                    <div className="status-banner green">
+                        <b>✓ {banner.title}.</b> {banner.detail}
+                    </div>
+                ) : null}
+
+                {s.uptime && (
+                    <p className="status-uptime">
+                        {s.uptime.measuredMinutes === 0 ? (
+                            <>Uptime: not measured yet (the server health check records it every minute).</>
+                        ) : (
+                            <>
+                                Uptime, last 30 days: console <b>{s.uptime.consoleUpPct?.toFixed(3)}%</b> · mail flowing{" "}
+                                <b>{s.uptime.mailFlowingPct?.toFixed(3)}%</b> · target 99.9% · down {s.uptime.downMinutes} min, mail stalled{" "}
+                                {s.uptime.stalledMinutes} min · measured every minute since {shortDateTime(s.uptime.since!)}
+                            </>
+                        )}
+                        {s.certificate?.daysLeft != null && <> · HTTPS certificate valid {s.certificate.daysLeft} more days</>}
+                    </p>
+                )}
+
+                {needsLook.length > 0 && (
+                    <div className="status-needs-look">
+                        <b>Needs a look</b>
+                        <ul>
+                            {needsLook.map((line) => (
+                                <li key={line}>{line}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                <div className={`status-crashes ${crashes.length > 0 ? "has" : ""}`}>
+                    <div className="status-crashes-head">
+                        <b>Crashes and restarts</b>
+                        <span>{crashes.length === 0 ? "None in the last 30 days" : `${crashes.length} in the last 30 days`}</span>
+                    </div>
+                    {crashes.length > 0 && (
+                        <ul>
+                            {crashes.map((c) => (
+                                <li key={c.at}>
+                                    <b>{shortDateTime(c.at)}</b> · {c.detail}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+
+                <p className="status-quiet">
+                    Single mailbox timeouts in the last 24 h: <b>{s.quiet?.mailboxTimeouts24h ?? s.mailboxFailures24h}</b> (normal; each is retried by the next check).
+                </p>
+
+                <details className="status-details">
+                <summary>Details</summary>
                 <div className={`status-overall ${s.overall}`}>
                     <div className="status-overall-icon">{s.overall === "ok" ? "✓" : "!"}</div>
                     <div>
@@ -495,6 +561,7 @@ export default function StatusPage() {
                         </div>
                     )}
                 </div>
+                </details>
             </div>
         </div>
     );

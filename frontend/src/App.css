@@ -2277,3 +2277,24 @@ a.logout-button { display: inline-block; text-decoration: none; }
 /* Step 48: failures in the Add students log. */
 .status-row-bad td { background: var(--bad-soft); }
 .status-pre { white-space: pre-wrap; font-size: 11px; margin: 4px 0 0; max-width: 480px; }
+
+/* Step 53: status page top - huge red banner, green line, crashes, needs a look, details. */
+.status-banner { border-radius: 12px; margin-bottom: 16px; }
+.status-banner.red { background: #b91c1c; color: #fff; padding: 28px 24px; box-shadow: 0 0 0 4px #fecaca; }
+.status-banner-title { font-size: 30px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.2; }
+.status-banner-detail { font-size: 16px; margin-top: 10px; }
+.status-banner-since { font-size: 14px; margin-top: 8px; opacity: 0.9; }
+.status-banner.green { background: var(--good-soft, #e5f4e4); color: var(--text); padding: 14px 18px; font-size: 16px; }
+.status-needs-look { background: #fff4d6; border: 1px solid #f0c75e; color: #5c4400; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
+.status-needs-look ul { margin: 6px 0 0; padding-left: 20px; }
+.status-crashes { border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; background: var(--card-bg); }
+.status-crashes.has { border: 2px solid #d97706; background: #fff7ed; color: #7c2d12; }
+.status-crashes-head { display: flex; justify-content: space-between; gap: 12px; font-size: 16px; }
+.status-crashes.has .status-crashes-head b { font-size: 18px; }
+.status-crashes ul { margin: 8px 0 0; padding-left: 20px; }
+.status-crashes li { margin: 4px 0; }
+.status-quiet { color: var(--text-muted); font-size: 13px; margin: 0 0 16px; }
+.status-details > summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 8px 0; }
+.status-details[open] > summary { margin-bottom: 12px; }
+@media (max-width: 600px) { .status-banner-title { font-size: 22px; } }
+.status-uptime { font-size: 14px; margin: 0 0 16px; color: var(--text); }

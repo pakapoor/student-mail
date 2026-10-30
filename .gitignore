@@ -28,3 +28,7 @@ Thumbs.db
 
 # Claude Code local settings
 **/.claude/settings.local.json
+
+# Step 53: atomic frontend deploy (deploy/build-frontend.sh)
+frontend/dist-new/
+frontend/dist-old/

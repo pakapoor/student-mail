@@ -1,2 +1,4 @@
 .env
 node_modules/
+# Step 53: crash/clean-stop state of the running backend (crashLog.ts)
+.run/

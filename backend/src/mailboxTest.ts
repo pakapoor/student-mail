@@ -4,6 +4,7 @@ import { ImapFlow } from "imapflow";
 import type { ParsedMail } from "mailparser";
 import { db } from "./db.js";
 import { audit } from "./addLog.js";
+import { registerJob, runJob } from "./jobHealth.js";
 import type { MailboxApi } from "./migadu.js";
 
 // Step 48: a student added through Add students only counts as added once its new
@@ -311,6 +312,8 @@ async function logEntriesFor(messageId: string): Promise<unknown[]> {
 // look at the mailbox and is then failed the same way. Started by server.ts.
 const SWEEP_EVERY_MS = 60 * 1000;
 const SWEEP_GRACE_SECONDS = 30;
+export const STALE_ADD_ROUND_LIMIT_MS = 3 * 60 * 1000;
+export const STALE_ADD_OVERDUE_MS = 10 * 60 * 1000;
 
 export async function failStaleAdds(transport: MailboxTestTransport = realTransport): Promise<number> {
     const stale = await db.query<{
@@ -363,8 +366,10 @@ export function startStaleAddSweep(): void {
         return;
     }
 
+    // Step 53: bounded rounds that never overlap; a stuck round is abandoned.
+    registerJob("stale-add", "Check of students added but not confirmed", STALE_ADD_OVERDUE_MS);
     sweepTimer = setInterval(() => {
-        failStaleAdds().catch((error) => console.error("Mailbox test: stale add check failed", errorText(error)));
+        void runJob("stale-add", () => failStaleAdds(), STALE_ADD_ROUND_LIMIT_MS);
     }, SWEEP_EVERY_MS);
     sweepTimer.unref();
 }

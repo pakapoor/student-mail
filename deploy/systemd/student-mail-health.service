@@ -1,0 +1,6 @@
+[Unit]
+Description=Student Mail Console health check (restarts a stuck backend)
+
+[Service]
+Type=oneshot
+ExecStart=/home/ubuntu/student-mail/deploy/systemd/student-mail-health.sh

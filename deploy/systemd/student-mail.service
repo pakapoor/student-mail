@@ -1,0 +1,16 @@
+[Unit]
+Description=Student Mail Console backend
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/student-mail/backend
+ExecStart=/home/ubuntu/student-mail/backend/node_modules/.bin/tsx src/server.ts
+# Step 53: restart after any exit, not only failures (was on-failure).
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

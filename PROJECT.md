@@ -16,7 +16,7 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 53 (sweep unregistered students every 2 h). |
+| Next step number | 54 (53 in progress). |
 
 ### Step index
 
@@ -58,6 +58,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 50 | Bulk add of the 105 KNU students by script, each confirmed by its TEST email | done on prod 2026-10-21 |
 | 51 | Search students: Save CSV of every matching student | deployed 2026-10-21 |
 | 52 | Central sync can no longer stay stuck: hard limit after the deadline, 5-min stall alert (log, status page, email) | deployed 2026-10-30 |
+| 53 | No silent stops: database safety, every job bounded, outage/crash/expired-code alerts, simple status page with a red banner, active students checked every 5 min | in progress |
 
 ## Operating prod (runbook)
 
@@ -178,6 +179,124 @@ a full copy at `~/holds/step-32-full-20260929T222943/` (outside the repository).
 Next planned slice: 31d (opening a thread reads one student's data, with the
 `replies` index). Open decisions: CloudFront or a nearer region; the 015 policy that
 clears cached registration dates when their last supporting Edugate mail is deleted.
+
+## Step 53 — No silent stops
+
+**Status: in progress 2026-10-30** (owner approved the full scope; local first, deploy only when told).
+Owner's rule: **short blips are fine; a long silent outage is a disaster.** Goal: no outage longer than ~10 min,
+and the owner knows within 5. Owner: "the last bug was so bad ... we should have caught this in testing ... add
+lots of similar test scenarios"; "this is real loss of face".
+
+**Audit findings (2026-10-30, prod read-only):**
+1. Central sync could hang forever: fixed in Step 52.
+2. **Backend crashed 3 times** (2026-10-02 06:13, 10-09 06:40, 10-23 06:57 UTC): Ubuntu unattended-upgrades updated
+   libraries PostgreSQL uses (openssl, libxml2, zlib), so PostgreSQL was restarted ("terminating connection due to
+   administrator command", 57P01); the `pg` Pool has no `error` listener, so the idle client's error killed the
+   process. systemd (`Restart=on-failure`, 5 s) brought it back each time.
+3. Database calls have no time limit (no `connectionTimeoutMillis`, no query timeout): a stuck call freezes any job.
+4. Hot list (`running` flag), sweep (setTimeout chain), alert loop (`running` flag) and stale-add check have no
+   per-run limit: one never-settling run stops that job silently, forever (the Oct 28 pattern).
+5. The 5 s backup poll (`server.ts` setInterval) has no catch: a database blip there is an unhandled rejection.
+6. Nothing restarts a running but stuck backend (systemd only sees crashes).
+7. Alerts cover only the central sync.
+8. Status page noise: 17 open "Mailbox won't open" rows (single-student 45 s timeouts, ~20/day, retried the next
+   day) keep it in "problem"; meanwhile **106 central sync failures on Oct 25-26** (Migadu network/TLS errors), two
+   days before the hang, each marked itself solved and vanished in the list.
+9. Service setup: enabled at boot (backend, nginx, PostgreSQL), `Restart=on-failure` (a clean exit is not
+   restarted); the server has not been rebooted since 2026-09-21, so boot start is untested.
+
+**Scope:**
+- **A. Database:** Pool `error` listener (log, never crash); `connectionTimeoutMillis` 10 s; query timeout 30 s.
+- **B. Every job bounded:** per-run hard limit (`withHardLimit`) and own error handling: backup poll (catch),
+  hot list 3 min, sweep batch 5 min, stale-add check 3 min, alert loop 1 min. A stuck run is logged and the next
+  run goes ahead.
+- **C. Heartbeats and alerts:** each job records its last completed run; missing its expected time (central sync
+  5 min, hot list 5 min, sweep 30 min) = outage: journal error line every minute, red banner, email to the owner
+  (`ALERT_EMAIL`) at start and end. **Crashes:** a start marker and a clean-stop marker; a start without a clean
+  stop before it = crash, cause from a small file written by the `uncaughtException`/`unhandledRejection`
+  handler; shown and emailed; 3+ in an hour = crash loop (red). **Expired codes:** the status page's "still
+  waiting" count (`codeAlerts.ts`, all colleges) above 3 = email listing them; back to 3 or fewer = email; at most
+  one pair per 15 min.
+- **D. Status page made simple:** huge red full-width banner only when mail is being lost right now (central
+  sync, hot list or sweep stopped, database unreachable, crash loop), saying what and for how long; a green line
+  ("All good. Last email received N min ago") otherwise; bold "Crashes and restarts" panel (30 days); amber
+  "Needs a look" for patterns only (central sync failed 10+ times in an hour; a student's mailbox failing 3 days
+  running); single-student timeouts become a quiet count; all statistics cards move into a collapsed Details.
+- **G. Active students checked every 5 min:** students not registered and either added in the last 14 days or
+  with an Edugate email in the last 7 days (~20 today) are checked every **5 min**, most overdue first, capped at
+  **600 checks an hour** (the interval stretches beyond ~50 active students, e.g. ~12 min at 125). Everyone else
+  stays on the daily sweep. Extra load ~5,800 checks/day (total ~8,300 vs ~2,500); per mailbox it is like a phone
+  mail app polling every 5 min. Settings adjustable by env.
+- **E. Tests (~30, fakes only):** database closed/restart without crash, never-answering query, pool exhaustion;
+  per job: never settles, throws, database gone, and the next run still happens; central sync: IMAP connect hangs,
+  fetch hangs mid-stream, watcher drops while the poll syncs, backlog over 50, catch-up after restart; alerts:
+  each outage kind sets the banner, emails once, clears on recovery, failing email harmless; crash detected at the
+  next start with its cause, crash loop; noise rules; expired-code threshold and flap limit; active tier interval,
+  cap and order. Mutation check per fix.
+- **Server, at deploy (owner OK per action):** `Restart=always`; a systemd timer that checks a local health
+  endpoint every minute and restarts the backend after 10 min of stall; unit files kept in `deploy/systemd/`,
+  installed from the git checkout; a test reboot at a quiet hour.
+- **Later:** Healthchecks.io outside dead man's switch.
+
+**Added 2026-10-30 (owner: "take this to at least 3 nines ... assuming the EC2 instance does not crash"; Migadu
+is third party, its timeouts are expected and must be handled gracefully).** 99.9% = 43 min of downtime a month.
+Prod findings: nginx and PostgreSQL have `Restart=no` (a crash stays down); a reboot is pending (security
+updates); no swap (1.9 GB RAM); certificate valid 51 days, certbot.timer active; disk 22%.
+- **H. nginx and PostgreSQL restart after any exit:** systemd drop-ins `deploy/systemd/overrides/*/restart.conf`.
+- **I. Hung backend restarted in 2 min:** the health script tells "no answer" (hung, restart after 2 checks) from
+  "503 stalled" (answers but mail not flowing, restart after 10: a restart cannot fix Migadu).
+- **J. Atomic frontend deploy:** `deploy/build-frontend.sh` builds into `dist-new`, keeps the previous assets (14
+  days) for open tabs, swaps; a failed build leaves the live site untouched.
+- **K. Certificate and disk alerts:** HTTPS certificate read off a TLS connection to the site hourly, email under
+  14 days (and when renewed); disk above 90% emailed (and when back).
+- **L. Uptime measured:** the health script logs every minute to `backend/.run/health.log`; the status page shows
+  console up % and mail flowing % over 30 days against the 99.9% target (`serverChecks.ts`).
+- **M. 1 GB swap** and the pending reboot (with the test reboot, owner picks the time).
+
+**Built (2026-10-30).** Backend: `db.ts` (pool error listener, 10 s connect, 30 s query: `query_timeout` +
+`statement_timeout`), `jobHealth.ts` (new: `runJob` hard limit per round, heartbeats, overdue jobs),
+`crashLog.ts` (new: run-state file, crash cause, clean stop, crash detection at start, stored as a solved
+`backend-crash` row), `activeCheck.ts` (new), `serverChecks.ts` (new), `syncAlert.ts` (jobs, crash, expired codes,
+certificate, disk; flap limit), `systemStatus.ts` (banner, outages, crashes, needs-a-look, quiet count, uptime;
+mailbox timeouts out of Recent problems; crashes kept 30 days), `hotList.ts`, `sweep.ts`, `mailboxTest.ts` (bounded
+rounds), `mailboxSync.ts` (`pollAllMailboxes`, also starts a missing watcher), `server.ts` (crash handlers, clean
+stop, `/api/health`, bounded poll, active check, startup survives a database not ready), `checkStudentMail.ts`
+(source "active"). Frontend: `StatusPage.tsx`, `api.ts`, `App.css`. Server files: `deploy/`.
+Bugs the new tests found in the new code and fixed: the expired-codes flap limit and the active check's "never
+checked" rule both treated a clock value of 0 as "recent".
+
+**Tests: ~200 new** (`jobHealth` 22, `crashLog` 25 incl. real processes crashing / stopped with SIGTERM,
+`alerts` 29 incl. Migadu timeouts handled quietly, `statusBanner` 20, `activeCheck.db` 27 (real PostgreSQL),
+`db` 12 (real PostgreSQL: a killed connection, every connection killed, statement and query timeouts, a silent
+server, pool exhaustion, a leaked client), `syncScenarios` 13 (connect / lock / fetch / database hangs, backlog of
+60 and 300, catch-up from the watermark, UID validity change, backup poll), `healthScript` 24 (the real script
+with fake curl/systemctl, unit files, atomic frontend build), `jobWiring` 7 (each real job against a database that
+never answers), `serverChecks` 21). **Mutation check:** each fix broken on purpose, 28 of 29 caught; the 29th
+(the token check in `runJob`'s finally) is unreachable by design, an equivalent mutant.
+
+**Risk analysis**
+
+| Change | Impact | Risk | Description |
+|---|---|---|---|
+| Database safety | HIGH | LOW | PostgreSQL restarts no longer crash us; stuck queries time out (slowest real query ~40 ms) |
+| Backup poll catches errors | MED | LOW | A database blip no longer crashes the backend |
+| Hard limits on every job | HIGH | LOW | A stuck job resumes; a late finisher is harmless (inserts are idempotent) |
+| Heartbeats + outage alerts | HIGH | LOW | Email and red banner within 5 min if mail stops; thresholds well above normal |
+| Crash detection + email | MED | LOW-MED | Touches process exit; tested with real processes; `Restart=always` behind it |
+| Expired codes email | MED | LOW | Read-only; at most one pair per 15 min |
+| Status page redesign | HIGH | LOW-MED | Status page only; staff console untouched |
+| Active students every 5 min | HIGH | MED | ~3.3x Migadu logins (~8,300/day), capped 600/hour, env-adjustable |
+| `/api/health` + self-restart | HIGH | LOW-MED | Restart only after 2 min of no answer or 10 min of stall |
+| nginx / PostgreSQL restart | HIGH | LOW | Standard systemd setting |
+| Atomic frontend deploy | MED | LOW | A failed build leaves the live site as it was |
+| Cert / disk alerts | MED | LOW | Read-only checks; a failed check never alerts |
+| Uptime measured | HIGH | LOW | Log ~35 days, trimmed |
+| Swap 1 GB | MED | LOW | Standard; disk has 15 GB free |
+| Pending reboot | MED | MED | 1-2 min downtime, at a time the owner picks |
+
+Overall: impact HIGH, risk LOW-MED. Deploy: `git pull`, `deploy/build-frontend.sh`, install `deploy/systemd` (see
+`deploy/README.md`), backend restart (a few seconds; logins persist). No schema change. Rollback: `git revert`,
+restart, rebuild; undo steps in `deploy/README.md`.
 
 ## Step 52 — Central sync can never stay stuck; alert when mail stops
 

@@ -4,6 +4,9 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import multer from "multer";
 import { db } from "./db.js";
+import { beginRun, installCrashHandlers, markAlive } from "./crashLog.js";
+import { registerJob, runJob } from "./jobHealth.js";
+import { startActiveCheck } from "./activeCheck.js";
 import { findCollege, listColleges } from "./colleges.js";
 import {
     AlreadyRepliedError,
@@ -19,9 +22,9 @@ import { fetchCodeAlerts } from "./codeAlerts.js";
 import { checkStudentMailbox } from "./checkStudentMail.js";
 import { startSweep } from "./sweep.js";
 import { startHotList } from "./hotList.js";
-import { getSystemStatus } from "./systemStatus.js";
+import { currentOutages, getSystemStatus } from "./systemStatus.js";
 import { htmlToPlainText, sanitizeReplyHtml } from "./sanitizeReplyHtml.js";
-import { ensureWatcher, triggerSync } from "./mailboxSync.js";
+import { ensureWatcher, pollAllMailboxes, triggerSync } from "./mailboxSync.js";
 import { addClient, broadcast, removeClient } from "./realtime.js";
 import {
     createSession,
@@ -375,6 +378,13 @@ app.get("/api/codes/alerts", requireAuth, requireCollege, async (_req, res) => {
 // System status page (/status, Step 21): health of the sync, hot list,
 // sweep, Migadu delays and the server. Logged-in users only; not linked
 // from the staff screens.
+// Step 53: for the server's self-restart timer (deploy/systemd). No login and no
+// data: "ok", or "stalled" when mail is not flowing or a job has stopped.
+app.get("/api/health", (_req, res) => {
+    const outages = currentOutages();
+    res.status(outages.length === 0 ? 200 : 503).json({ status: outages.length === 0 ? "ok" : "stalled" });
+});
+
 app.get("/api/status", requireAuth, async (_req, res) => {
     res.json(await getSystemStatus());
 });
@@ -678,7 +688,16 @@ const fallbackSyncIntervalMs = Number(
     process.env.FALLBACK_SYNC_INTERVAL_MS || 5000
 );
 
+// Step 53: a crash keeps its cause (shown on the status page, emailed); a clean
+// stop (systemctl stop/restart) is recorded so it is not taken for a crash.
+installCrashHandlers(() => db.end());
+const ALIVE_EVERY_MS = 60 * 1000;
+const POLL_ROUND_LIMIT_MS = 30 * 1000;
+const POLL_OVERDUE_MS = 5 * 60 * 1000;
+
 app.listen(port, "0.0.0.0", async () => {
+    beginRun();
+    setInterval(() => markAlive(), ALIVE_EVERY_MS).unref();
     // Rolling daily sweep of every student's own mailbox (sweep.ts).
     startSweep();
     // Hot list: watch a student's mailbox while staff wait for the
@@ -689,24 +708,24 @@ app.listen(port, "0.0.0.0", async () => {
     startStaleAddSweep();
     // Journal line and owner email when the central sync stalls (syncAlert.ts, Step 52).
     startSyncAlert();
+    // Students in progress checked every 5 min (activeCheck.ts, Step 53).
+    startActiveCheck();
     console.log(`API listening on http://127.0.0.1:${port}`);
 
-    const mailboxes = await listCentralMailboxes();
+    try {
+        const mailboxes = await listCentralMailboxes();
 
-    for (const mailbox of mailboxes) {
-        ensureWatcher(mailbox.email, mailbox.password);
-        triggerSync(mailbox.email, mailbox.password);
-    }
-
-    setInterval(async () => {
-        const current = await listCentralMailboxes();
-        for (const mailbox of current) {
+        for (const mailbox of mailboxes) {
+            ensureWatcher(mailbox.email, mailbox.password);
             triggerSync(mailbox.email, mailbox.password);
         }
-    }, fallbackSyncIntervalMs);
-});
+    } catch (error) {
+        // The backup poll below keeps trying every few seconds.
+        console.error("Startup: could not list the central mailboxes yet:", error instanceof Error ? error.message : error);
+    }
 
-process.on("SIGINT", async () => {
-    await db.end();
-    process.exit(0);
+    registerJob("poll", "Backup mail check (every 5 s)", POLL_OVERDUE_MS);
+    setInterval(() => {
+        void runJob("poll", () => pollAllMailboxes(listCentralMailboxes), POLL_ROUND_LIMIT_MS);
+    }, fallbackSyncIntervalMs);
 });

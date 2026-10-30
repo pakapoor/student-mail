@@ -464,7 +464,29 @@ export async function fetchCodeAlerts(): Promise<CodeAlertsResult> {
 }
 
 // System status page (/status). Shape of backend systemStatus.ts.
+// Step 53: the top of the status page.
+export interface StatusBanner {
+    level: "red" | "green";
+    title: string;
+    detail: string;
+    since: string | null;
+}
+
 export interface SystemStatus {
+    banner?: StatusBanner;
+    outages?: { key: string; title: string; detail: string; since: string }[];
+    crashes?: { at: string; detail: string }[];
+    needsLook?: string[];
+    quiet?: { mailboxTimeouts24h: number };
+    uptime?: {
+        since: string | null;
+        measuredMinutes: number;
+        consoleUpPct: number | null;
+        mailFlowingPct: number | null;
+        downMinutes: number;
+        stalledMinutes: number;
+    };
+    certificate?: { daysLeft: number | null; error: string | null };
     generatedAt: string;
     activityCoverage?: { since: string; maxEvents: number; retainedEvents: number; approximate: boolean };
     overall: "ok" | "warning" | "problem";

@@ -2,6 +2,8 @@ import { statfsSync } from "node:fs";
 import os from "node:os";
 import { db } from "./db.js";
 import { fetchCodeStatus, type CodeStatus } from "./codeAlerts.js";
+import { overdueJobs } from "./jobHealth.js";
+import { CERT_WARN_DAYS, certState, readUptime } from "./serverChecks.js";
 
 // System status page (Step 21, /status - user: "status page is fine", no
 // alert emails). The background jobs report into this module; the page
@@ -10,8 +12,8 @@ import { fetchCodeStatus, type CodeStatus } from "./codeAlerts.js";
 // database, so it survives restarts: problems are stored in status_problems
 // (Step 28) and Migadu delays are read off messages.
 
-type EventKind = "retry" | "gave-up" | "mailbox-failed" | "recovered" | "sync-failed";
-type ProblemKind = "gave-up" | "mailbox-failed" | "sync-failed";
+type EventKind = "retry" | "gave-up" | "mailbox-failed" | "recovered" | "sync-failed" | "backend-crash";
+type ProblemKind = "gave-up" | "mailbox-failed" | "sync-failed" | "backend-crash";
 
 interface StatusEvent {
     at: number;
@@ -85,6 +87,44 @@ export function noteSyncSuccess(mailbox: string): void {
     solveProblems("sync-failed", mailbox);
 }
 
+export interface Outage {
+    key: string;
+    title: string;
+    detail: string;
+    since: number;
+}
+
+const minutesOf = (ms: number) => Math.round(ms / 60000);
+
+// What is broken right now, in memory only (no database): central mailboxes
+// not synced for SYNC_STALE_MS and overdue jobs. Used by the red banner, the
+// health check (/api/health) and the alerts.
+export function currentOutages(now = Date.now()): Outage[] {
+    const outages: Outage[] = [];
+
+    for (const { email, lastOkAt } of syncHealth()) {
+        if (now - lastOkAt > SYNC_STALE_MS) {
+            outages.push({
+                key: `sync:${email}`,
+                title: "EMAILS ARE NOT REACHING THE CONSOLE",
+                detail: `No successful sync of ${email} for ${minutesOf(now - lastOkAt)} min.`,
+                since: lastOkAt,
+            });
+        }
+    }
+
+    for (const job of overdueJobs(now)) {
+        outages.push({
+            key: `job:${job.name}`,
+            title: `${job.label.toUpperCase()} HAS STOPPED`,
+            detail: `No completed round for ${minutesOf(job.overdueForMs)} min${job.lastError ? ` · last error: ${job.lastError}` : ""}.`,
+            since: job.lastOkAt,
+        });
+    }
+
+    return outages;
+}
+
 // Hot-list and sweep figures are supplied by those modules (avoids import
 // cycles): each registers a function returning its current numbers.
 type Provider = () => Promise<Record<string, unknown>> | Record<string, unknown>;
@@ -114,7 +154,100 @@ const PROBLEM_LABELS: Record<ProblemKind, string> = {
     "mailbox-failed": "Mailbox won't open",
     "gave-up": "Email could not be fetched",
     "sync-failed": "Central sync failed",
+    "backend-crash": "Backend crashed",
 };
+
+// Step 53: the page is red only when mail is being lost right now; patterns
+// are amber; single-student mailbox timeouts are a quiet count.
+const CRASH_LOOP_COUNT = 3;
+const CRASH_KEEP_DAYS = 30;
+const SYNC_FAILURES_AMBER = 10;
+const STUDENT_FAILING_DAYS = 3;
+
+export interface Banner {
+    level: "red" | "green";
+    title: string;
+    detail: string;
+    since: string | null;
+}
+
+export interface CrashRow {
+    at: string;
+    detail: string;
+}
+
+// Pure: the banner from what is broken.
+export function makeBanner(
+    outages: Outage[],
+    extra: { databaseError: string | null; crashesLastHour: number; diskFull: string | null; lastEmailAt: number | null },
+    now: number
+): Banner {
+    if (extra.databaseError) {
+        return { level: "red", title: "DATABASE NOT REACHABLE", detail: extra.databaseError, since: null };
+    }
+
+    if (outages.length > 0) {
+        const first = [...outages].sort((a, b) => a.since - b.since)[0]!;
+        const lasting = formatDuration(now - first.since);
+        return {
+            level: "red",
+            title: `${first.title} — ${lasting}`,
+            detail: outages.map((o) => o.detail).join(" "),
+            since: new Date(first.since).toISOString(),
+        };
+    }
+
+    if (extra.crashesLastHour >= CRASH_LOOP_COUNT) {
+        return {
+            level: "red",
+            title: `BACKEND KEEPS CRASHING — ${extra.crashesLastHour} crashes in the last hour`,
+            detail: "See Crashes and restarts below.",
+            since: null,
+        };
+    }
+
+    if (extra.diskFull) {
+        return { level: "red", title: "DISK ALMOST FULL", detail: extra.diskFull, since: null };
+    }
+
+    return {
+        level: "green",
+        title: "All good",
+        detail: extra.lastEmailAt === null ? "No email received yet." : `Last email received ${formatDuration(now - extra.lastEmailAt)} ago.`,
+        since: null,
+    };
+}
+
+export function formatDuration(ms: number): string {
+    const m = Math.max(0, Math.round(ms / 60000));
+
+    if (m < 60) {
+        return `${m} min`;
+    }
+
+    const h = Math.floor(m / 60);
+
+    if (h < 48) {
+        return `${h} h ${m % 60} min`;
+    }
+
+    return `${Math.floor(h / 24)} days ${h % 24} h`;
+}
+
+// Pure: amber "needs a look" lines - patterns only.
+export function needsLook(syncFailuresLastHour: number, studentsFailingDays: string[]): string[] {
+    const lines: string[] = [];
+
+    if (syncFailuresLastHour >= SYNC_FAILURES_AMBER) {
+        lines.push(`The central sync failed ${syncFailuresLastHour} times in the last hour (Migadu connection trouble?). It is still retrying.`);
+    }
+
+    for (const email of studentsFailingDays) {
+        lines.push(`${email}: the mailbox has failed to open for ${STUDENT_FAILING_DAYS} days. Check its password in Migadu.`);
+    }
+
+    return lines;
+}
 
 export interface RecentProblem {
     at: string;
@@ -169,6 +302,10 @@ export async function getSystemStatus() {
     let recentDelays: { at: string; minutes: number; queue: string | null; from: string; student: string }[] = [];
     let storedProblems: RecentProblem[] = [];
     let openGaveUp = 0;
+    let crashes: CrashRow[] = [];
+    let studentsFailingDays: string[] = [];
+    let lastEmailAt: number | null = null;
+    let databaseError: string | null = null;
 
     try {
         const counts = await db.query<{ total: string; today: string }>(
@@ -213,11 +350,12 @@ export async function getSystemStatus() {
 
         await db.query(
             `DELETE FROM status_problems
-             WHERE solved_at < now() - make_interval(days => $1) OR at < now() - make_interval(days => $2)`,
+             WHERE (kind <> 'backend-crash' AND solved_at < now() - make_interval(days => $1)) OR at < now() - make_interval(days => $2)`,
             [SOLVED_KEEP_DAYS, PROBLEM_KEEP_DAYS]
         );
         const p = await db.query<{ at: Date; last_at: Date; times: number; kind: ProblemKind; detail: string; solved_at: Date | null }>(
             `SELECT at, last_at, times, kind, detail, solved_at FROM status_problems
+             WHERE kind NOT IN ('mailbox-failed', 'backend-crash')
              ORDER BY (solved_at IS NULL) DESC, last_at DESC LIMIT $1`,
             [RECENT_LIMIT]
         );
@@ -235,8 +373,29 @@ export async function getSystemStatus() {
             "SELECT count(*) AS n FROM status_problems WHERE kind = 'gave-up' AND solved_at IS NULL"
         );
         openGaveUp = Number(g.rows[0]?.n ?? 0);
+
+        const c = await db.query<{ at: Date; detail: string }>(
+            `SELECT at, detail FROM status_problems
+             WHERE kind = 'backend-crash' AND at > now() - make_interval(days => $1)
+             ORDER BY at DESC`,
+            [CRASH_KEEP_DAYS]
+        );
+        crashes = c.rows.map((x) => ({ at: new Date(x.at).toISOString(), detail: x.detail }));
+
+        const f = await db.query<{ subject: string }>(
+            `SELECT subject FROM status_problems
+             WHERE kind = 'mailbox-failed' AND solved_at IS NULL
+               AND at < now() - make_interval(days => $1) AND last_at > now() - interval '1 day'
+             ORDER BY subject`,
+            [STUDENT_FAILING_DAYS - 1]
+        );
+        studentsFailingDays = f.rows.map((x) => x.subject);
+
+        const l = await db.query<{ last: Date | null }>("SELECT max(received_at) AS last FROM messages");
+        lastEmailAt = l.rows[0]?.last ? new Date(l.rows[0].last).getTime() : null;
     } catch (error) {
-        problems.push(`Database not reachable: ${error instanceof Error ? error.message : String(error)}`);
+        databaseError = error instanceof Error ? error.message : String(error);
+        problems.push(`Database not reachable: ${databaseError}`);
     }
 
     // --- Verification codes (Step 27) -----------------------------------------
@@ -255,6 +414,7 @@ export async function getSystemStatus() {
 
     // --- Server ---------------------------------------------------------------
     let disk: Record<string, number> | null = null;
+    let diskFull: string | null = null;
 
     try {
         const fsStat = statfsSync("/");
@@ -263,7 +423,8 @@ export async function getSystemStatus() {
         disk = { totalBytes: total, usedBytes: total - free };
 
         if ((total - free) / total > DISK_PROBLEM_RATIO) {
-            problems.push(`Disk almost full: ${Math.round(((total - free) / total) * 100)}% used.`);
+            diskFull = `Disk almost full: ${Math.round(((total - free) / total) * 100)}% used.`;
+            problems.push(diskFull);
         }
     } catch {
         // Not critical for the page.
@@ -310,8 +471,33 @@ export async function getSystemStatus() {
         .sort((a, b) => Number(b.state === "open") - Number(a.state === "open") || b.at.localeCompare(a.at))
         .slice(0, RECENT_LIMIT);
 
+    // --- Step 53: banner, crashes, patterns, quiet counts ----------------------
+    const outages = currentOutages(now);
+    const crashesLastHour = crashes.filter((c) => now - new Date(c.at).getTime() < 60 * 60 * 1000).length;
+    const banner = makeBanner(outages, { databaseError, crashesLastHour, diskFull, lastEmailAt }, now);
+    const syncFailuresLastHour = events.filter((e) => e.kind === "sync-failed" && now - e.at < 60 * 60 * 1000).length;
+
+    // A stopped job is a problem too (a stale central sync is already listed above).
+    for (const o of outages) {
+        if (o.key.startsWith("job:")) {
+            problems.push(`${o.title}: ${o.detail}`);
+        }
+    }
+
     return {
         generatedAt: new Date(now).toISOString(),
+        banner,
+        outages: outages.map((o) => ({ ...o, since: new Date(o.since).toISOString() })),
+        crashes,
+        needsLook: [
+            ...needsLook(syncFailuresLastHour, studentsFailingDays),
+            ...(certState.daysLeft !== null && certState.daysLeft < CERT_WARN_DAYS
+                ? [`The HTTPS certificate expires in ${Math.floor(certState.daysLeft)} days and has not been renewed yet.`]
+                : []),
+        ],
+        uptime: readUptime(now),
+        certificate: { daysLeft: certState.daysLeft === null ? null : Math.floor(certState.daysLeft), error: certState.error },
+        quiet: { mailboxTimeouts24h: since("mailbox-failed").length },
         activityCoverage: {
             // Once the cap is hit, older events were dropped - coverage then
             // starts at the oldest one still kept, not 24 h ago.

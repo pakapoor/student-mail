@@ -2,6 +2,7 @@ import { db } from "./db.js";
 import { broadcast } from "./realtime.js";
 import { checkStudentMailbox, type CheckOutcome } from "./checkStudentMail.js";
 import { registerStatusProvider } from "./systemStatus.js";
+import { registerJob, runJob } from "./jobHealth.js";
 
 // Hot list (Step 20, user): after an Edugate verification code arrives, a
 // staff member has typed it into Edugate and is sitting waiting for the
@@ -37,6 +38,10 @@ const WINDOW_MIN = CODE_VALID_MIN + REGISTRATION_EMAIL_GRACE_MIN;
 const TICK_MS = 10 * 1000;
 const MAX_PARALLEL = 5;
 const SUMMARY_EVERY_MS = 60 * 60 * 1000;
+// Step 53: one round may take this long at most (MAX_PARALLEL checks of at most
+// ~2 min each); no completed round for OVERDUE_MS is an outage (alert).
+export const HOT_ROUND_LIMIT_MS = 3 * 60 * 1000;
+export const HOT_OVERDUE_MS = 5 * 60 * 1000;
 
 interface HotStudent {
     id: string;
@@ -51,7 +56,6 @@ interface HotStudent {
 // restart everyone still hot is simply checked again straight away).
 const lastChecked = new Map<string, number>();
 const stats = { students: new Set<string>(), checks: 0, recovered: 0, failed: 0, since: Date.now() };
-let running = false;
 
 export function startHotList(): void {
     registerStatusProvider("hot", async () => ({
@@ -70,17 +74,9 @@ export function startHotList(): void {
         `[hot] started: code → every ${FAST_INTERVAL_MS / 1000} s for ${FAST_WINDOW_MS / 60000} min, ` +
             `then every ${INTERVAL_MS / 1000} s, until registered or ${WINDOW_MIN} min after the code`
     );
+    registerJob("hot-list", "Hot list (students waiting after a code)", HOT_OVERDUE_MS);
     setInterval(() => {
-        if (running) {
-            return;
-        }
-
-        running = true;
-        tick()
-            .catch((error) => console.error("[hot] tick failed:", error))
-            .finally(() => {
-                running = false;
-            });
+        void runJob("hot-list", tick, HOT_ROUND_LIMIT_MS);
     }, TICK_MS).unref?.();
 }
 
