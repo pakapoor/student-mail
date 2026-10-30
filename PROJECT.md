@@ -188,7 +188,10 @@ clears cached registration dates when their last supporting Edugate mail is dele
 health timer enabled; nginx and PostgreSQL drop-ins); 1 GB `/swapfile` (+ fstab); backend restarted 13:09:35.
 Verified: `Restart=always` on student-mail, nginx, postgresql@18-main, all active; swap on; IMAP watcher connected;
 active check started; no warnings since the restart; health timer every minute, `/api/health` 200, health log
-writing "ok"; public site serves the new bundle. Not done yet: the pending reboot (owner picks the time).
+writing "ok"; public site serves the new bundle. **Test reboot 2026-10-30 13:42:35 UTC** (owner OK, staff not
+working): booted 13:42:46, backend up 13:42:57, site healthy ~25 s after the command; student-mail, nginx,
+PostgreSQL and the health timer started by themselves, swap kept, the pending security updates applied, the stop
+recorded as clean (not a crash), no warnings.
 Owner's rule: **short blips are fine; a long silent outage is a disaster.** Goal: no outage longer than ~10 min,
 and the owner knows within 5. Owner: "the last bug was so bad ... we should have caught this in testing ... add
 lots of similar test scenarios"; "this is real loss of face".
