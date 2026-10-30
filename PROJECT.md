@@ -11,12 +11,12 @@ Written 2026-10-01. Update this block whenever a step is deployed.
 
 | Item | State |
 |---|---|
-| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 51 (`201b7ad`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
-| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 42 Add students hardening (no reload while adding, plain errors, audit log, adopt a lost-reply mailbox), 43 Migadu call times on the status page (migration 017), 44 used Application No flagged before adding, 45 Search students opens on the login college, 46 Search students with less clutter (one small All colleges button), 47 a search looks in every college and can be cleared with a ✕, 48 a TEST email confirms each new mailbox (60 s, else the add fails) and the Add students log on the status page (migration 018), 49 new college KYRGYZ NATIONAL UNIVERSITY (migration 019), 50 bulk add of 105 KNU students by script, 51 Save CSV in Search students, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
+| Production | EC2 at `app.myemailinfo.com` (52.86.63.127), one instance running Node, PostgreSQL 18 and nginx. Last deployed code: Step 52 (`3ea4448`; docs-only commits follow it). Check the real state with `git log -1` on the server. |
+| Last deployed steps | 34 flexible name search, 35 Login screen when signed out in another tab, 36 reason line on rejected rows, 37 add students from name + Application No (Migadu mailbox created automatically), 38 simpler Add students hint, 39 separate Search/Add students dialogs with the clerk-friendly add, 40 repeated Application No flagged in the box, 41 students dialogs stay open when the mouse leaves the card plus a clearer Add students hint, 42 Add students hardening (no reload while adding, plain errors, audit log, adopt a lost-reply mailbox), 43 Migadu call times on the status page (migration 017), 44 used Application No flagged before adding, 45 Search students opens on the login college, 46 Search students with less clutter (one small All colleges button), 47 a search looks in every college and can be cleared with a ✕, 48 a TEST email confirms each new mailbox (60 s, else the add fails) and the Add students log on the status page (migration 018), 49 new college KYRGYZ NATIONAL UNIVERSITY (migration 019), 50 bulk add of 105 KNU students by script, 51 Save CSV in Search students, 52 stuck central sync abandoned after 105 s + 5-min stall alert by email, 31a-d (UID reset fix, lowercase email indexes, cached rejection date, thread open reads one student), nginx tuning (HTTP/2, gzip, asset caching). |
 | Held back, not on GitHub | Steps 32 (stored thread summaries, queue, worker) and 33 (full test suite, coverage, mutation and load tooling): `git stash` entry "Full Steps 31-33 working tree ..." and a copy at `~/holds/step-32-full-20260929T222943/` on the dev machine. The user plans to work on them at a weekend. |
 | Open decisions | CloudFront or a nearer AWS region (round trip is ~0.28 s, the real latency); policy 015 on clearing cached registration dates when their last supporting Edugate mail is deleted. |
 | Planned, not built | Search that tolerates mistyped names (`pg_trgm` similarity; see Step 34); instant sign-out of an idle background tab (cross-tab signal; see Step 35); Step 17b hot-list polling proposal. |
-| Next step number | 53 (52 in progress). |
+| Next step number | 53 (sweep unregistered students every 2 h). |
 
 ### Step index
 
@@ -57,7 +57,7 @@ Newest sections are at the top of this file, the older ones below the "Agreed TO
 | 49 | New college KYRGYZ NATIONAL UNIVERSITY with its logo (migration 019) | deployed 2026-10-21 |
 | 50 | Bulk add of the 105 KNU students by script, each confirmed by its TEST email | done on prod 2026-10-21 |
 | 51 | Search students: Save CSV of every matching student | deployed 2026-10-21 |
-| 52 | Central sync can no longer stay stuck: hard limit after the deadline, 5-min stall alert (log, status page, email) | in progress |
+| 52 | Central sync can no longer stay stuck: hard limit after the deadline, 5-min stall alert (log, status page, email) | deployed 2026-10-30 |
 
 ## Operating prod (runbook)
 
@@ -181,7 +181,10 @@ clears cached registration dates when their last supporting Edugate mail is dele
 
 ## Step 52 — Central sync can never stay stuck; alert when mail stops
 
-**Status: in progress 2026-10-30** (owner approved the plan; local first, deploy only when told).
+**Status: DEPLOYED 2026-10-30 11:50 UTC** at `3ea4448` (owner: "complete the fix on prod"). `git pull --ff-only`, backend
+restart; `ALERT_EMAIL` added to the server's `backend/.env` (the owner's address) and restarted again (11:50:43).
+Verified: service active, IMAP watcher connected, syncs every 5 s "no new messages" (~1.2 s each), no errors. No
+frontend or schema change. The alert email itself has not been triggered on prod (needs a real 5-min stall).
 
 **Incident (2026-10-28 18:26 UTC to 2026-10-30 11:33 UTC, ~41 h).** IHSM staff reported codes arriving ~20 min
 late (Purnima Yadav, 32631: Edugate sent the code 10:04:42 UTC, Migadu had it 10:04:45, the console stored it
